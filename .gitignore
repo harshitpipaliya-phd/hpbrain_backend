@@ -1,0 +1,56 @@
+# Laravel application
+/vendor
+/node_modules
+
+# Environment files — never commit real credentials
+.env
+.env.backup
+.env.production
+
+# Laravel cache and compiled files
+/bootstrap/cache/*.php
+/public/hot
+/public/storage
+/storage/*.key
+/storage/logs/*.log
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+
+# Composer
+composer.phar
+
+# NPM / Frontend build output
+/web/node_modules
+/web/dist
+/web
+
+# Testing
+/.phpunit.result.cache
+/coverage
+
+# IDE and OS files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Vercel
+.vercel
+.claude
+/adr
+/api
+/contracts
+/docs
+
+
+# Deployment artifacts
+*.zip
+*.tar.gz

@@ -1,0 +1,57 @@
+{
+  "name": "hp/enterprise-brain",
+  "type": "project",
+  "description": "HP Enterprise Brain \u2014 Organizational Intelligence & Execution System",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.2",
+    "laravel/framework": "^11.0",
+    "laravel/tinker": "^2.9",
+    "firebase/php-jwt": "^6.10",
+    "ramsey/uuid": "^4.7",
+    "symfony/yaml": "^7.0",
+    "phpunit/phpunit": "^11.0"
+  },
+  "require-dev": {
+    "fakerphp/faker": "^1.23",
+    "mockery/mockery": "^1.6",
+    "phpunit/phpunit": "^11.5",
+    "laravel/pint": "^1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/",
+      "Database\\Factories\\": "database/factories/",
+      "Database\\Seeders\\": "database/seeders/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "post-autoload-dump": [
+      "@php artisan package:discover --ansi"
+    ],
+    "test": "@php artisan test"
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "sort-packages": true,
+    "audit": {
+      "ignore": {
+        "PKSA-m5cs-t1y6-qpcs": "Acknowledged - install from lock file only, no updates",
+        "PKSA-3r5d-mb8f-1qw9": "Acknowledged - install from lock file only, no updates",
+        "PKSA-mdq4-51ck-6kdq": "Acknowledged - install from lock file only, no updates",
+        "PKSA-8qx3-n5y5-vvnd": "Acknowledged - install from lock file only, no updates",
+        "PKSA-q46n-4fdk-zjr4": "Acknowledged - install from lock file only, no updates",
+        "PKSA-qzrn-rnz3-85w1": "Acknowledged - install from lock file only, no updates",
+        "PKSA-w7xr-vk7n-rstm": "Acknowledged - install from lock file only, no updates",
+        "PKSA-y2cr-5h3j-g3ys": "Acknowledged - firebase/php-jwt used only for internal HS256 tokens"
+      }
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

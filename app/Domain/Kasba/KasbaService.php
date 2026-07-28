@@ -1,0 +1,93 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Kasba;
+
+/**
+ * KASBA Assessment Engine. Ported from api/src/kasba/assessment-engine.ts.
+ *
+ * The rule that must not be softened: **an unassessed dimension is null, never
+ * zero.** Defaulting to 0 would assert that a person has been measured and
+ * found to have no knowledge, when in fact nothing is known. The Product Bible
+ * states this as "a fact the system hasn't verified is null, never defaulted to
+ * 0", and the Node build enforced it by test in every scoring function.
+ *
+ * KNOWN DIVERGENCE FROM THE DOCUMENTS — read before extending.
+ * Architecture Invariant 6 requires every capability to carry an explicit
+ * STATE: Unknown -> Asserted -> Inferred -> Assessed -> Demonstrated ->
+ * Mastered (Observed for Behaviour and Attitude), advancing only on evidence
+ * and never regressing or inflating silently. This implementation has numeric
+ * 0-5 levels only. Levels answer "how good", state answers "how firmly do we
+ * know" — they are not interchangeable, and the second is the one the Brain
+ * needs in order to be honest. Closing this gap requires a capability_state
+ * column with an evidence_ref, plus a guarded transition. It is not done in
+ * either the Node or the Laravel build.
+ */
+final class KasbaService
+{
+    /** @var array<int, string> */
+    private array $dimensions;
+
+    public function __construct(?array $dimensions = null)
+    {
+        $this->dimensions = $dimensions ?? ['knowledge', 'ability', 'skill', 'behaviour', 'attitude'];
+    }
+
+    /**
+     * @param  array<string, float|null>|null  $latest
+     * @return array<string, float|null>
+     */
+    public function computeScores(?array $latest): array
+    {
+        $scores = [];
+
+        foreach ($this->dimensions as $d) {
+            $scores[$d] = $latest[$d.'_level'] ?? null;
+        }
+
+        $assessed = array_values(array_filter($scores, fn ($v) => $v !== null));
+
+        $scores['overall'] = $assessed === []
+            ? null
+            : round(array_sum($assessed) / count($assessed), 2);
+
+        return $scores;
+    }
+
+    /**
+     * Gap analysis against the Capability's own stated target per dimension.
+     * A dimension with no target is SKIPPED, not treated as a zero gap —
+     * "no target set" is not the same claim as "target met".
+     *
+     * @return array<int, array{dimension: string, currentLevel: float|null, targetLevel: float, gap: float}>
+     */
+    public function computeGaps(?array $latest, array $targets): array
+    {
+        $findings = [];
+
+        foreach ($this->dimensions as $d) {
+            $target = $targets[$d]['targetLevel'] ?? null;
+
+            if ($target === null) {
+                continue;
+            }
+
+            $current = $latest[$d.'_level'] ?? null;
+            $gap = round((float) $target - (float) ($current ?? 0), 2);
+
+            if ($gap > 0) {
+                $findings[] = [
+                    'dimension'    => $d,
+                    'currentLevel' => $current,
+                    'targetLevel'  => (float) $target,
+                    'gap'          => $gap,
+                ];
+            }
+        }
+
+        usort($findings, fn ($a, $b) => $b['gap'] <=> $a['gap']);
+
+        return $findings;
+    }
+}
