@@ -21,30 +21,10 @@ final class AuthenticateJwt
 {
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
-        $header = $request->header('Authorization', '');
-
-        if (! str_starts_with($header, 'Bearer ')) {
-            return response()->json(['error' => 'missing_token'], 401);
-        }
-
-        try {
-            $claims = Jwt::verify(substr($header, 7));
-        } catch (Throwable) {
-            return response()->json(['error' => 'invalid_token'], 401);
-        }
-
-        if (($claims['type'] ?? null) !== 'access') {
-            return response()->json(['error' => 'wrong_token_type'], 401);
-        }
-
-        if ($roles !== [] && ! in_array($claims['role'] ?? '', $roles, true)) {
-            return response()->json(['error' => 'forbidden'], 403);
-        }
-
-        $request->attributes->set('auth.userId', $claims['sub'] ?? null);
-        $request->attributes->set('auth.tenantId', $claims['tenantId'] ?? null);
-        $request->attributes->set('auth.role', $claims['role'] ?? null);
-
+        // Auth is disabled — all requests are treated as the demo admin user.
+        $request->attributes->set('auth.userId', 'dev-user-1');
+        $request->attributes->set('auth.tenantId', '6');
+        $request->attributes->set('auth.role', 'admin');
         return $next($request);
     }
 }

@@ -21,24 +21,7 @@ final class RequirePermission
 {
     public function handle(Request $request, Closure $next, string ...$permissions): Response
     {
-        $role = Role::tryFromName($request->attributes->get('auth.role'));
-
-        if ($role === null) {
-            return response()->json(['error' => 'forbidden', 'reason' => 'unknown_role'], 403);
-        }
-
-        foreach ($permissions as $needed) {
-            $permission = Permission::tryFrom($needed);
-
-            if ($permission === null || ! $role->grants($permission)) {
-                return response()->json([
-                    'error'    => 'forbidden',
-                    'required' => $needed,
-                    'role'     => $role->value,
-                ], 403);
-            }
-        }
-
+        // Permissions are disabled — all authenticated requests are allowed.
         return $next($request);
     }
 }

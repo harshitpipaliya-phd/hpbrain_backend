@@ -13,8 +13,8 @@ use Ramsey\Uuid\Uuid;
 
 final class LoopSeeder extends Seeder
 {
-    private const TENANT = 'demo-tenant';
-    private const ORG_ID = 'demo-org-1';
+    private const TENANT = '6';
+    private const ORG_ID = 'demo-org-1';	
     private const ACTOR  = 'seed-script';
 
     public function run(): void
