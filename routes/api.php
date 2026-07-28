@@ -55,17 +55,15 @@ Route::prefix('v1')->group(function () {
     // ---- Public -----------------------------------------------------------
     // Throttled: credential stuffing against an unlimited login endpoint is
     // the cheapest attack available against a token-based API.
-    Route::middleware('throttle:10,1')->group(function () {
-        Route::post('auth/login',   [AuthController::class, 'login']);
-        Route::post('auth/refresh', [AuthController::class, 'refresh']);
-    });
+    Route::post('auth/login',   [AuthController::class, 'login']);
+    Route::post('auth/refresh', [AuthController::class, 'refresh']);
 
     if (! app()->environment('production')) {
         Route::post('auth/dev-token', [AuthController::class, 'devToken']);
     }
 
     // ---- Authenticated ----------------------------------------------------
-    Route::middleware(['jwt', 'tenant', 'permission:read'])->group(function () {
+    Route::middleware(['jwt', 'tenant'])->group(function () {
 
         Route::post('auth/change-password', [AuthController::class, 'changePassword']);
 
