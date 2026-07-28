@@ -46,7 +46,8 @@ final class DepartmentController extends Controller
             'status'               => 1,
             'is_calculated'        => 0,
             'sub_institute_id'     => $data['orgId'],
-            'created_by'           => $this->actorId($request),
+            // ERP column is BIGINT; see Controller::actorErpId().
+            'created_by'           => $this->actorErpId($request),
             'created_at'           => $now,
             'updated_at'           => $now,
         ]);
@@ -80,7 +81,7 @@ final class DepartmentController extends Controller
             DB::table('hpbrain_audit_logs')
                 ->where('tenant_id', $this->tenantId($request))
                 ->where('entity_type', 'Department')->where('entity_id', $id)
-                ->orderByDesc('created_date')->get()
+                ->orderByDesc('created_at')->get()
         );
     }
 

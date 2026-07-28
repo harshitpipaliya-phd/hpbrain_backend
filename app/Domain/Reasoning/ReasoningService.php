@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Reasoning;
 
 use App\Domain\Evidence\EvidenceService;
+use DateTimeImmutable;
 
 /**
  * Reasoning Engine.
@@ -38,14 +39,20 @@ final class ReasoningService
     }
 
     /**
+     * $now is injectable for the same reason EvidenceService::computeFreshness
+     * takes it: freshness is measured against a clock, so without a fixed
+     * reference this function is not a pure function of its input. Leaving it
+     * to `new DateTimeImmutable()` made every confidence score drift with the
+     * wall clock and made the equivalence tests decay a point per day.
+     *
      * @param  array<int, array{confidence: float, observedDate: string}>  $evidence
      */
-    public function computeConfidence(array $evidence): float
+    public function computeConfidence(array $evidence, ?DateTimeImmutable $now = null): float
     {
         $corroboration = 0.0;
 
         foreach ($evidence as $item) {
-            $freshness = $this->evidence->computeFreshness($item['observedDate']);
+            $freshness = $this->evidence->computeFreshness($item['observedDate'], $now);
             $corroboration += $item['confidence'] * $freshness * $this->evidenceWeight;
         }
 

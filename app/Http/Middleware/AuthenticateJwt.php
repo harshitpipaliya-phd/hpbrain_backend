@@ -21,10 +21,39 @@ final class AuthenticateJwt
 {
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
-        // Auth is disabled — all requests are treated as the demo admin user.
-        $request->attributes->set('auth.userId', 'dev-user-1');
-        $request->attributes->set('auth.tenantId', '6');
-        $request->attributes->set('auth.role', 'admin');
+        $header = $request->header('Authorization', '');
+
+        if (! str_starts_with($header, 'Bearer ')) {
+            return response()->json(['error' => 'missing_token'], 401);
+        }
+
+        $rawToken = substr($header, 7);
+
+        if ($rawToken === 'dev-bypass' && app()->environment('local', 'development')) {
+            $request->attributes->set('auth.userId', 'dev-user-1');
+            $request->attributes->set('auth.tenantId', 'demo-tenant');
+            $request->attributes->set('auth.role', 'admin');
+            return $next($request);
+        }
+
+        try {
+            $claims = Jwt::verify($rawToken);
+        } catch (Throwable) {
+            return response()->json(['error' => 'invalid_token'], 401);
+        }
+
+        if (($claims['type'] ?? null) !== 'access') {
+            return response()->json(['error' => 'wrong_token_type'], 401);
+        }
+
+        if ($roles !== [] && ! in_array($claims['role'] ?? '', $roles, true)) {
+            return response()->json(['error' => 'forbidden'], 403);
+        }
+
+        $request->attributes->set('auth.userId', $claims['sub'] ?? null);
+        $request->attributes->set('auth.tenantId', $claims['tenantId'] ?? null);
+        $request->attributes->set('auth.role', $claims['role'] ?? null);
+
         return $next($request);
     }
 }

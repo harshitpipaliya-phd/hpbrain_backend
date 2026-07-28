@@ -78,7 +78,8 @@ final class PersonController extends Controller
             'sub_institute_id' => $data['orgId'],
             'user_profile_id'  => $profileId,
             'status'           => 1,
-            'created_by'       => $this->actorId($request),
+            // ERP column is BIGINT; see Controller::actorErpId().
+            'created_by'       => $this->actorErpId($request),
             'created_at'       => $now,
             'updated_at'       => $now,
         ]);
@@ -118,7 +119,7 @@ final class PersonController extends Controller
             DB::table('hpbrain_audit_logs')
                 ->where('tenant_id', $this->tenantId($request))
                 ->where('entity_type', 'Person')->where('entity_id', $id)
-                ->orderByDesc('created_date')->get()
+                ->orderByDesc('created_at')->get()
         );
     }
 

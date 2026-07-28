@@ -44,7 +44,9 @@ final class OrganizationController extends Controller
             'logo'      => ['nullable', 'string'],
         ]);
 
-        $data['createdBy'] = $this->actorId($request);
+        // institute_detail.created_by and org_details.created_by are BIGINT;
+        // see Controller::actorErpId().
+        $data['createdBy'] = $this->actorErpId($request);
 
         return response()->json($this->repository->create($data), 201);
     }
@@ -55,7 +57,7 @@ final class OrganizationController extends Controller
             DB::table('hpbrain_audit_logs')
                 ->where('tenant_id', $this->tenantId($request))
                 ->where('entity_type', 'Organization')->where('entity_id', $id)
-                ->orderByDesc('created_date')->get()
+                ->orderByDesc('created_at')->get()
         );
     }
 

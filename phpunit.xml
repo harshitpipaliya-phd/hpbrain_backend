@@ -6,4 +6,25 @@
     <testsuite name="Unit"><directory>tests/Unit</directory></testsuite>
     <testsuite name="Feature"><directory>tests/Feature</directory></testsuite>
   </testsuites>
+  <!--
+    The .env this project ships points DB_* at a REMOTE MySQL server whose
+    database (hp_erp) is shared with the institute ERP. Without the overrides
+    below, `php artisan test` boots against that live shared database. These
+    pin the suite to an in-memory SQLite instance so no test can read or write
+    the shared server, whatever it does.
+
+    APP_ENV=testing also matters on its own: AuthenticateJwt honours a
+    `Bearer dev-bypass` backdoor under local/development that mints an ADMIN
+    identity. Running the suite as `testing` keeps that backdoor closed, so the
+    authorization tests exercise the real token path.
+  -->
+  <php>
+    <env name="APP_ENV" value="testing"/>
+    <env name="DB_CONNECTION" value="sqlite"/>
+    <env name="DB_DATABASE" value=":memory:"/>
+    <env name="CACHE_STORE" value="array"/>
+    <env name="SESSION_DRIVER" value="array"/>
+    <env name="QUEUE_CONNECTION" value="sync"/>
+    <env name="JWT_SECRET" value="testing-only-secret-not-a-real-key"/>
+  </php>
 </phpunit>

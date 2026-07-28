@@ -26,17 +26,63 @@ use Ramsey\Uuid\Uuid;
  */
 final class EventController extends Controller
 {
+    /**
+     * hpbrain_event_store names the column `type`, and timestamps it with
+     * `created_at`. Every query here previously said `event_type` and
+     * `created_date`, so the whole events surface 500'd.
+     *
+     * hpbrain_dead_letter_queue has no tenant_id at all — it is
+     * (id, event_id, consumer_name, error_message, error_stack, retry_count,
+     * max_retries, created_at). Tenant scoping therefore has to travel through
+     * the event the entry refers to, which is what dlqForTenant() does.
+     */
+    private function dlqForTenant(string $tenant)
+    {
+        return DB::table('hpbrain_dead_letter_queue as d')
+            ->join('hpbrain_event_store as e', 'e.id', '=', 'd.event_id')
+            ->where('e.tenant_id', $tenant);
+    }
+
+    /**
+     * GET /events — the collection read the SPA's Event Store screen calls.
+     * There was no such route, so that screen could only ever 404.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $q = DB::table('hpbrain_event_store')->where('tenant_id', $this->tenantId($request));
+
+        if ($type   = $request->query('type'))   { $q->where('type', $type); }
+        if ($status = $request->query('status')) { $q->where('status', $status); }
+        if ($entity = $request->query('entityType')) { $q->where('entity_type', $entity); }
+
+        $limit = min((int) $request->query('limit', 100), 500);
+
+        return response()->json($q->orderByDesc('created_at')->limit($limit)->get());
+    }
+
     public function stats(Request $request): JsonResponse
     {
         $tenant = $this->tenantId($request);
+        $store  = fn () => DB::table('hpbrain_event_store')->where('tenant_id', $tenant);
+
+        $byStatus = $store()->select('status', DB::raw('COUNT(*) as count'))
+            ->groupBy('status')->pluck('count', 'status');
 
         return response()->json([
-            'total'      => DB::table('hpbrain_event_store')->where('tenant_id', $tenant)->count(),
-            'byType'     => DB::table('hpbrain_event_store')->where('tenant_id', $tenant)
-                              ->select('event_type', DB::raw('COUNT(*) as count'))
-                              ->groupBy('event_type')->orderByDesc('count')->limit(50)->get(),
-            'deadLetter' => DB::table('hpbrain_dead_letter_queue')->where('tenant_id', $tenant)->count(),
-            'consumers'  => DB::table('hpbrain_consumer_state')->count(),
+            'total'           => $store()->count(),
+            // The dashboard reads these four by name, so emit them explicitly
+            // rather than making the client dig through a grouped array.
+            'pending'         => (int) ($byStatus['pending'] ?? 0),
+            'processing'      => (int) ($byStatus['processing'] ?? 0),
+            'completed'       => (int) ($byStatus['completed'] ?? 0),
+            'failed'          => (int) ($byStatus['failed'] ?? 0),
+            'byType'          => $store()->select('type', DB::raw('COUNT(*) as count'))
+                                   ->groupBy('type')->orderByDesc('count')->limit(50)->get(),
+            'deadLetterCount' => $this->dlqForTenant($tenant)->count(),
+            'consumers'       => DB::table('hpbrain_consumer_state')->pluck('consumer_name'),
+            'consumerStates'  => DB::table('hpbrain_consumer_state')
+                                   ->select('consumer_name', 'status', 'last_processed_at')
+                                   ->orderBy('consumer_name')->get(),
         ]);
     }
 
@@ -62,7 +108,7 @@ final class EventController extends Controller
         DB::table('hpbrain_event_store')->insert([
             'id'              => $newId,
             'tenant_id'       => $tenant,
-            'event_type'      => $original->event_type,
+            'type'            => $original->type,
             'entity_type'     => $original->entity_type ?? null,
             'entity_id'       => $original->entity_id ?? null,
             'payload'         => $original->payload,
@@ -71,7 +117,7 @@ final class EventController extends Controller
             'causation_id'    => $original->id,
             'idempotency_key' => "replay-{$original->id}-{$newId}",
             'status'          => 'pending',
-            'created_date'    => now()->format('Y-m-d H:i:s'),
+            'created_at'      => now()->format('Y-m-d H:i:s'),
         ]);
 
         return response()->json(['ok' => true, 'replayEventId' => $newId, 'causationId' => $original->id], 202);
@@ -89,15 +135,17 @@ final class EventController extends Controller
     public function dlq(Request $request): JsonResponse
     {
         return response()->json(
-            DB::table('hpbrain_dead_letter_queue')->where('tenant_id', $this->tenantId($request))
-                ->orderByDesc('created_date')->limit(200)->get()
+            $this->dlqForTenant($this->tenantId($request))
+                ->select('d.*', 'e.type as event_type', 'e.payload')
+                ->orderByDesc('d.created_at')->limit(200)->get()
         );
     }
 
     public function retryDlq(Request $request, string $id): JsonResponse
     {
         $tenant = $this->tenantId($request);
-        $row = DB::table('hpbrain_dead_letter_queue')->where('tenant_id', $tenant)->where('id', $id)->first();
+        $row = $this->dlqForTenant($tenant)->select('d.*', 'e.type as event_type', 'e.payload')
+            ->where('d.id', $id)->first();
 
         if (! $row) {
             return response()->json(['error' => 'dlq_entry_not_found'], 404);
@@ -109,15 +157,15 @@ final class EventController extends Controller
             DB::table('hpbrain_event_store')->insert([
                 'id'              => $newId,
                 'tenant_id'       => $tenant,
-                'event_type'      => $row->event_type,
+                'type'            => $row->event_type,
                 'payload'         => $row->payload,
                 'correlation_id'  => $row->id,
                 'idempotency_key' => "dlq-retry-{$row->id}-{$newId}",
                 'status'          => 'pending',
-                'created_date'    => now()->format('Y-m-d H:i:s'),
+                'created_at'      => now()->format('Y-m-d H:i:s'),
             ]);
 
-            DB::table('hpbrain_dead_letter_queue')->where('tenant_id', $tenant)->where('id', $id)->delete();
+            DB::table('hpbrain_dead_letter_queue')->where('id', $id)->delete();
 
             return response()->json(['ok' => true, 'eventId' => $newId], 202);
         });
@@ -125,10 +173,15 @@ final class EventController extends Controller
 
     public function deleteDlq(Request $request, string $id): JsonResponse
     {
-        $n = DB::table('hpbrain_dead_letter_queue')
-            ->where('tenant_id', $this->tenantId($request))->where('id', $id)->delete();
+        // Confirm the entry belongs to this tenant (through its event) before
+        // deleting, since the DLQ table itself carries no tenant column.
+        if (! $this->dlqForTenant($this->tenantId($request))->where('d.id', $id)->exists()) {
+            return response()->json(['error' => 'dlq_entry_not_found'], 404);
+        }
 
-        return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'dlq_entry_not_found'], 404);
+        DB::table('hpbrain_dead_letter_queue')->where('id', $id)->delete();
+
+        return response()->json(['ok' => true]);
     }
 
     public function consumers(): JsonResponse

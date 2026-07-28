@@ -31,14 +31,14 @@ final class AuditController extends Controller
 
         $limit = min((int) $request->query('limit', 100), 500);
 
-        return response()->json($q->orderByDesc('created_date')->limit($limit)->get());
+        return response()->json($q->orderByDesc('created_at')->limit($limit)->get());
     }
 
     public function activity(Request $request): JsonResponse
     {
         return response()->json(
             DB::table(self::TABLE)->where('tenant_id', $this->tenantId($request))
-                ->orderByDesc('created_date')->limit(50)->get()
+                ->orderByDesc('created_at')->limit(50)->get()
         );
     }
 
