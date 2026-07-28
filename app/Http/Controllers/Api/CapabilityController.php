@@ -100,20 +100,38 @@ final class CapabilityController extends Controller
             return response()->json(['error' => 'capability_not_found'], 404);
         }
 
+        // hpbrain_capability_versions stores a real column-per-field snapshot
+        // (version, name, description, category, capability_type, difficulty,
+        // criticality and the five KASBA columns) — not a `version_number` plus
+        // a JSON `snapshot` blob. Both of those names were invented; neither
+        // exists, so versioning 500'd on every call.
         $next = (int) DB::table('hpbrain_capability_versions')
-            ->where('tenant_id', $tenant)->where('capability_id', $id)->max('version_number') + 1;
+            ->where('tenant_id', $tenant)->where('capability_id', $id)->max('version') + 1;
 
         $row = [
-            'id'             => Uuid::uuid4()->toString(),
-            'tenant_id'      => $tenant,
-            'capability_id'  => $id,
-            'version_number' => $next,
-            'snapshot'       => json_encode($current),
-            'created_by'     => $this->actorId($request),
-            'created_date'   => now()->format('Y-m-d H:i:s'),
+            'id'              => Uuid::uuid4()->toString(),
+            'tenant_id'       => $tenant,
+            'capability_id'   => $id,
+            'version'         => $next,
+            'name'            => $current['name'] ?? null,
+            'description'     => $current['description'] ?? null,
+            'category'        => $current['category'] ?? null,
+            'capability_type' => $current['capability_type'] ?? null,
+            'difficulty'      => $current['difficulty'] ?? null,
+            'criticality'     => $current['criticality'] ?? null,
+            'knowledge'       => $current['knowledge'] ?? null,
+            'ability'         => $current['ability'] ?? null,
+            'skill'           => $current['skill'] ?? null,
+            'behaviour'       => $current['behaviour'] ?? null,
+            'attitude'        => $current['attitude'] ?? null,
+            'created_by'      => $this->actorId($request),
+            'created_date'    => now()->format('Y-m-d H:i:s'),
         ];
 
         DB::table('hpbrain_capability_versions')->insert($row);
+
+        // Keep the capability's own version counter in step with its history.
+        $this->repository->updateFields($tenant, $id, ['version' => $next]);
 
         return response()->json($row, 201);
     }
@@ -123,7 +141,7 @@ final class CapabilityController extends Controller
         return response()->json(
             DB::table('hpbrain_capability_versions')
                 ->where('tenant_id', $this->tenantId($request))->where('capability_id', $id)
-                ->orderByDesc('version_number')->get()
+                ->orderByDesc('version')->get()
         );
     }
 
@@ -134,10 +152,19 @@ final class CapabilityController extends Controller
         return $row ? response()->json($row) : response()->json(['error' => 'capability_not_found'], 404);
     }
 
+    /**
+     * hpbrain_capability_assignments is polymorphic — (target_type, target_id,
+     * assigned_by, assigned_date) — so a capability can be assigned to a
+     * Person, Department, JobRole or Organization. This method previously
+     * validated a single `personId` and wrote a `person_id` column that does
+     * not exist, which both 500'd and threw away three quarters of what the
+     * schema supports.
+     */
     public function assign(Request $request, string $tenantId, string $id): JsonResponse
     {
         $data = $request->validate([
-            'personId' => ['required', 'string'],
+            'targetType' => ['required', 'string', 'in:Person,Department,JobRole,Organization'],
+            'targetId'   => ['required', 'string'],
         ]);
 
         $tenant = $this->tenantId($request);
@@ -148,7 +175,8 @@ final class CapabilityController extends Controller
 
         $existing = DB::table('hpbrain_capability_assignments')
             ->where('tenant_id', $tenant)->where('capability_id', $id)
-            ->where('person_id', $data['personId'])->first();
+            ->where('target_type', $data['targetType'])->where('target_id', $data['targetId'])
+            ->first();
 
         if ($existing) {
             return response()->json($existing);
@@ -158,10 +186,11 @@ final class CapabilityController extends Controller
             'id'            => Uuid::uuid4()->toString(),
             'tenant_id'     => $tenant,
             'capability_id' => $id,
-            'person_id'     => $data['personId'],
+            'target_type'   => $data['targetType'],
+            'target_id'     => $data['targetId'],
             'status'        => 'active',
-            'created_by'    => $this->actorId($request),
-            'created_date'  => now()->format('Y-m-d H:i:s'),
+            'assigned_by'   => $this->actorId($request),
+            'assigned_date' => now()->format('Y-m-d H:i:s'),
         ];
 
         DB::table('hpbrain_capability_assignments')->insert($row);
@@ -184,7 +213,7 @@ final class CapabilityController extends Controller
             DB::table('hpbrain_audit_logs')
                 ->where('tenant_id', $this->tenantId($request))
                 ->where('entity_type', 'Capability')->where('entity_id', $id)
-                ->orderByDesc('created_date')->get()
+                ->orderByDesc('created_at')->get()
         );
     }
 }

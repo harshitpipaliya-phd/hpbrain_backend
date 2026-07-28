@@ -9,7 +9,11 @@ declare(strict_types=1);
  * deployment's configuration carries over untouched.
  */
 return [
-    'default' => 'mysql',
+    // Honours DB_CONNECTION instead of hardcoding mysql. .env sets
+    // DB_CONNECTION=mysql, so deployments are unaffected — but hardcoding it
+    // meant phpunit.xml could not redirect the suite off the shared ERP
+    // server, and tests were opening real connections to it.
+    'default' => env('DB_CONNECTION', 'mysql'),
 
     'connections' => [
         'mysql' => [
@@ -27,6 +31,18 @@ return [
             'options'        => env('DB_SSL') === 'true'
                 ? [PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false]
                 : [],
+        ],
+        // Test-only. The mysql connection above points at hp_erp, which the
+        // Brain SHARES with the institute ERP (171 non-hpbrain_ tables live in
+        // it). A suite that boots against that connection is one
+        // RefreshDatabase trait away from dropping the ERP. phpunit.xml pins
+        // DB_CONNECTION to this instead, so tests cannot reach the shared
+        // server even by accident.
+        'sqlite' => [
+            'driver'   => 'sqlite',
+            'database' => env('DB_DATABASE', ':memory:'),
+            'prefix'   => '',
+            'foreign_key_constraints' => true,
         ],
     ],
 
