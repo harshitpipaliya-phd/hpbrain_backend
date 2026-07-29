@@ -32,6 +32,9 @@ final class OrganizationRepository
             ->whereNull('d.deleted_at')
             ->groupBy('d.sub_institute_id')
             ->orderByDesc('d.sub_institute_id')
+            // No hydrate() here: this class does not extend BaseRepository —
+            // the ERP tables it reads are not Brain-owned and hold no JSON
+            // columns.
             ->get()->map(fn ($r) => (array) $r)->all();
     }
 

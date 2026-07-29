@@ -19,21 +19,33 @@ use Illuminate\Support\Facades\DB;
  */
 final class SearchController extends Controller
 {
+    /**
+     * `headline` names the column that makes a row recognisable to a human.
+     * Without it a result carries only an id, and the Global Search list
+     * rendered a column of blank rows — technically correct answers nobody
+     * could act on.
+     */
     private const SEARCHABLE = [
-        'signals'         => ['table' => 'hpbrain_signals',         'fields' => ['classification', 'source']],
-        'evidence'        => ['table' => 'hpbrain_evidence',        'fields' => ['content', 'source']],
-        'cases'           => ['table' => 'hpbrain_cases',           'fields' => ['title']],
-        'recommendations' => ['table' => 'hpbrain_recommendations', 'fields' => ['title']],
-        'learnings'       => ['table' => 'hpbrain_learnings',       'fields' => ['pattern']],
-        'capabilities'    => ['table' => 'hpbrain_capabilities',    'fields' => ['name', 'capability_code']],
+        'signals'         => ['table' => 'hpbrain_signals',         'fields' => ['classification', 'source'],       'headline' => 'classification'],
+        'evidence'        => ['table' => 'hpbrain_evidence',        'fields' => ['content', 'source'],              'headline' => 'source'],
+        'cases'           => ['table' => 'hpbrain_cases',           'fields' => ['title'],                          'headline' => 'title'],
+        'recommendations' => ['table' => 'hpbrain_recommendations', 'fields' => ['title'],                          'headline' => 'title'],
+        'learnings'       => ['table' => 'hpbrain_learnings',       'fields' => ['pattern'],                        'headline' => 'pattern'],
+        'capabilities'    => ['table' => 'hpbrain_capabilities',    'fields' => ['name', 'capability_code'],        'headline' => 'name'],
     ];
 
+    /**
+     * Each result is flattened to (entityType, id, headline) alongside the full
+     * record. GlobalSearch.tsx reads exactly those three fields; the previous
+     * {type, record} shape left every one of them undefined, so the screen
+     * listed the right number of results with nothing written on them.
+     */
     public function search(Request $request): JsonResponse
     {
         $term = trim((string) $request->query('q', ''));
 
         if ($term === '') {
-            return response()->json(['query' => '', 'results' => []]);
+            return response()->json(['query' => '', 'count' => 0, 'results' => []]);
         }
 
         $tenant = $this->tenantId($request);
@@ -55,7 +67,15 @@ final class SearchController extends Controller
                 ->limit(25)->get();
 
             foreach ($rows as $row) {
-                $results[] = ['type' => $type, 'record' => $row];
+                $headline = $row->{$spec['headline']} ?? null;
+
+                $results[] = [
+                    'type'       => $type,
+                    'entityType' => $type,
+                    'id'         => (string) $row->id,
+                    'headline'   => (string) ($headline !== null && $headline !== '' ? $headline : $row->id),
+                    'record'     => $row,
+                ];
             }
         }
 
@@ -87,8 +107,13 @@ final class SearchController extends Controller
         $executions = $decisions->isEmpty() ? collect() : DB::table('hpbrain_eso_executions')
             ->where('tenant_id', $t)->whereIn('decision_id', $decisions->pluck('id')->all())->get();
 
-        $outcomes = $executions->isEmpty() ? collect() : DB::table('hpbrain_outcomes')
-            ->where('tenant_id', $t)->whereIn('eso_execution_id', $executions->pluck('id')->all())->get();
+        // hpbrain_outcomes links to the DECISION, not to the execution — there
+        // is no eso_execution_id column, and asking for one raised
+        // "Unknown column 'eso_execution_id'" the moment a chain reached its
+        // first execution. An outcome is the result of the decision; which
+        // execution carried it out is recorded on the execution.
+        $outcomes = $decisions->isEmpty() ? collect() : DB::table('hpbrain_outcomes')
+            ->where('tenant_id', $t)->whereIn('decision_id', $decisions->pluck('id')->all())->get();
 
         $learnings = $outcomes->isEmpty() ? collect() : DB::table('hpbrain_learnings')
             ->where('tenant_id', $t)->whereIn('outcome_id', $outcomes->pluck('id')->all())->get();

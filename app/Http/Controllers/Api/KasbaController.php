@@ -77,7 +77,91 @@ final class KasbaController extends Controller
             ];
         }
 
-        return response()->json(['dimensions' => $summary, 'assignments' => $rows->count()]);
+        return response()->json([
+            'cells'       => $this->heatmapCells($tenant, $rows, $dims),
+            'dimensions'  => $summary,
+            'assignments' => $rows->count(),
+        ]);
+    }
+
+    /**
+     * The heatmap proper: one cell per (capability, department).
+     *
+     * The endpoint only ever returned the five-dimension roll-up, so the KASBA
+     * Explorer — which assigns the response straight into a cell array and maps
+     * over it — called .map on an object and blanked the screen.
+     *
+     * Aggregates only. A cell carries an average and a count of how many
+     * assessments stand behind it, never a person id and never an individual
+     * level, which is the privacy line this screen is built not to cross.
+     *
+     * @param  \Illuminate\Support\Collection  $rows  latest proficiency per assignment
+     * @param  array<int, string>  $dims
+     * @return array<int, array<string, mixed>>
+     */
+    private function heatmapCells(string $tenant, $rows, array $dims): array
+    {
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $assignments = DB::table('hpbrain_capability_assignments')
+            ->where('tenant_id', $tenant)
+            ->whereIn('id', $rows->pluck('assignment_id')->unique()->all())
+            ->get()->keyBy('id');
+
+        // A capability held by a person belongs to that person's department;
+        // one assigned to a department belongs to it directly. Anything else
+        // (JobRole, Organization) has no department and is reported under a
+        // null departmentId rather than dropped.
+        $personIds = $assignments->where('target_type', 'Person')->pluck('target_id')->unique()->all();
+
+        $departmentOfPerson = $personIds === [] ? collect() : DB::table('tbluser')
+            ->whereIn('id', $personIds)->whereNull('deleted_at')
+            ->pluck('department_id', 'id');
+
+        $buckets = [];
+
+        foreach ($rows as $p) {
+            $assignment = $assignments->get($p->assignment_id);
+
+            if (! $assignment) {
+                continue;
+            }
+
+            $levels = [];
+            foreach ($dims as $d) {
+                $value = $p->{$d.'_level'} ?? null;
+                if ($value !== null) {
+                    $levels[] = (float) $value;
+                }
+            }
+
+            if ($levels === []) {
+                continue;
+            }
+
+            $departmentId = match ($assignment->target_type) {
+                'Person'     => ($d = $departmentOfPerson[$assignment->target_id] ?? null) !== null ? (string) $d : null,
+                'Department' => (string) $assignment->target_id,
+                default      => null,
+            };
+
+            $key = $assignment->capability_id.'|'.($departmentId ?? '');
+            $buckets[$key] ??= ['capabilityId' => (string) $assignment->capability_id, 'departmentId' => $departmentId, 'levels' => []];
+            $buckets[$key]['levels'][] = array_sum($levels) / count($levels);
+        }
+
+        $cells = array_values(array_map(fn (array $b) => [
+            'capabilityId'  => $b['capabilityId'],
+            'departmentId'  => $b['departmentId'],
+            'averageLevel'  => round(array_sum($b['levels']) / count($b['levels']), 2),
+            'assessedCount' => count($b['levels']),
+        ], $buckets));
+
+        usort($cells, fn ($a, $b) => $b['averageLevel'] <=> $a['averageLevel']);
+
+        return $cells;
     }
 
     public function tasksForCapability(Request $request, string $tenantId, string $capabilityId): JsonResponse

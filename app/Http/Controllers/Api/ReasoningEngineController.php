@@ -14,9 +14,28 @@ use Illuminate\Support\Facades\DB;
  * request time and states its own basis, so a user can always ask "why is this
  * on my list?" and get an answer from data rather than a heuristic they cannot
  * inspect.
+ *
+ * All three endpoints answer with an envelope {count, findings}. Both callers —
+ * the Executive Dashboard's data-quality tiles and the Command Center — read
+ * `.count`, which a bare array does not carry: every alert tile rendered empty
+ * and, being empty rather than zero, read as "no data collected" instead of
+ * "nothing wrong". The findings themselves are unchanged and still carry their
+ * own `basis`.
  */
 final class ReasoningEngineController extends Controller
 {
+    /** @param array<int, array<string, mixed>>|\Illuminate\Support\Collection $findings */
+    private function envelope(string $finding, $findings): JsonResponse
+    {
+        $list = is_array($findings) ? $findings : $findings->all();
+
+        return response()->json([
+            'finding'  => $finding,
+            'count'    => count($list),
+            'findings' => array_values($list),
+        ]);
+    }
+
     /** Signals that have produced no evidence — the Brain is guessing. */
     public function missingEvidence(Request $request): JsonResponse
     {
@@ -31,7 +50,7 @@ final class ReasoningEngineController extends Controller
             ->select('s.id', 's.classification', 's.priority', 's.created_date')
             ->orderByDesc('s.created_date')->limit(100)->get();
 
-        return response()->json($rows->map(fn ($r) => (array) $r + [
+        return $this->envelope('signal_without_evidence', $rows->map(fn ($r) => (array) $r + [
             'finding' => 'signal_without_evidence',
             'basis'   => 'No evidence row references this signal.',
         ]));
@@ -48,7 +67,7 @@ final class ReasoningEngineController extends Controller
             ->having('occurrences', '>', 1)
             ->orderByDesc('occurrences')->limit(50)->get();
 
-        return response()->json($rows->map(fn ($r) => (array) $r + [
+        return $this->envelope('recurring_signal', $rows->map(fn ($r) => (array) $r + [
             'finding' => 'recurring_signal',
             'basis'   => 'Same classification and source recorded more than once.',
         ]));
@@ -101,6 +120,6 @@ final class ReasoningEngineController extends Controller
 
         usort($warnings, fn ($a, $b) => $b['recurrences'] <=> $a['recurrences']);
 
-        return response()->json($warnings);
+        return $this->envelope('recurrence_after_resolution', $warnings);
     }
 }

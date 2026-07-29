@@ -20,6 +20,21 @@ final class PolicyRepository extends BaseRepository
         return 'hpbrain_policies';
     }
 
+    /** @return array<int, string> */
+    protected function jsonColumns(): array
+    {
+        return [
+            'rules',
+            'allowed_executor_classes',
+            'trust_levels',
+            'routing_criteria',
+            'escalation_path',
+            'approval_gates',
+            'data_access_rules',
+            'regulatory_constraints',
+        ];
+    }
+
     public function list(string $tenantId, ?string $status = null): array
     {
         $q = $this->scoped($tenantId);
@@ -28,14 +43,14 @@ final class PolicyRepository extends BaseRepository
             $q->where('status', $status);
         }
 
-        return $q->orderByDesc('created_date')->get()->map(fn ($r) => (array) $r)->all();
+        return $q->orderByDesc('created_date')->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
     }
 
     public function findById(string $tenantId, string $id): ?array
     {
         $row = $this->scoped($tenantId)->where('id', $id)->first();
 
-        return $row ? (array) $row : null;
+        return $row ? $this->hydrate((array) $row) : null;
     }
 
     public function insert(array $row): array
