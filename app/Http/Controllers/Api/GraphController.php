@@ -42,8 +42,11 @@ final class GraphController extends Controller
 
         $row = DB::table($table)->where('tenant_id', $this->tenantId($request))->where('id', $id)->first();
 
+        // `labels` is an array because the graph contract models a node as
+        // carrying a set of labels, and GraphExplorer reads node.labels[0].
+        // MySQL gives each row exactly one, but the shape has to hold either way.
         return $row
-            ? response()->json(['label' => $label, 'properties' => $row])
+            ? response()->json(['label' => $label, 'labels' => [$label], 'properties' => $row])
             : response()->json(['error' => 'entity_not_found'], 404);
     }
 
@@ -69,7 +72,18 @@ final class GraphController extends Controller
 
         foreach ($edges[$label] ?? [] as [$relLabel, $relTable, $fk]) {
             foreach (DB::table($relTable)->where('tenant_id', $t)->where($fk, $id)->limit(100)->get() as $row) {
-                $out[] = ['label' => $relLabel, 'via' => $fk, 'properties' => $row];
+                // A relationship is (type, direction, otherNode) — the shape
+                // GraphExplorer navigates by. The flat {label, via, properties}
+                // it used to return left r.otherNode undefined, and clicking
+                // through to a related entity threw on r.otherNode.labels[0].
+                $out[] = [
+                    'type'      => $fk,
+                    'via'       => $fk,
+                    // Every edge here is followed from this node outward: the
+                    // related row holds the foreign key pointing back at it.
+                    'direction' => 'outgoing',
+                    'otherNode' => ['label' => $relLabel, 'labels' => [$relLabel], 'properties' => $row],
+                ];
             }
         }
 
@@ -80,8 +94,11 @@ final class GraphController extends Controller
     {
         $term = trim((string) $request->query('q', ''));
 
+        // Envelope, not a bare array: both callers (GraphExplorer and
+        // GlobalSearch) read `.results`, and a bare array made that undefined —
+        // the explorer then called .map on it and blanked the screen.
         if ($term === '') {
-            return response()->json([]);
+            return response()->json(['query' => '', 'count' => 0, 'results' => []]);
         }
 
         $t = $this->tenantId($request);
@@ -100,10 +117,10 @@ final class GraphController extends Controller
             };
 
             foreach (DB::table($table)->where('tenant_id', $t)->where($col, 'like', "%{$term}%")->limit(20)->get() as $row) {
-                $out[] = ['label' => $label, 'properties' => $row];
+                $out[] = ['label' => $label, 'labels' => [$label], 'properties' => $row];
             }
         }
 
-        return response()->json($out);
+        return response()->json(['query' => $term, 'count' => count($out), 'results' => $out]);
     }
 }

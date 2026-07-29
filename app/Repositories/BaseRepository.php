@@ -44,4 +44,48 @@ abstract class BaseRepository
     {
         return (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');
     }
+
+    /**
+     * Columns this table stores as JSON. Overridden by the repositories that
+     * have any; empty here so a table of plain scalars needs no ceremony.
+     *
+     * @return array<int, string>
+     */
+    protected function jsonColumns(): array
+    {
+        return [];
+    }
+
+    /**
+     * A database row as the API should express it.
+     *
+     * PDO hands back JSON columns as strings — `capability_tags` arrives as the
+     * six characters `["a"]`, not as a list. Every consumer of this API treats
+     * those fields as structured: the agent monitor calls .map on capabilityTags,
+     * policy management calls .map on rules. Against a string, .map does not
+     * exist, and the screen went blank rather than showing a policy.
+     *
+     * A column that does not parse is left exactly as it came. That case means
+     * the stored text is not JSON, and quietly turning it into null would
+     * destroy the only copy of whatever it actually is.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    protected function hydrate(array $row): array
+    {
+        foreach ($this->jsonColumns() as $column) {
+            if (! isset($row[$column]) || ! is_string($row[$column])) {
+                continue;
+            }
+
+            $decoded = json_decode($row[$column], true);
+
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $row[$column] = $decoded;
+            }
+        }
+
+        return $row;
+    }
 }

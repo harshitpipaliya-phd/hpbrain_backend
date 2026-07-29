@@ -25,26 +25,61 @@ use Illuminate\Support\Facades\DB;
  */
 final class AiController extends Controller
 {
+    private const SUPPORTED = ['anthropic', 'openai', 'gemini', 'ollama'];
+
+    /**
+     * `providers` is a list of {name, available} because that is what the AI
+     * Workspace and the Command Center both iterate. Returning only the two
+     * flat name lists left providerData.providers undefined, and .filter on it
+     * took both screens down before they painted.
+     *
+     * supported/configured are kept alongside it — they are the same facts in
+     * the form the API contract already published.
+     */
     public function providers(): JsonResponse
     {
         $configured = array_values(array_filter(
-            ['anthropic', 'openai', 'gemini', 'ollama'],
+            self::SUPPORTED,
             fn (string $p) => (string) env(strtoupper($p).'_API_KEY', '') !== ''
         ));
 
+        $active = (string) env('AI_PROVIDER', '') ?: null;
+
         return response()->json([
-            'supported'  => ['anthropic', 'openai', 'gemini', 'ollama'],
+            'providers'  => array_map(
+                fn (string $p) => ['name' => $p, 'available' => in_array($p, $configured, true)],
+                self::SUPPORTED
+            ),
+            'supported'  => self::SUPPORTED,
             'configured' => $configured,     // names only — never keys
-            'active'     => (string) env('AI_PROVIDER', '') ?: null,
+            // The UI prints this straight into a sentence, so it must be a
+            // string; `null` rendered as an empty gap after "Active provider:".
+            'active'     => $active ?? 'none configured',
         ]);
     }
 
     public function executions(Request $request): JsonResponse
     {
-        return response()->json(
-            DB::table('hpbrain_ai_executions')->where('tenant_id', $this->tenantId($request))
-                ->orderByDesc('created_date')->limit(200)->get()
-        );
+        $rows = DB::table('hpbrain_ai_executions')->where('tenant_id', $this->tenantId($request))
+            ->orderByDesc('created_date')->limit(200)->get();
+
+        // camelCase, matching every other read surface in this API. The raw
+        // snake_case row left serviceName/latencyMs/createdDate undefined in
+        // the execution list.
+        return response()->json($rows->map(fn ($r) => [
+            'id'           => (string) $r->id,
+            'serviceName'  => (string) ($r->service_name ?? ''),
+            'provider'     => (string) ($r->provider ?? ''),
+            'model'        => $r->model ?? null,
+            'status'       => (string) ($r->status ?? 'unknown'),
+            'inputTokens'  => $r->input_tokens === null ? null : (int) $r->input_tokens,
+            'outputTokens' => $r->output_tokens === null ? null : (int) $r->output_tokens,
+            'latencyMs'    => $r->latency_ms === null ? null : (int) $r->latency_ms,
+            'error'        => $r->error ?? null,
+            'entityType'   => $r->entity_type ?? null,
+            'entityId'     => $r->entity_id ?? null,
+            'createdDate'  => $r->created_date,
+        ])->values());
     }
 
     public function summarizeEvidence(Request $request): JsonResponse
