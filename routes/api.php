@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\KnowledgeLibraryController;
 use App\Http\Controllers\Api\MentalModelController;
 use App\Http\Controllers\Api\RiskController;
 use App\Http\Controllers\Api\EventController;
+use App\Http\Controllers\Api\MeasurementPlanController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ObservabilityController;
 use App\Http\Controllers\Api\SettingsController;
@@ -154,6 +155,8 @@ Route::prefix('v1')->group(function () {
         Route::post('eso-executions/{tenantId}/{id}/rollback',   [EsoExecutionController::class, 'rollback'])->middleware('permission:eso.execute');
         Route::get ('eso-executions/{tenantId}/eso/{esoId}',      [EsoExecutionController::class, 'history']);
 
+        Route::post('measurement-plans',                          [MeasurementPlanController::class, 'store'])->middleware('permission:create');
+
         Route::get ('outcomes/{tenantId}',           [OutcomeController::class, 'index']);
         Route::post('outcomes',                      [OutcomeController::class, 'store'])->middleware('permission:create');
 
@@ -283,6 +286,25 @@ Route::prefix('v1')->group(function () {
         Route::get('reasoning-engine/{tenantId}/missing-evidence',   [ReasoningEngineController::class, 'missingEvidence']);
         Route::get('reasoning-engine/{tenantId}/duplicate-signals',  [ReasoningEngineController::class, 'duplicateSignals']);
         Route::get('reasoning-engine/{tenantId}/early-warnings',     [ReasoningEngineController::class, 'earlyWarnings']);
+
+        // The verb pipeline (ADR-004). A THIRD deliberate exception to the
+        // "POST that writes needs a write permission" rule, alongside policy
+        // evaluation and evidence summarisation: these ask a question. They
+        // write only LearningGrounded traceability events, never domain state,
+        // and requiring `update` would forbid a Viewer from asking why — see
+        // the note on ReasoningEngineController::explain(). The writes are
+        // bounded by the event store's idempotency key.
+        // COACH, SIMULATE, RECOMMEND and EVALUATE are not wired; EXECUTE ships
+        // dark and VerbPipeline refuses it outright.
+        Route::post('reasoning-engine/{tenantId}/explain',           [ReasoningEngineController::class, 'explain']);
+        Route::post('reasoning-engine/{tenantId}/assess',            [ReasoningEngineController::class, 'assess']);
+        Route::get ('reasoning-engine/{tenantId}/memory-stats',      [ReasoningEngineController::class, 'memoryStats']);
+        // RECOMMEND and EVALUATE are NOT exceptions to the write rule: they
+        // create rows (recommendations, reasoning steps) and they spend money
+        // on a provider call, so they carry `create` explicitly. EXECUTE is
+        // still absent and stays that way — no AI path may trigger an ESO run.
+        Route::post('reasoning-engine/{tenantId}/recommend',         [ReasoningEngineController::class, 'recommend'])->middleware('permission:create');
+        Route::post('reasoning-engine/{tenantId}/evaluate',          [ReasoningEngineController::class, 'evaluate'])->middleware('permission:create');
 
         Route::get ('tasks/registry', [TaskController::class, 'registry']);
         // tasks/run is NOT read-adjacent. `expire-stale-evidence` issues a bulk
