@@ -273,10 +273,11 @@ export type EsoExecutionStorePostEsoExecutionsRequest = {
   esoDefinitionId: string;
   executorType: string;
   executorId?: string;
-  measurementPlan: string;
+  measurementPlan?: string;
 };
 /** UNVERIFIED: App\Http\Controllers\Api\EsoExecutionController@store returns a raw database row. */
 export type EsoExecutionStorePostEsoExecutionsResponse = unknown;
+export type EsoExecutionStorePostEsoExecutionsError = 'measurement_plan_required';
 
 /** UNVERIFIED: App\Http\Controllers\Api\EsoExecutionController@index returns a raw database row. */
 export type EsoExecutionIndexGetEsoExecutionsTenantIdResponse = unknown;
@@ -431,6 +432,7 @@ export type KasbaHeatmapGetKasbaHeatmapTenantIdResponse = unknown;
 export type KasbaRecordProficiencyPostKasbaProficiencyRequest = unknown;
 /** UNVERIFIED: App\Http\Controllers\Api\KasbaController@recordProficiency returns a raw database row. */
 export type KasbaRecordProficiencyPostKasbaProficiencyResponse = unknown;
+export type KasbaRecordProficiencyPostKasbaProficiencyError = 'evidence_not_found' | 'capability_state_transition_rejected';
 
 /** UNVERIFIED: App\Http\Controllers\Api\KasbaController@proficiencyHistory returns a raw database row. */
 export type KasbaProficiencyHistoryGetKasbaProficiencyTenantIdAssignmentAssignmentIdHistoryResponse = unknown;

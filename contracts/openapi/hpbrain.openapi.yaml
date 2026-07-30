@@ -2685,12 +2685,12 @@ paths:
                   nullable: true
                 measurementPlan:
                   type: string
+                  nullable: true
                   minLength: 1.0
               required:
                 - decisionId
                 - esoDefinitionId
                 - executorType
-                - measurementPlan
       responses:
         201:
           description: Success.
@@ -2703,6 +2703,19 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         403:
           $ref: '#/components/responses/Forbidden'
+        422:
+          description: 'Refused: measurement_plan_required'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - measurement_plan_required
+                required:
+                  - error
   '/eso-executions/{tenantId}':
     get:
       operationId: esoExecutionIndex_get_eso_executions_tenantId_
@@ -4280,6 +4293,20 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         403:
           $ref: '#/components/responses/Forbidden'
+        422:
+          description: 'Refused: evidence_not_found, capability_state_transition_rejected'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - evidence_not_found
+                      - capability_state_transition_rejected
+                required:
+                  - error
   '/kasba/proficiency/{tenantId}/assignment/{assignmentId}/history':
     get:
       operationId: kasbaProficiencyHistory_get_kasba_proficiency_tenantId_assignment_assignmentId_history
