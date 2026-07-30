@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: 'HP Enterprise Brain API'
   version: 1.0.0
-  description: "GENERATED FROM routes/api.php by `php artisan brain:openapi`. Do not edit by hand.\n\nOperations marked `x-unverified: true` have a shape this generator could not\nderive from source. They are gaps to close, not schemas to trust: no client\nshould generate a type from an unverified operation and believe it."
+  description: "GENERATED FROM routes/api.php by `php artisan brain:openapi`. Do not edit by hand.\r\n\r\nOperations marked `x-unverified: true` have a shape this generator could not\r\nderive from source. They are gaps to close, not schemas to trust: no client\r\nshould generate a type from an unverified operation and believe it."
 servers:
   -
     url: /api/v1
