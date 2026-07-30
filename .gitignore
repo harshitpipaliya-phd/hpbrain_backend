@@ -70,3 +70,9 @@ desktop.ini
 # Deployment artifacts
 *.zip
 *.tar.gz
+# Keep required runtime directories
+!/storage/framework/cache/data/.gitkeep
+!/storage/framework/sessions/.gitkeep
+!/storage/framework/testing/.gitkeep
+!/storage/framework/views/.gitkeep
+!/storage/logs/.gitkeep
