@@ -223,6 +223,14 @@ trait BuildsBrainSchema
             $t->timestamp('updated_date')->nullable();
         });
 
+        // ---- ESO library ----------------------------------------------------
+        Schema::create('hpbrain_eso_definitions', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('eso_code');
+            $t->string('name');
+        });
+
         // Invariant 4 (2026_07_30_000100). An ESO run is refused without one.
         Schema::create('hpbrain_measurement_plans', function ($t) {
             $t->string('id', 36)->primary();
@@ -264,6 +272,7 @@ trait BuildsBrainSchema
             $t->string('eso_id', 36);
             $t->string('decision_id', 36)->nullable();
             $t->text('status')->default('queued');
+            $t->text('rollback_reason')->nullable();
             $t->text('executed_by');
             $t->text('executor_type')->default('human');
             $t->text('input');

@@ -58,18 +58,11 @@ final class MeasurementPlanTest extends TestCase
         ]);
     }
 
-    /** The two structures this phase adds, plus the ESO library they bind to. */
+    /** The ESO library (now part of BuildsBrainSchema). */
     private function buildPhase2Schema(): void
     {
-        // hpbrain_measurement_plans and recommendations.eso_id are built by
-        // BuildsBrainSchema, which mirrors 2026_07_30_000100. Only the ESO
-        // library is extra here.
-        Schema::create('hpbrain_eso_definitions', function ($t) {
-            $t->string('id', 36)->primary();
-            $t->string('tenant_id', 36);
-            $t->string('eso_code');
-            $t->string('name');
-        });
+        // hpbrain_measurement_plans is built by BuildsBrainSchema, which mirrors
+        // 2026_07_30_000100. The ESO library is also in BuildsBrainSchema now.
     }
 
     private function auth(string $role = 'manager'): array
