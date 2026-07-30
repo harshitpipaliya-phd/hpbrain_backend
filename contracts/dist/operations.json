@@ -972,6 +972,17 @@
     "unverifiedResponse": true
   },
   {
+    "name": "MeasurementPlanStorePostMeasurementPlans",
+    "method": "POST",
+    "path": "/measurement-plans",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\MeasurementPlanController@store",
+    "unverifiedResponse": true
+  },
+  {
     "name": "MentalModelIndexGetMentalModelsTenantId",
     "method": "GET",
     "path": "/mental-models/{tenantId}",

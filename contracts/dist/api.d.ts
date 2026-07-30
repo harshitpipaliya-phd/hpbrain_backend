@@ -273,7 +273,6 @@ export type EsoExecutionStorePostEsoExecutionsRequest = {
   esoDefinitionId: string;
   executorType: string;
   executorId?: string;
-  measurementPlan?: string;
 };
 /** UNVERIFIED: App\Http\Controllers\Api\EsoExecutionController@store returns a raw database row. */
 export type EsoExecutionStorePostEsoExecutionsResponse = unknown;
@@ -486,6 +485,18 @@ export type LearningIndexGetLearningsTenantIdResponse = unknown;
 
 /** UNVERIFIED: App\Http\Controllers\Api\LearningController@reusable returns a raw database row. */
 export type LearningReusableGetLearningsTenantIdReusableResponse = unknown;
+
+export type MeasurementPlanStorePostMeasurementPlansRequest = {
+  decisionId: string;
+  baselineMetric: string;
+  baselineValue?: number;
+  targetValue?: number;
+  metricUnit?: string;
+  measurementWindowDays?: number;
+  ownerId?: string;
+};
+/** UNVERIFIED: App\Http\Controllers\Api\MeasurementPlanController@store returns a raw database row. */
+export type MeasurementPlanStorePostMeasurementPlansResponse = unknown;
 
 /** UNVERIFIED: App\Http\Controllers\Api\MentalModelController@index returns a raw database row. */
 export type MentalModelIndexGetMentalModelsTenantIdResponse = unknown;
@@ -1786,6 +1797,17 @@ export const OPERATIONS = [
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\LearningController@reusable",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "MeasurementPlanStorePostMeasurementPlans",
+    "method": "POST",
+    "path": "/measurement-plans",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\MeasurementPlanController@store",
     "unverifiedResponse": true
   },
   {

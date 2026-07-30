@@ -2683,10 +2683,6 @@ paths:
                 executorId:
                   type: string
                   nullable: true
-                measurementPlan:
-                  type: string
-                  nullable: true
-                  minLength: 1.0
               required:
                 - decisionId
                 - esoDefinitionId
@@ -4810,6 +4806,69 @@ paths:
           description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
       responses:
         200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  /measurement-plans:
+    post:
+      operationId: measurementPlanStore_post_measurement_plans
+      summary: 'MeasurementPlanController::store'
+      tags:
+        - MeasurementPlan
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+        - 'permission:create'
+      x-permissions:
+        - read
+        - create
+      x-controller: App\Http\Controllers\Api\MeasurementPlanController@store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decisionId:
+                  type: string
+                baselineMetric:
+                  type: string
+                  minLength: 1.0
+                baselineValue:
+                  type: number
+                  nullable: true
+                targetValue:
+                  type: number
+                  nullable: true
+                metricUnit:
+                  type: string
+                  nullable: true
+                  maxLength: 50.0
+                measurementWindowDays:
+                  type: integer
+                  nullable: true
+                  minimum: 1.0
+                ownerId:
+                  type: string
+                  nullable: true
+              required:
+                - decisionId
+                - baselineMetric
+      responses:
+        201:
           description: Success.
           x-unverified: true
           content:

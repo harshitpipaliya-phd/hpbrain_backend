@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Events\EventPublisher;
+use App\Domain\Events\LoopEvent;
 use App\Http\Controllers\Controller;
 use App\Support\Jwt;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Ramsey\Uuid\Uuid;
 
 /**
  * Auth. Ported from api/src/auth/auth.routes.ts.
@@ -22,6 +25,10 @@ use Illuminate\Support\Facades\Hash;
  */
 final class AuthController extends Controller
 {
+    public function __construct(private readonly EventPublisher $events)
+    {
+    }
+
     public function login(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -42,6 +49,27 @@ final class AuthController extends Controller
         }
 
         $claims = ['id' => $user->id, 'tenantId' => $user->tenant_id, 'role' => $user->role];
+
+        // Golden path stage (1): a principal arrives. There is no sessions
+        // table — the session exists only as this event — so emit() is correct
+        // here rather than an exception to the rule.
+        //
+        // NOT emitted on refresh(): a refreshed access token continues the
+        // session it was issued under, and counting it as a new one would
+        // inflate every session metric by the token TTL.
+        //
+        // NOT emitted on failed login either. A rejected credential is an audit
+        // and security concern, not a stage of the reasoning loop; putting it
+        // here would let an unauthenticated caller write rows into the loop's
+        // event store at will.
+        $this->events->emit(
+            LoopEvent::SESSION_STARTED,
+            (string) $user->tenant_id,
+            'Session',
+            Uuid::uuid4()->toString(),
+            (string) $user->id,
+            ['userId' => $user->id, 'role' => $user->role],
+        );
 
         return response()->json([
             'accessToken'  => Jwt::issueAccess($claims),

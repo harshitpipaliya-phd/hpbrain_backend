@@ -26,12 +26,23 @@ final class EvidenceRepository extends BaseRepository
         return ['content', 'provenance'];
     }
 
-    public function list(string $tenantId, ?string $status = null): array
+    /**
+     * $signalId filters in SQL rather than in PHP. idx_evidence_signal is
+     * (tenant_id, signal_id) — the controller previously pulled every evidence
+     * row in the tenant and filtered the result set, so the index existed and
+     * was never used, and the cost grew with the tenant instead of with the
+     * answer.
+     */
+    public function list(string $tenantId, ?string $status = null, ?string $signalId = null): array
     {
         $q = $this->scoped($tenantId);
 
         if ($status !== null) {
             $q->where('status', $status);
+        }
+
+        if ($signalId !== null) {
+            $q->where('signal_id', $signalId);
         }
 
         return $q->orderByDesc('created_date')->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
