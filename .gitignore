@@ -1,6 +1,9 @@
 # Laravel application
 /vendor
-/node_modules
+# Any depth, not just the root: contracts/node_modules is 2,000 files that a
+# root-anchored `/node_modules` does not match, and un-ignoring /contracts made
+# that immediately visible.
+node_modules/
 
 # Environment files — never commit real credentials
 .env
@@ -22,13 +25,17 @@
 composer.phar
 
 # NPM / Frontend build output
-/web/node_modules
 /web/dist
-/web
 
 # Testing
 /.phpunit.result.cache
 /coverage
+
+# Generated per CI run and published as a build artifact. Committing it would
+# recreate the problem it replaced: a status file in the tree is stale from the
+# moment the next commit lands, and a stale status file is worse than none
+# because it is believed. Generate it locally with `php artisan brain:status`.
+/docs/STATUS.md
 
 # IDE and OS files
 .idea
@@ -45,10 +52,19 @@ desktop.ini
 # Vercel
 .vercel
 .claude
-/adr
 /api
-/contracts
-/docs
+
+# /contracts, /docs and /adr were ignored, which meant the contract seam ADR-001
+# calls "contract-enforced separation" was not under version control at all —
+# nothing can be enforced that is not tracked. They are tracked now.
+#
+# /web stays ignored, but NOT because it should be: it contains its own .git
+# pointing at a DIFFERENT GitHub remote from this repository, so it is an
+# orphan nested repo rather than a submodule (there is no .gitmodules and no
+# gitlink in this index). Un-ignoring it here would either swallow that history
+# or create a broken gitlink. It needs a human decision — see the Module 9
+# report — so it is left exactly as found.
+/web
 
 
 # Deployment artifacts

@@ -64,11 +64,21 @@ final class CapabilityState
     /**
      * The guarded transition. Returns the new state, or throws.
      *
-     * @param  string|null  $evidenceRef  Required for any advance. Provenance is
-     *                                    mandatory on every capability write
-     *                                    (ADR-003) — an advance without a
-     *                                    traceable reason is an assertion
-     *                                    dressed as a measurement.
+     * @param  string|null  $evidenceRef  Required for any advance ABOVE Asserted.
+     *                                    Asserted is reachable without one on
+     *                                    purpose: an assertion is by definition
+     *                                    somebody's claim, and demanding
+     *                                    evidence for it would make the honest
+     *                                    "someone told us this" state
+     *                                    unrecordable, pushing callers to
+     *                                    overstate. Everything above Asserted
+     *                                    claims measurement, and a measurement
+     *                                    without a traceable reason is an
+     *                                    assertion dressed up as one.
+     * @param  string|null  $dimension    The KASBA dimension this state describes.
+     *                                    Required to validate Observed and
+     *                                    Demonstrated, which are not
+     *                                    interchangeable — see below.
      */
     public static function advance(
         string $from,
@@ -76,16 +86,39 @@ final class CapabilityState
         ?string $evidenceRef,
         bool $allowDowngrade = false,
         ?string $downgradeReason = null,
+        ?string $dimension = null,
     ): string {
         $fromRank = self::rank($from);
         $toRank   = self::rank($to);
+
+        // Observed and Demonstrated share rank 4 but are NOT alternatives a
+        // caller may pick between: behaviour and attitude are observed, the
+        // other three are demonstrated. Accepting either for either dimension
+        // would make the state name meaningless as evidence of how the claim
+        // was arrived at.
+        if ($dimension !== null) {
+            $expected = self::forDimension($to, $dimension);
+
+            if ($expected !== $to) {
+                throw new InvalidArgumentException(
+                    "capability_state_invalid_for_dimension: {$to} on {$dimension} (expected {$expected})"
+                );
+            }
+
+            if ($to === self::OBSERVED && ! in_array(strtolower($dimension), self::OBSERVED_DIMENSIONS, true)) {
+                throw new InvalidArgumentException(
+                    "capability_state_invalid_for_dimension: Observed is only valid for "
+                    .implode(' and ', self::OBSERVED_DIMENSIONS).", not {$dimension}"
+                );
+            }
+        }
 
         if ($toRank === $fromRank) {
             return $to;
         }
 
         if ($toRank > $fromRank) {
-            if ($evidenceRef === null || $evidenceRef === '') {
+            if (self::requiresEvidence($to) && ($evidenceRef === null || $evidenceRef === '')) {
                 throw new InvalidArgumentException(
                     "capability_state_advance_requires_evidence: {$from} -> {$to}"
                 );
@@ -102,6 +135,18 @@ final class CapabilityState
         }
 
         return $to;
+    }
+
+    /**
+     * Does reaching this state require a traceable piece of evidence?
+     *
+     * Everything above Asserted does. This is the line between "somebody says
+     * so" and "we measured it", and it is the only thing that stops a
+     * self-reported 5 from looking identical to an assessed one.
+     */
+    public static function requiresEvidence(string $state): bool
+    {
+        return self::rank($state) > self::rank(self::ASSERTED);
     }
 
     /**

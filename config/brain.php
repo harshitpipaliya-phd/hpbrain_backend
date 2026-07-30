@@ -72,6 +72,43 @@ return [
     ],
 
     /*
+     | AI (ADR-004). The provider is selected by NAME here and resolved to a
+     | driver in AiServiceProvider; business logic never names a vendor.
+     |
+     | Default is '' — no provider. That is not a placeholder waiting to be
+     | filled in: with no provider the reasoning verbs return UNDETERMINED
+     | naming the gap, which is the honest answer and the one the golden
+     | intelligence-flow test asserts. A missing key must degrade to "I don't
+     | know", never to a 500 and never to invented text.
+     |
+     | The API key is read from the environment HERE, in config, so that
+     | `php artisan config:cache` captures it. A provider that called env()
+     | at request time would work locally and return null in production.
+     | It is never committed: .env.example carries an empty value.
+     */
+    'ai' => [
+        'provider' => env('AI_PROVIDER', ''),
+        'model'    => env('AI_MODEL', 'claude-sonnet-5'),
+
+        'anthropic' => [
+            'api_key' => env('ANTHROPIC_API_KEY', ''),
+            'timeout' => (int) env('AI_TIMEOUT_SECONDS', 30),
+        ],
+
+        /*
+         | USD per MILLION tokens. Used only to estimate
+         | hpbrain_ai_executions.estimated_cost_usd — a model absent from this
+         | map records a NULL cost rather than zero, because "not priced" and
+         | "free" are different claims.
+         */
+        'pricing' => [
+            'claude-opus-5'   => ['input' => 15.00, 'output' => 75.00],
+            'claude-sonnet-5' => ['input' => 3.00,  'output' => 15.00],
+            'claude-haiku-4-5-20251001' => ['input' => 1.00, 'output' => 5.00],
+        ],
+    ],
+
+    /*
      | The institute's existing ERP tables. The Brain reads Organization,
      | Department and Person from these — it does not own them. Everything
      | the Brain reasons WITH lives in hpbrain_* tables.

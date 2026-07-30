@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Domain\CaseFile\CaseService;
+use App\Domain\Events\EventPublisher;
+use App\Domain\Events\LoopEvent;
 use App\Http\Controllers\Controller;
 use App\Repositories\CaseRepository;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +19,7 @@ final class CaseController extends Controller
     public function __construct(
         private readonly CaseRepository $repository,
         private readonly CaseService $cases,
+        private readonly EventPublisher $events,
     ) {
     }
 
@@ -32,13 +35,39 @@ final class CaseController extends Controller
             'signalId' => ['nullable', 'string'],
         ]);
 
-        return response()->json($this->repository->insert([
-            'tenant_id'  => $this->tenantId($request),
+        $tenant = $this->tenantId($request);
+
+        $row = $this->repository->insert([
+            'tenant_id'  => $tenant,
             'title'      => $data['title'],
             'signal_id'  => $data['signalId'] ?? null,
             'status'     => 'open',
             'created_by' => $this->actorId($request),
-        ]), 201);
+        ]);
+
+        // Golden path stage (3): the moment a principal names what they are
+        // reasoning about.
+        //
+        // emit() rather than publishInTransaction() is a deliberate exception
+        // to the rule, and the reason is narrow: a case is not a loop STAGE, it
+        // is the container the stages happen inside. Nothing downstream
+        // consumes SubjectSelected to do work — it exists so the audit trail
+        // can say when the subject was chosen. If that ever changes, this must
+        // move inside the transaction with the insert.
+        $this->events->emit(
+            LoopEvent::SUBJECT_SELECTED,
+            $tenant,
+            'Case',
+            (string) $row['id'],
+            $this->actorId($request),
+            [
+                'caseId'   => $row['id'],
+                'title'    => $row['title'],
+                'signalId' => $row['signal_id'],
+            ],
+        );
+
+        return response()->json($row, 201);
     }
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse

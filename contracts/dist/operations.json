@@ -1,0 +1,1614 @@
+[
+  {
+    "name": "AiSummarizeEvidencePostAiEvidenceSummarize",
+    "method": "POST",
+    "path": "/ai/evidence/summarize",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiController@summarizeEvidence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiExecutionsGetAiExecutionsTenantId",
+    "method": "GET",
+    "path": "/ai/executions/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiController@executions",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiProvidersGetAiProviders",
+    "method": "GET",
+    "path": "/ai/providers",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiController@providers",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AnalyticsIndexGetAnalyticsTenantId",
+    "method": "GET",
+    "path": "/analytics/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AnalyticsDecisionIntelligenceGetAnalyticsTenantIdDecisionIntelligence",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/decision-intelligence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@decisionIntelligence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AnalyticsDecisionsCsvGetAnalyticsTenantIdDecisionsExportCsv",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/decisions/export.csv",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@decisionsCsv",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AnalyticsExecutiveSummaryGetAnalyticsTenantIdExecutiveSummary",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/executive-summary",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@executiveSummary",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AuditIndexGetAudit",
+    "method": "GET",
+    "path": "/audit",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AuditController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AuditActivityGetAuditActivity",
+    "method": "GET",
+    "path": "/audit/activity",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AuditController@activity",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AuditStatsGetAuditStats",
+    "method": "GET",
+    "path": "/audit/stats",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AuditController@stats",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AuthChangePasswordPostAuthChangePassword",
+    "method": "POST",
+    "path": "/auth/change-password",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AuthController@changePassword",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AuthDevTokenPostAuthDevToken",
+    "method": "POST",
+    "path": "/auth/dev-token",
+    "permissions": {},
+    "controller": "App\\Http\\Controllers\\Api\\AuthController@devToken",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AuthLoginPostAuthLogin",
+    "method": "POST",
+    "path": "/auth/login",
+    "permissions": {},
+    "controller": "App\\Http\\Controllers\\Api\\AuthController@login",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AuthRefreshPostAuthRefresh",
+    "method": "POST",
+    "path": "/auth/refresh",
+    "permissions": {},
+    "controller": "App\\Http\\Controllers\\Api\\AuthController@refresh",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilityStorePostCapabilities",
+    "method": "POST",
+    "path": "/capabilities",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilityIndexGetCapabilitiesTenantId",
+    "method": "GET",
+    "path": "/capabilities/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilitySearchGetCapabilitiesTenantIdSearch",
+    "method": "GET",
+    "path": "/capabilities/{tenantId}/search",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@search",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilityShowGetCapabilitiesTenantIdId",
+    "method": "GET",
+    "path": "/capabilities/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilityUpdatePatchCapabilitiesTenantIdId",
+    "method": "PATCH",
+    "path": "/capabilities/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilityArchivePostCapabilitiesTenantIdIdArchive",
+    "method": "POST",
+    "path": "/capabilities/{tenantId}/{id}/archive",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@archive",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilityAssignPostCapabilitiesTenantIdIdAssign",
+    "method": "POST",
+    "path": "/capabilities/{tenantId}/{id}/assign",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@assign",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilityAssignmentsGetCapabilitiesTenantIdIdAssignments",
+    "method": "GET",
+    "path": "/capabilities/{tenantId}/{id}/assignments",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@assignments",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilityAuditGetCapabilitiesTenantIdIdAudit",
+    "method": "GET",
+    "path": "/capabilities/{tenantId}/{id}/audit",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@audit",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilityCreateVersionPostCapabilitiesTenantIdIdVersion",
+    "method": "POST",
+    "path": "/capabilities/{tenantId}/{id}/version",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@createVersion",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CapabilityVersionsGetCapabilitiesTenantIdIdVersions",
+    "method": "GET",
+    "path": "/capabilities/{tenantId}/{id}/versions",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CapabilityController@versions",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CaseStorePostCases",
+    "method": "POST",
+    "path": "/cases",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CaseController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CaseIndexGetCasesTenantId",
+    "method": "GET",
+    "path": "/cases/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CaseController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CaseShowGetCasesTenantIdId",
+    "method": "GET",
+    "path": "/cases/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CaseController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CaseAttachEvidencePostCasesTenantIdIdEvidence",
+    "method": "POST",
+    "path": "/cases/{tenantId}/{id}/evidence",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CaseController@attachEvidence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CaseEvidenceGetCasesTenantIdIdEvidence",
+    "method": "GET",
+    "path": "/cases/{tenantId}/{id}/evidence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CaseController@evidence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CaseTransitionPatchCasesTenantIdIdTransition",
+    "method": "PATCH",
+    "path": "/cases/{tenantId}/{id}/transition",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CaseController@transition",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationStorePromptTemplatePostConversationsPromptTemplates",
+    "method": "POST",
+    "path": "/conversations/prompt-templates",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@storePromptTemplate",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationPromptTemplatesGetConversationsPromptTemplatesTenantId",
+    "method": "GET",
+    "path": "/conversations/prompt-templates/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@promptTemplates",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationStorePostConversationsSessions",
+    "method": "POST",
+    "path": "/conversations/sessions",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationIndexGetConversationsSessionsTenantId",
+    "method": "GET",
+    "path": "/conversations/sessions/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationSearchGetConversationsSessionsTenantIdSearch",
+    "method": "GET",
+    "path": "/conversations/sessions/{tenantId}/search",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@search",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationShowGetConversationsSessionsTenantIdId",
+    "method": "GET",
+    "path": "/conversations/sessions/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationDestroyDeleteConversationsSessionsTenantIdId",
+    "method": "DELETE",
+    "path": "/conversations/sessions/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "delete"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationMessagesGetConversationsSessionsTenantIdIdMessages",
+    "method": "GET",
+    "path": "/conversations/sessions/{tenantId}/{id}/messages",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@messages",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationSendMessagePostConversationsSessionsTenantIdIdMessages",
+    "method": "POST",
+    "path": "/conversations/sessions/{tenantId}/{id}/messages",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@sendMessage",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationSetPinnedPatchConversationsSessionsTenantIdIdPin",
+    "method": "PATCH",
+    "path": "/conversations/sessions/{tenantId}/{id}/pin",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@setPinned",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConversationRenamePatchConversationsSessionsTenantIdIdRename",
+    "method": "PATCH",
+    "path": "/conversations/sessions/{tenantId}/{id}/rename",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConversationController@rename",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DecisionStorePostDecisions",
+    "method": "POST",
+    "path": "/decisions",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DecisionController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DecisionIndexGetDecisionsTenantId",
+    "method": "GET",
+    "path": "/decisions/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DecisionController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DecisionApprovePostDecisionsTenantIdIdApprove",
+    "method": "POST",
+    "path": "/decisions/{tenantId}/{id}/approve",
+    "permissions": [
+      "read",
+      "decision.approve"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DecisionController@approve",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentStorePostDepartments",
+    "method": "POST",
+    "path": "/departments",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentIndexGetDepartmentsTenantId",
+    "method": "GET",
+    "path": "/departments/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentShowGetDepartmentsTenantIdId",
+    "method": "GET",
+    "path": "/departments/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentUpdatePatchDepartmentsTenantIdId",
+    "method": "PATCH",
+    "path": "/departments/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentArchivePostDepartmentsTenantIdIdArchive",
+    "method": "POST",
+    "path": "/departments/{tenantId}/{id}/archive",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@archive",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentAuditGetDepartmentsTenantIdIdAudit",
+    "method": "GET",
+    "path": "/departments/{tenantId}/{id}/audit",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@audit",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentTwinGetDepartmentsTenantIdIdTwin",
+    "method": "GET",
+    "path": "/departments/{tenantId}/{id}/twin",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@twin",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EsoExecutionStorePostEsoExecutions",
+    "method": "POST",
+    "path": "/eso-executions",
+    "permissions": [
+      "read",
+      "eso.execute"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EsoExecutionController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EsoExecutionIndexGetEsoExecutionsTenantId",
+    "method": "GET",
+    "path": "/eso-executions/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EsoExecutionController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EsoExecutionHistoryGetEsoExecutionsTenantIdEsoEsoId",
+    "method": "GET",
+    "path": "/eso-executions/{tenantId}/eso/{esoId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EsoExecutionController@history",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EsoExecutionRollbackPostEsoExecutionsTenantIdIdRollback",
+    "method": "POST",
+    "path": "/eso-executions/{tenantId}/{id}/rollback",
+    "permissions": [
+      "read",
+      "eso.execute"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EsoExecutionController@rollback",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EsoExecutionCompletePatchEsoExecutionsTenantIdIdTransition",
+    "method": "PATCH",
+    "path": "/eso-executions/{tenantId}/{id}/transition",
+    "permissions": [
+      "read",
+      "eso.execute"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EsoExecutionController@complete",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EventIndexGetEvents",
+    "method": "GET",
+    "path": "/events",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EventController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EventConsumersGetEventsConsumers",
+    "method": "GET",
+    "path": "/events/consumers",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EventController@consumers",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EventDlqGetEventsDlq",
+    "method": "GET",
+    "path": "/events/dlq",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EventController@dlq",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EventDeleteDlqDeleteEventsDlqId",
+    "method": "DELETE",
+    "path": "/events/dlq/{id}",
+    "permissions": [
+      "read",
+      "events.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EventController@deleteDlq",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EventRetryDlqPostEventsDlqIdRetry",
+    "method": "POST",
+    "path": "/events/dlq/{id}/retry",
+    "permissions": [
+      "read",
+      "events.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EventController@retryDlq",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EventRetryFailedPostEventsRetryFailed",
+    "method": "POST",
+    "path": "/events/retry/failed",
+    "permissions": [
+      "read",
+      "events.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EventController@retryFailed",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EventStatsGetEventsStatsSummary",
+    "method": "GET",
+    "path": "/events/stats/summary",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EventController@stats",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EventShowGetEventsId",
+    "method": "GET",
+    "path": "/events/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EventController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EventReplayPostEventsIdReplay",
+    "method": "POST",
+    "path": "/events/{id}/replay",
+    "permissions": [
+      "read",
+      "events.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EventController@replay",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EvidenceStorePostEvidence",
+    "method": "POST",
+    "path": "/evidence",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EvidenceController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EvidenceIndexGetEvidenceTenantId",
+    "method": "GET",
+    "path": "/evidence/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EvidenceController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EvidenceForSignalGetEvidenceTenantIdSignalSignalId",
+    "method": "GET",
+    "path": "/evidence/{tenantId}/signal/{signalId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EvidenceController@forSignal",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ExecutorStorePostExecutors",
+    "method": "POST",
+    "path": "/executors",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ExecutorController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ExecutorIndexGetExecutorsTenantId",
+    "method": "GET",
+    "path": "/executors/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ExecutorController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphEntityGetGraphTenantIdEntityLabelId",
+    "method": "GET",
+    "path": "/graph/{tenantId}/entity/{label}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@entity",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphRelatedGetGraphTenantIdEntityLabelIdRelated",
+    "method": "GET",
+    "path": "/graph/{tenantId}/entity/{label}/{id}/related",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@related",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphSearchGetGraphTenantIdSearch",
+    "method": "GET",
+    "path": "/graph/{tenantId}/search",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@search",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "HypothesisStorePostHypotheses",
+    "method": "POST",
+    "path": "/hypotheses",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\HypothesisController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "HypothesisForCaseGetHypothesesTenantIdCaseCaseId",
+    "method": "GET",
+    "path": "/hypotheses/{tenantId}/case/{caseId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\HypothesisController@forCase",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "HypothesisConfirmPostHypothesesTenantIdCaseCaseIdIdConfirm",
+    "method": "POST",
+    "path": "/hypotheses/{tenantId}/case/{caseId}/{id}/confirm",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\HypothesisController@confirm",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "HypothesisRejectPostHypothesesTenantIdCaseCaseIdIdReject",
+    "method": "POST",
+    "path": "/hypotheses/{tenantId}/case/{caseId}/{id}/reject",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\HypothesisController@reject",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "HypothesisSupportPostHypothesesTenantIdCaseCaseIdIdSupport",
+    "method": "POST",
+    "path": "/hypotheses/{tenantId}/case/{caseId}/{id}/support",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\HypothesisController@support",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "HypothesisSetStatusPostHypothesesTenantIdIdStatus",
+    "method": "POST",
+    "path": "/hypotheses/{tenantId}/{id}/status",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\HypothesisController@setStatus",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KasbaAssessmentGetKasbaAssessmentTenantIdAssignmentAssignmentIdCapabilityId",
+    "method": "GET",
+    "path": "/kasba/assessment/{tenantId}/assignment/{assignmentId}/{capabilityId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KasbaController@assessment",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KasbaHeatmapGetKasbaHeatmapTenantId",
+    "method": "GET",
+    "path": "/kasba/heatmap/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KasbaController@heatmap",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KasbaRecordProficiencyPostKasbaProficiency",
+    "method": "POST",
+    "path": "/kasba/proficiency",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KasbaController@recordProficiency",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KasbaProficiencyHistoryGetKasbaProficiencyTenantIdAssignmentAssignmentIdHistory",
+    "method": "GET",
+    "path": "/kasba/proficiency/{tenantId}/assignment/{assignmentId}/history",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KasbaController@proficiencyHistory",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KasbaProficiencyTrendGetKasbaProficiencyTenantIdAssignmentAssignmentIdTrend",
+    "method": "GET",
+    "path": "/kasba/proficiency/{tenantId}/assignment/{assignmentId}/trend",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KasbaController@proficiencyTrend",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KasbaStoreTaskPostKasbaTasks",
+    "method": "POST",
+    "path": "/kasba/tasks",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KasbaController@storeTask",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KasbaTasksForCapabilityGetKasbaTasksTenantIdCapabilityCapabilityId",
+    "method": "GET",
+    "path": "/kasba/tasks/{tenantId}/capability/{capabilityId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KasbaController@tasksForCapability",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KnowledgeLibraryStorePostKnowledgeLibrary",
+    "method": "POST",
+    "path": "/knowledge-library",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KnowledgeLibraryController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KnowledgeLibraryIndexGetKnowledgeLibraryTenantId",
+    "method": "GET",
+    "path": "/knowledge-library/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KnowledgeLibraryController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KnowledgeLibrarySearchGetKnowledgeLibraryTenantIdSearch",
+    "method": "GET",
+    "path": "/knowledge-library/{tenantId}/search",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KnowledgeLibraryController@search",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "KnowledgeLibraryMarkReusedPostKnowledgeLibraryTenantIdIdReuse",
+    "method": "POST",
+    "path": "/knowledge-library/{tenantId}/{id}/reuse",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\KnowledgeLibraryController@markReused",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LearningStorePostLearnings",
+    "method": "POST",
+    "path": "/learnings",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LearningController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LearningIndexGetLearningsTenantId",
+    "method": "GET",
+    "path": "/learnings/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LearningController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LearningReusableGetLearningsTenantIdReusable",
+    "method": "GET",
+    "path": "/learnings/{tenantId}/reusable",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LearningController@reusable",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "MeasurementPlanStorePostMeasurementPlans",
+    "method": "POST",
+    "path": "/measurement-plans",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\MeasurementPlanController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "MentalModelIndexGetMentalModelsTenantId",
+    "method": "GET",
+    "path": "/mental-models/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\MentalModelController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "MentalModelByDomainGetMentalModelsTenantIdDomainDomain",
+    "method": "GET",
+    "path": "/mental-models/{tenantId}/domain/{domain}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\MentalModelController@byDomain",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "NotificationIndexGetNotificationsTenantId",
+    "method": "GET",
+    "path": "/notifications/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\NotificationController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "NotificationMarkAllReadPostNotificationsTenantIdReadAll",
+    "method": "POST",
+    "path": "/notifications/{tenantId}/read-all",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\NotificationController@markAllRead",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "NotificationUnreadCountGetNotificationsTenantIdUnreadCount",
+    "method": "GET",
+    "path": "/notifications/{tenantId}/unread-count",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\NotificationController@unreadCount",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "NotificationMarkReadPatchNotificationsTenantIdIdRead",
+    "method": "PATCH",
+    "path": "/notifications/{tenantId}/{id}/read",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\NotificationController@markRead",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ObservabilityHealthGetObservabilityHealth",
+    "method": "GET",
+    "path": "/observability/health",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ObservabilityController@health",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ObservabilityDatabaseGetObservabilityHealthDatabase",
+    "method": "GET",
+    "path": "/observability/health/database",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ObservabilityController@database",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ObservabilityEventsGetObservabilityHealthEvents",
+    "method": "GET",
+    "path": "/observability/health/events",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ObservabilityController@events",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ObservabilityNeo4jGetObservabilityHealthNeo4j",
+    "method": "GET",
+    "path": "/observability/health/neo4j",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ObservabilityController@neo4j",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ObservabilitySystemGetObservabilityHealthSystem",
+    "method": "GET",
+    "path": "/observability/health/system",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ObservabilityController@system",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ObservabilitySystemMetricsGetObservabilityMetricsSystem",
+    "method": "GET",
+    "path": "/observability/metrics/system",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ObservabilityController@systemMetrics",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ObservabilityMetricsGetObservabilityMetricsTenantId",
+    "method": "GET",
+    "path": "/observability/metrics/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ObservabilityController@metrics",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationStorePostOrganizations",
+    "method": "POST",
+    "path": "/organizations",
+    "permissions": [
+      "read",
+      "tenant.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIndexGetOrganizationsTenantId",
+    "method": "GET",
+    "path": "/organizations/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationShowGetOrganizationsTenantIdId",
+    "method": "GET",
+    "path": "/organizations/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationUpdatePatchOrganizationsTenantIdId",
+    "method": "PATCH",
+    "path": "/organizations/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationArchivePostOrganizationsTenantIdIdArchive",
+    "method": "POST",
+    "path": "/organizations/{tenantId}/{id}/archive",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationController@archive",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationAuditGetOrganizationsTenantIdIdAudit",
+    "method": "GET",
+    "path": "/organizations/{tenantId}/{id}/audit",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationController@audit",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OutcomeStorePostOutcomes",
+    "method": "POST",
+    "path": "/outcomes",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OutcomeController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OutcomeIndexGetOutcomesTenantId",
+    "method": "GET",
+    "path": "/outcomes/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OutcomeController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonStorePostPeople",
+    "method": "POST",
+    "path": "/people",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonIndexGetPeopleTenantId",
+    "method": "GET",
+    "path": "/people/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonSearchGetPeopleTenantIdSearch",
+    "method": "GET",
+    "path": "/people/{tenantId}/search",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonController@search",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonShowGetPeopleTenantIdId",
+    "method": "GET",
+    "path": "/people/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonUpdatePatchPeopleTenantIdId",
+    "method": "PATCH",
+    "path": "/people/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonArchivePostPeopleTenantIdIdArchive",
+    "method": "POST",
+    "path": "/people/{tenantId}/{id}/archive",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonController@archive",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonAuditGetPeopleTenantIdIdAudit",
+    "method": "GET",
+    "path": "/people/{tenantId}/{id}/audit",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonController@audit",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonTwinGetPeopleTenantIdIdTwin",
+    "method": "GET",
+    "path": "/people/{tenantId}/{id}/twin",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonController@twin",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PolicyStorePostPolicies",
+    "method": "POST",
+    "path": "/policies",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PolicyController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PolicyIndexGetPoliciesTenantId",
+    "method": "GET",
+    "path": "/policies/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PolicyController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PolicyShowGetPoliciesTenantIdId",
+    "method": "GET",
+    "path": "/policies/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PolicyController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PolicyEvaluatePostPoliciesTenantIdIdEvaluate",
+    "method": "POST",
+    "path": "/policies/{tenantId}/{id}/evaluate",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PolicyController@evaluate",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PolicyHistoryGetPoliciesTenantIdIdHistory",
+    "method": "GET",
+    "path": "/policies/{tenantId}/{id}/history",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PolicyController@history",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PolicyCreateVersionPostPoliciesTenantIdIdVersion",
+    "method": "POST",
+    "path": "/policies/{tenantId}/{id}/version",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PolicyController@createVersion",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReasoningStorePostReasoning",
+    "method": "POST",
+    "path": "/reasoning",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReasoningController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReasoningEngineAssessPostReasoningEngineTenantIdAssess",
+    "method": "POST",
+    "path": "/reasoning-engine/{tenantId}/assess",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReasoningEngineController@assess",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReasoningEngineDuplicateSignalsGetReasoningEngineTenantIdDuplicateSignals",
+    "method": "GET",
+    "path": "/reasoning-engine/{tenantId}/duplicate-signals",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReasoningEngineController@duplicateSignals",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReasoningEngineEarlyWarningsGetReasoningEngineTenantIdEarlyWarnings",
+    "method": "GET",
+    "path": "/reasoning-engine/{tenantId}/early-warnings",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReasoningEngineController@earlyWarnings",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReasoningEngineEvaluatePostReasoningEngineTenantIdEvaluate",
+    "method": "POST",
+    "path": "/reasoning-engine/{tenantId}/evaluate",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReasoningEngineController@evaluate",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReasoningEngineExplainPostReasoningEngineTenantIdExplain",
+    "method": "POST",
+    "path": "/reasoning-engine/{tenantId}/explain",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReasoningEngineController@explain",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReasoningEngineMemoryStatsGetReasoningEngineTenantIdMemoryStats",
+    "method": "GET",
+    "path": "/reasoning-engine/{tenantId}/memory-stats",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReasoningEngineController@memoryStats",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReasoningEngineMissingEvidenceGetReasoningEngineTenantIdMissingEvidence",
+    "method": "GET",
+    "path": "/reasoning-engine/{tenantId}/missing-evidence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReasoningEngineController@missingEvidence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReasoningEngineRecommendPostReasoningEngineTenantIdRecommend",
+    "method": "POST",
+    "path": "/reasoning-engine/{tenantId}/recommend",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReasoningEngineController@recommend",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReasoningForSignalGetReasoningTenantIdSignalSignalId",
+    "method": "GET",
+    "path": "/reasoning/{tenantId}/signal/{signalId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReasoningController@forSignal",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RecommendationStorePostRecommendations",
+    "method": "POST",
+    "path": "/recommendations",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RecommendationController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RecommendationIndexGetRecommendationsTenantId",
+    "method": "GET",
+    "path": "/recommendations/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RecommendationController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RiskAssessPostRisks",
+    "method": "POST",
+    "path": "/risks",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RiskController@assess",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RiskIndexGetRisksTenantId",
+    "method": "GET",
+    "path": "/risks/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RiskController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RiskMitigatePostRisksTenantIdIdMitigate",
+    "method": "POST",
+    "path": "/risks/{tenantId}/{id}/mitigate",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RiskController@mitigate",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SearchSearchGetSearchTenantId",
+    "method": "GET",
+    "path": "/search/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SearchController@search",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SettingsIndexGetSettingsTenantId",
+    "method": "GET",
+    "path": "/settings/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SettingsController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SettingsSetPutSettingsTenantId",
+    "method": "PUT",
+    "path": "/settings/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SettingsController@set",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SignalStorePostSignals",
+    "method": "POST",
+    "path": "/signals",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SignalController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SignalIndexGetSignalsTenantId",
+    "method": "GET",
+    "path": "/signals/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SignalController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SignalShowGetSignalsTenantIdId",
+    "method": "GET",
+    "path": "/signals/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SignalController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SignalChangeStatusPatchSignalsTenantIdIdStatus",
+    "method": "PATCH",
+    "path": "/signals/{tenantId}/{id}/status",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SignalController@changeStatus",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TaskRegistryGetTasksRegistry",
+    "method": "GET",
+    "path": "/tasks/registry",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TaskController@registry",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TaskRunPostTasksRun",
+    "method": "POST",
+    "path": "/tasks/run",
+    "permissions": [
+      "read",
+      "update"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TaskController@run",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "WorkspaceSummaryGetWorkspaceTenantId",
+    "method": "GET",
+    "path": "/workspace/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\WorkspaceController@summary",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SearchSignalChainGetWorkspaceTenantIdSignalSignalIdChain",
+    "method": "GET",
+    "path": "/workspace/{tenantId}/signal/{signalId}/chain",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SearchController@signalChain",
+    "unverifiedResponse": true
+  }
+]

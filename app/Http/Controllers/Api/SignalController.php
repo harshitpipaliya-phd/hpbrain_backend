@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Events\EventPublisher;
+use App\Domain\Events\LoopEvent;
 use App\Http\Controllers\Controller;
 use App\Repositories\SignalRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Ramsey\Uuid\Uuid;
 
 final class SignalController extends Controller
 {
-    public function __construct(private readonly SignalRepository $repository)
-    {
+    public function __construct(
+        private readonly SignalRepository $repository,
+        private readonly EventPublisher $events,
+    ) {
     }
 
     public function index(Request $request): JsonResponse
@@ -39,8 +44,14 @@ final class SignalController extends Controller
             'metadata'       => ['nullable', 'array'],
         ]);
 
-        return response()->json($this->repository->insert([
-            'tenant_id'      => $this->tenantId($request),
+        $tenant = $this->tenantId($request);
+
+        // The id is generated here rather than left to the repository because
+        // the event's entity_id, correlation_id and idempotency key all depend
+        // on it, and they are decided before the row is written.
+        $row = [
+            'id'             => Uuid::uuid4()->toString(),
+            'tenant_id'      => $tenant,
             'source'         => $data['source'],
             'classification' => $data['classification'],
             'priority'       => $data['priority'] ?? 'medium',
@@ -49,7 +60,27 @@ final class SignalController extends Controller
             'metadata'       => isset($data['metadata']) ? json_encode($data['metadata']) : null,
             'status'         => 'new',
             'created_by'     => $this->actorId($request),
-        ]), 201);
+        ];
+
+        // Golden path stages (2–3): something was noticed. This event STARTS
+        // the thread, so correlation_id defaults to the signal's own id —
+        // evidence and reasoning inherit it until a decision exists.
+        $this->events->publishInTransaction(
+            LoopEvent::OBSERVATION_MADE,
+            $tenant,
+            'Signal',
+            $this->actorId($request),
+            [
+                'signalId'       => $row['id'],
+                'source'         => $row['source'],
+                'classification' => $row['classification'],
+                'priority'       => $row['priority'],
+                'severity'       => $row['severity'],
+            ],
+            fn () => ['entityId' => $row['id'], 'result' => $this->repository->insert($row)],
+        );
+
+        return response()->json($this->repository->findById($tenant, $row['id']), 201);
     }
 
     public function changeStatus(Request $request, string $tenantId, string $id): JsonResponse
