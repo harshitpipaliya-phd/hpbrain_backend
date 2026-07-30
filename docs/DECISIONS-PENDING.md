@@ -58,3 +58,22 @@ This is valid SQL grammar and MySQL parses it without error, but InnoDB silently
 **Prerequisite before real constraints can be added:** orphaned rows must be found and resolved. Any `hpbrain_evidence` row whose `signal_id` points at a missing signal, any `hpbrain_decisions` row whose `recommendation_id` points at a missing recommendation, and so on, must be identified and either deleted or repaired before a real FK can be added. Adding a constraint to a table that already contains orphans fails.
 
 **Decision needed:** schedule the orphan sweep as a data-migration step. Once it is confirmed clean, real `ALTER TABLE ADD CONSTRAINT` statements can be added without risk of migration failure. Do not add constraints in the same release as the orphan fix — those are separate changes with separate rollback profiles.
+
+## 3 — Missing ESO definition and efficacy endpoints (Module 6 / Stage 6 finding)
+
+**Question:** Are there existing endpoints to list ESO definitions and their efficacy records?
+
+**Answer:** No. Both are missing.
+
+**Evidence:**
+
+| Needed | Existing route | Status |
+|---|---|---|
+| `GET /api/v1/eso-definitions` — list ESO definitions with objective, status, allowed executor classes, trust level | None | Missing |
+| `GET /api/v1/eso-definitions/{id}` — single ESO definition | None | Missing |
+| `GET /api/v1/eso-efficacy-records` — list efficacy records | None | Missing |
+| `GET /api/v1/recommendations/{tenantId}` — list recommendations (includes `eso_id`) | Exists | Available |
+
+The `recommendations` endpoint returns `eso_id` on each row, so the binding from recommendation to ESO is visible. But the ESO definition details (objective, status, allowed executor classes, trust level) and the efficacy records in `hpbrain_eso_efficacy_records` have no API surface at all.
+
+**Decision needed:** add `EsoDefinitionController` with `index` and `show`, and `EsoEfficacyController` with `index`, flowing through the Module 9 contract pipeline. This is a contract change, not a screen change, so it requires a new OpenAPI spec version.
