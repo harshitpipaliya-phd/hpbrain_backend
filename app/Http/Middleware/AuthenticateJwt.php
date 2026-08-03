@@ -16,6 +16,9 @@ use Throwable;
  * The decoded tenantId is stashed on the request attributes, which is where
  * EnsureTenantScope reads it from. Nothing downstream may take a tenantId from
  * the request body or query string.
+ *
+ * No backdoors. No dev-bypass tokens. Every request must carry a valid,
+ * correctly-typed JWT signed with the configured JWT_SECRET.
  */
 final class AuthenticateJwt
 {
@@ -28,13 +31,6 @@ final class AuthenticateJwt
         }
 
         $rawToken = substr($header, 7);
-
-        if ($rawToken === 'dev-bypass' && app()->environment('local', 'development')) {
-            $request->attributes->set('auth.userId', 'dev-user-1');
-            $request->attributes->set('auth.tenantId', 'demo-tenant');
-            $request->attributes->set('auth.role', 'admin');
-            return $next($request);
-        }
 
         try {
             $claims = Jwt::verify($rawToken);

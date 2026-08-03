@@ -120,7 +120,9 @@ final class KasbaController extends Controller
         $personIds = $assignments->where('target_type', 'Person')->pluck('target_id')->unique()->all();
 
         $departmentOfPerson = $personIds === [] ? collect() : DB::table('tbluser')
-            ->whereIn('id', $personIds)->whereNull('deleted_at')
+            ->whereIn('id', $personIds)
+            ->where('sub_institute_id', $tenant)
+            ->whereNull('deleted_at')
             ->pluck('department_id', 'id');
 
         $buckets = [];

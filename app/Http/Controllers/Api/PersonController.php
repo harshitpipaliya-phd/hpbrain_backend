@@ -12,28 +12,70 @@ use Illuminate\Support\Facades\DB;
 /** People are read from the ERP tables tbluser / tbluserprofilemaster. */
 final class PersonController extends Controller
 {
-    public function index(): JsonResponse
+    /**
+     * Exactly the columns map() reads.
+     *
+     * These reads used to be SELECT * against tbluser — the ERP's widest table.
+     * That pulled every column of every employee into PHP so that map() could
+     * throw all but eleven of them away, and among the discarded ones were
+     * `password` and `plain_password`: credential material crossing the wire
+     * and sitting in process memory for a screen that only ever renders a name
+     * and a department.
+     *
+     * @var array<int, string>
+     */
+    private const LIST_COLUMNS = [
+        'id', 'employee_no', 'first_name', 'last_name', 'email', 'mobile',
+        'gender', 'department_id', 'sub_institute_id', 'created_at', 'updated_at',
+    ];
+
+    public function index(Request $request): JsonResponse
     {
-        return response()->json($this->query()->get()->map(fn ($r) => $this->map((array) $r))->all());
+        $t = $this->tenantId($request);
+
+        return response()->json(
+            DB::table('tbluser')
+                ->select(self::LIST_COLUMNS)
+                ->where('sub_institute_id', $t)
+                ->whereNull('deleted_at')
+                ->where('status', 1)
+                ->get()
+                ->map(fn ($r) => $this->map((array) $r))
+                ->all()
+        );
     }
 
     public function search(Request $request): JsonResponse
     {
         $q = trim((string) $request->query('q', ''));
+        $t = $this->tenantId($request);
 
-        $rows = $this->query()->where(function ($w) use ($q) {
-            $w->where('first_name', 'like', "%{$q}%")
-              ->orWhere('last_name', 'like', "%{$q}%")
-              ->orWhere('email', 'like', "%{$q}%")
-              ->orWhere('employee_no', 'like', "%{$q}%");
-        })->limit(50)->get();
+        $rows = DB::table('tbluser')
+            ->select(self::LIST_COLUMNS)
+            ->where('sub_institute_id', $t)
+            ->whereNull('deleted_at')
+            ->where('status', 1)
+            ->where(function ($w) use ($q) {
+                $w->where('first_name', 'like', "%{$q}%")
+                  ->orWhere('last_name', 'like', "%{$q}%")
+                  ->orWhere('email', 'like', "%{$q}%")
+                  ->orWhere('employee_no', 'like', "%{$q}%");
+            })->limit(50)->get();
 
         return response()->json($rows->map(fn ($r) => $this->map((array) $r))->all());
     }
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $row = $this->query()->where('id', $id)->first();
+        $t = $this->tenantId($request);
+
+        $row = DB::table('tbluser')
+            ->select(self::LIST_COLUMNS)
+            ->where('id', $id)
+            ->where('sub_institute_id', $t)
+            ->whereNull('deleted_at')
+            ->where('status', 1)
+            ->first();
 
         return $row
             ? response()->json($this->map((array) $row))
@@ -47,20 +89,18 @@ final class PersonController extends Controller
             'firstName'  => ['required', 'string'],
             'lastName'   => ['required', 'string'],
             'email'      => ['required', 'email'],
-            'orgId'      => ['required', 'integer'],
             'phone'      => ['nullable', 'string'],
             'gender'     => ['nullable', 'string'],
         ]);
 
-        // The ERP requires an 'Employee' profile for the institute. It is
-        // provisioned by OrganizationRepository::create(); if it is missing the
-        // institute predates the Brain and needs one added.
+        $t = $this->tenantId($request);
+
         $profileId = DB::table('tbluserprofilemaster')
-            ->where('sub_institute_id', $data['orgId'])
+            ->where('sub_institute_id', $t)
             ->where('name', 'Employee')->where('status', 1)->value('id');
 
         if (! $profileId) {
-            return response()->json(['error' => "no_employee_profile_for_org_{$data['orgId']}"], 422);
+            return response()->json(['error' => "no_employee_profile_for_org_{$t}"], 422);
         }
 
         $now = now()->format('Y-m-d H:i:s');
@@ -75,10 +115,9 @@ final class PersonController extends Controller
             'email'            => $data['email'],
             'mobile'           => $data['phone'] ?? null,
             'gender'           => $data['gender'] ?? null,
-            'sub_institute_id' => $data['orgId'],
+            'sub_institute_id' => $t,
             'user_profile_id'  => $profileId,
             'status'           => 1,
-            // ERP column is BIGINT; see Controller::actorErpId().
             'created_by'       => $this->actorErpId($request),
             'created_at'       => $now,
             'updated_at'       => $now,
@@ -88,11 +127,6 @@ final class PersonController extends Controller
             $this->map((array) DB::table('tbluser')->find($id)) + ['tempPassword' => $temp],
             201
         );
-    }
-
-    private function query()
-    {
-        return DB::table('tbluser')->whereNull('deleted_at')->where('status', 1);
     }
 
     private function map(array $r): array
@@ -132,6 +166,8 @@ final class PersonController extends Controller
             'phone'     => ['sometimes', 'nullable', 'string'],
         ]);
 
+        $t = $this->tenantId($request);
+
         $map = ['firstName' => 'first_name', 'lastName' => 'last_name', 'email' => 'email', 'phone' => 'mobile'];
         $fields = [];
         foreach ($data as $k => $v) { $fields[$map[$k]] = $v; }
@@ -141,14 +177,23 @@ final class PersonController extends Controller
         }
 
         $fields['updated_at'] = now()->format('Y-m-d H:i:s');
-        $n = DB::table('tbluser')->where('id', $id)->whereNull('deleted_at')->update($fields);
+        $n = DB::table('tbluser')
+            ->where('id', $id)
+            ->where('sub_institute_id', $t)
+            ->whereNull('deleted_at')
+            ->update($fields);
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'person_not_found'], 404);
     }
 
     public function archive(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $n = DB::table('tbluser')->where('id', $id)->whereNull('deleted_at')
+        $t = $this->tenantId($request);
+
+        $n = DB::table('tbluser')
+            ->where('id', $id)
+            ->where('sub_institute_id', $t)
+            ->whereNull('deleted_at')
             ->update(['deleted_at' => now()->format('Y-m-d H:i:s'), 'status' => 0]);
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'person_not_found'], 404);
@@ -157,36 +202,22 @@ final class PersonController extends Controller
     /** The five KASBA dimensions, in the order the UI renders them. */
     private const KASBA = ['knowledge', 'ability', 'skill', 'behaviour', 'attitude'];
 
-    /**
-     * The Brain's view of a person: capabilities held, how firmly known, and
-     * what the person has actually decided and executed.
-     *
-     * Two things this method must get right, both of which it previously did
-     * not:
-     *
-     * 1. hpbrain_capability_assignments is polymorphic — (target_type,
-     *    target_id) — exactly as CapabilityController::assign() writes it.
-     *    Filtering on a `person_id` column raised
-     *      SQLSTATE[42S22]: Unknown column 'person_id' in 'where clause'
-     *    on every visit to a person's profile.
-     *
-     * 2. The response shape is a contract. web/src/components/person/
-     *    PersonTwin.tsx and workspace/PersonIntelligence.tsx both read
-     *    capabilityScores[], decisionParticipation, executionHistory[],
-     *    guardians[] and individualScore. Returning raw assignment rows left
-     *    every one of those undefined, and `twin.capabilityScores.length`
-     *    threw before React could paint — a blank screen, not an error.
-     */
     public function twin(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $row = $this->query()->where('id', $id)->first();
+        $t = $this->tenantId($request);
+
+        $row = DB::table('tbluser')
+            ->where('id', $id)
+            ->where('sub_institute_id', $t)
+            ->whereNull('deleted_at')
+            ->where('status', 1)
+            ->first();
 
         if (! $row) {
             return response()->json(['error' => 'person_not_found'], 404);
         }
 
         $person = (array) $row;
-        $t = $this->tenantId($request);
         $pid = (string) $id;
 
         $assignments = DB::table('hpbrain_capability_assignments')
@@ -196,8 +227,6 @@ final class PersonController extends Controller
             ->orderBy('assigned_date')
             ->get();
 
-        // One proficiency record per assignment: the most recent assessment.
-        // Older rows are history, not a second opinion to average in.
         $proficiency = $assignments->isEmpty() ? collect() : DB::table('hpbrain_capability_proficiency')
             ->where('tenant_id', $t)
             ->whereIn('assignment_id', $assignments->pluck('id')->all())
@@ -211,9 +240,6 @@ final class PersonController extends Controller
             ->whereIn('id', $assignments->pluck('capability_id')->all())
             ->pluck('name', 'id');
 
-        // Gaps are measured against the target level for the person's job role.
-        // With no jobtitle_id, or no requirements recorded for it, there is no
-        // target — and an unmeasurable gap is reported as no gap, not as zero.
         $jobRoleId = isset($person['jobtitle_id']) && $person['jobtitle_id'] !== null
             ? (string) $person['jobtitle_id']
             : null;
@@ -261,7 +287,6 @@ final class PersonController extends Controller
                 'capabilityId'    => (string) $a->capability_id,
                 'capabilityName'  => (string) ($capabilityNames[$a->capability_id] ?? $a->capability_id),
                 'assignmentId'    => (string) $a->id,
-                // Surfaced explicitly: how much of what we "know" is merely claimed.
                 'capabilityState' => (string) ($p->capability_state ?? 'Unassessed'),
                 'scores'          => $scores,
                 'gaps'            => $gaps,
@@ -284,8 +309,6 @@ final class PersonController extends Controller
             fn ($e) => in_array(strtolower((string) $e->status), ['completed', 'succeeded', 'success'], true)
         )->count();
 
-        // Activity attributed to this person, either as the actor or as the
-        // subject of the record.
         $recentActivity = DB::table('hpbrain_audit_logs')
             ->where('tenant_id', $t)
             ->where(function ($w) use ($pid) {
@@ -313,10 +336,6 @@ final class PersonController extends Controller
         $learningContributions = DB::table('hpbrain_learnings')
             ->where('tenant_id', $t)->where('created_by', $pid)->count();
 
-        // Each component is a 0-100 reading of one evidence stream. A stream
-        // with no records contributes nothing rather than a zero, so a person
-        // with one assessed capability and no decisions is not scored as
-        // having failed every decision they never made.
         $overalls = $capabilityScores->pluck('scores.overall')->filter(fn ($v) => $v !== null);
 
         $breakdown = [
@@ -329,8 +348,6 @@ final class PersonController extends Controller
 
         return response()->json([
             'person' => array_merge($this->map($person), [
-                // PersonIntelligence reads person.firstName[0] for the avatar
-                // initials; a null there is a TypeError, so these are strings.
                 'firstName' => (string) ($person['first_name'] ?? ''),
                 'lastName'  => (string) ($person['last_name'] ?? ''),
                 'email'     => (string) ($person['email'] ?? ''),

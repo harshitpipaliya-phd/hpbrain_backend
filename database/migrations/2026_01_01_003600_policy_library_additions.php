@@ -26,13 +26,13 @@ return new class extends Migration
     public function up(): void
     {
         if (!Schema::hasColumn('hpbrain_policies', 'approval_gates')) {
-            DB::unprepaired('ALTER TABLE hpbrain_policies ADD COLUMN approval_gates JSON NOT NULL DEFAULT (\'[]\')');
+            DB::unprepared('ALTER TABLE hpbrain_policies ADD COLUMN approval_gates JSON NOT NULL DEFAULT (\'[]\')');
         }
         if (!Schema::hasColumn('hpbrain_policies', 'data_access_rules')) {
-            DB::unprepaired('ALTER TABLE hpbrain_policies ADD COLUMN data_access_rules JSON NOT NULL DEFAULT (\'[]\')');
+            DB::unprepared('ALTER TABLE hpbrain_policies ADD COLUMN data_access_rules JSON NOT NULL DEFAULT (\'[]\')');
         }
         if (!Schema::hasColumn('hpbrain_policies', 'regulatory_constraints')) {
-            DB::unprepaired('ALTER TABLE hpbrain_policies ADD COLUMN regulatory_constraints JSON NOT NULL DEFAULT (\'[]\')');
+            DB::unprepared('ALTER TABLE hpbrain_policies ADD COLUMN regulatory_constraints JSON NOT NULL DEFAULT (\'[]\')');
         }
     }
 

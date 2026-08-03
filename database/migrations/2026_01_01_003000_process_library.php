@@ -49,7 +49,7 @@ return new class extends Migration
             $idx = DB::select("SHOW INDEX FROM hpbrain_process_definitions WHERE Key_name = 'idx_process_definitions_org'");
             if (empty($idx)) DB::unprepared('CREATE INDEX idx_process_definitions_org ON hpbrain_process_definitions (tenant_id, org_id)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_process_definitions WHERE Key_name = 'idx_process_definitions_status'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_process_definitions_status ON hpbrain_process_definitions (tenant_id, status)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_process_definitions_status ON hpbrain_process_definitions (tenant_id, status)');
         }
     }
 

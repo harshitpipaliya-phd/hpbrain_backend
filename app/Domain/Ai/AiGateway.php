@@ -104,6 +104,39 @@ final class AiGateway
         return $response;
     }
 
+    public function completeWithRag(
+        string $tenantId,
+        string $actorId,
+        string $service,
+        AiRequest $request,
+        array $ragOptions = [],
+    ): AiResponse {
+        return $this->complete($request, $tenantId, $actorId, $service, null, null, null);
+    }
+
+    public function completeWithFallback(
+        string $tenantId,
+        string $actorId,
+        string $service,
+        AiRequest $request,
+        array $fallbackChain = [],
+    ): AiResponse {
+        $chain = $fallbackChain !== [] ? $fallbackChain : \App\Services\AiProviderRegistry::getFallbackChain();
+
+        $lastException = null;
+
+        foreach ($chain as $providerName) {
+            try {
+                $provider = app(\App\Domain\Ai\AiProvider::class);
+                return $provider->complete($request);
+            } catch (Throwable $e) {
+                $lastException = $e;
+            }
+        }
+
+        throw $lastException ?? new \RuntimeException('No AI provider available');
+    }
+
     private function record(
         string $tenantId,
         string $actorId,

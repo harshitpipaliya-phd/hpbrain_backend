@@ -26,7 +26,7 @@ return new class extends Migration
     public function up(): void
     {
         if (!Schema::hasColumn('hpbrain_evidence', 'ledger_sequence')) {
-            DB::unprepaired('ALTER TABLE hpbrain_evidence ADD COLUMN ledger_sequence BIGINT AUTO_INCREMENT UNIQUE');
+            DB::unprepared('ALTER TABLE hpbrain_evidence ADD COLUMN ledger_sequence BIGINT AUTO_INCREMENT UNIQUE');
         }
     }
 

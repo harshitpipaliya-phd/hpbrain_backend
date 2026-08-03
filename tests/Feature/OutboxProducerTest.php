@@ -177,6 +177,15 @@ final class OutboxProducerTest extends TestCase
             $t->string('eso_definition_id', 36)->nullable();
         });
 
+        Schema::create('hpbrain_refresh_tokens', function ($t) {
+            $t->string('jti', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('user_id', 36);
+            $t->timestamp('expires_at')->nullable();
+            $t->timestamp('revoked_at')->nullable();
+            $t->timestamp('created_at')->nullable();
+        });
+
         // Invariant 4 (2026_07_30_000100). An ESO run is refused without a plan
         // that pre-dates it, so the producer site cannot be reached at all
         // without this table.
@@ -212,6 +221,53 @@ final class OutboxProducerTest extends TestCase
             'id' => self::ANALYST, 'tenant_id' => self::TENANT, 'email' => 'a@x.test',
             'name' => 'Ada Analyst', 'role' => 'analyst', 'password_hash' => Hash::make('correct-horse'),
         ]);
+
+        Schema::create('tbluserprofilemaster', function ($t) {
+            $t->integer('id')->primary();
+            $t->integer('sub_institute_id');
+            $t->string('name');
+            $t->integer('status')->default(1);
+        });
+
+        Schema::create('tbluser', function ($t) {
+            $t->integer('id')->primary();
+            $t->string('employee_no')->nullable();
+            $t->string('password')->nullable();
+            $t->string('plain_password')->nullable();
+            $t->string('first_name')->nullable();
+            $t->string('last_name')->nullable();
+            $t->string('email');
+            $t->string('mobile')->nullable();
+            $t->string('gender')->nullable();
+            $t->date('birthdate')->nullable();
+            $t->date('joined_date')->nullable();
+            $t->integer('department_id')->nullable();
+            $t->integer('jobtitle_id')->nullable();
+            $t->string('city')->nullable();
+            $t->string('state')->nullable();
+            $t->string('image')->nullable();
+            $t->integer('sub_institute_id');
+            $t->integer('user_profile_id')->nullable();
+            $t->integer('status')->default(1);
+            $t->string('created_by')->nullable();
+            $t->timestamp('created_at')->nullable();
+            $t->timestamp('updated_at')->nullable();
+            $t->timestamp('deleted_at')->nullable();
+        });
+
+        DB::table('tbluserprofilemaster')->insert([
+            'id' => 1, 'sub_institute_id' => 1, 'name' => 'Employee', 'status' => 1,
+        ]);
+
+        DB::table('tbluser')->insert([
+            'id' => 1, 'employee_no' => 'E001', 'password' => Hash::make('correct-horse'),
+            'plain_password' => null, 'first_name' => 'Ada', 'last_name' => 'Analyst',
+            'email' => 'a@x.test', 'mobile' => null, 'gender' => null,
+            'birthdate' => null, 'joined_date' => null, 'department_id' => null,
+            'jobtitle_id' => null, 'city' => null, 'state' => null, 'image' => null,
+            'sub_institute_id' => 1, 'user_profile_id' => 1, 'status' => 1,
+            'created_by' => null, 'created_at' => null, 'updated_at' => null, 'deleted_at' => null,
+        ]);
     }
 
     private function auth(string $role, string $id): array
@@ -237,7 +293,7 @@ final class OutboxProducerTest extends TestCase
     public function test_login_emits_session_started_but_refresh_does_not(): void
     {
         $login = $this->postJson('/api/v1/auth/login', [
-            'tenantId' => self::TENANT, 'email' => 'a@x.test', 'password' => 'correct-horse',
+            'email' => 'a@x.test', 'password' => 'correct-horse',
         ]);
 
         $login->assertStatus(200);
@@ -255,7 +311,7 @@ final class OutboxProducerTest extends TestCase
         // An unauthenticated caller must not be able to write into the event
         // store; a rejected credential is an audit concern, not a loop stage.
         $this->postJson('/api/v1/auth/login', [
-            'tenantId' => self::TENANT, 'email' => 'a@x.test', 'password' => 'wrong',
+            'email' => 'a@x.test', 'password' => 'wrong',
         ])->assertStatus(401);
 
         self::assertSame(0, DB::table('hpbrain_event_store')->count());
@@ -312,7 +368,7 @@ final class OutboxProducerTest extends TestCase
     public function test_every_producer_site_writes_exactly_one_event(): void
     {
         $this->postJson('/api/v1/auth/login', [
-            'tenantId' => self::TENANT, 'email' => 'a@x.test', 'password' => 'correct-horse',
+            'email' => 'a@x.test', 'password' => 'correct-horse',
         ])->assertStatus(200);
 
         $this->walkTheLoop();

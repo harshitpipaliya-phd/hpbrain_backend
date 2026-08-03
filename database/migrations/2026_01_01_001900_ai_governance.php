@@ -58,7 +58,7 @@ return new class extends Migration
                 DB::unprepared('ALTER TABLE hpbrain_prompt_templates ADD COLUMN default_model TEXT');
             }
             if (!Schema::hasColumn('hpbrain_prompt_templates', 'default_temperature')) {
-                DB::unprepaired('ALTER TABLE hpbrain_prompt_templates ADD COLUMN default_temperature DECIMAL(4,2) DEFAULT 0.7');
+                DB::unprepared('ALTER TABLE hpbrain_prompt_templates ADD COLUMN default_temperature DECIMAL(4,2) DEFAULT 0.7');
             }
         }
     }

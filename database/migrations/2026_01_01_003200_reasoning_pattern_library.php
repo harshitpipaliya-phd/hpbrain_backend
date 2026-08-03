@@ -26,7 +26,7 @@ return new class extends Migration
     public function up(): void
     {
         if (!Schema::hasTable('hpbrain_reasoning_patterns')) {
-            DB::unprepaired('CREATE TABLE IF NOT EXISTS hpbrain_reasoning_patterns (
+            DB::unprepared('CREATE TABLE IF NOT EXISTS hpbrain_reasoning_patterns (
   id              VARCHAR(36) PRIMARY KEY,
   tenant_id       VARCHAR(36) NOT NULL,
   org_id          VARCHAR(36) NOT NULL,
@@ -48,9 +48,9 @@ return new class extends Migration
         }
         if (Schema::hasTable('hpbrain_reasoning_patterns')) {
             $idx = DB::select("SHOW INDEX FROM hpbrain_reasoning_patterns WHERE Key_name = 'idx_reasoning_patterns_org'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_reasoning_patterns_org ON hpbrain_reasoning_patterns (tenant_id, org_id)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_reasoning_patterns_org ON hpbrain_reasoning_patterns (tenant_id, org_id)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_reasoning_patterns WHERE Key_name = 'idx_reasoning_patterns_type'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_reasoning_patterns_type ON hpbrain_reasoning_patterns (tenant_id, pattern_type)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_reasoning_patterns_type ON hpbrain_reasoning_patterns (tenant_id, pattern_type)');
         }
     }
 
