@@ -62,7 +62,7 @@ return new class extends Migration
   PRIMARY KEY (job_role_id, capability_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
             $idx = DB::select("SHOW INDEX FROM hpbrain_job_role_capability_requirements WHERE Key_name = 'idx_job_role_requirements_tenant'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_job_role_requirements_tenant ON hpbrain_job_role_capability_requirements (tenant_id)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_job_role_requirements_tenant ON hpbrain_job_role_capability_requirements (tenant_id)');
         }
     }
 

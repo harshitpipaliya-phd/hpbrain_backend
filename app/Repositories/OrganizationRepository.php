@@ -18,9 +18,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class OrganizationRepository
 {
-    public function list(): array
+    public function list(?string $tenantId = null): array
     {
-        return DB::table('institute_detail as d')
+        $q = DB::table('institute_detail as d')
             ->selectRaw('d.sub_institute_id as id')
             ->selectRaw('MAX(d.organization_name) as name')
             ->selectRaw('MAX(d.organization_code) as org_code')
@@ -31,11 +31,13 @@ final class OrganizationRepository
             ->selectRaw('(SELECT logo FROM org_details WHERE sub_institute_id = d.sub_institute_id LIMIT 1) as logo')
             ->whereNull('d.deleted_at')
             ->groupBy('d.sub_institute_id')
-            ->orderByDesc('d.sub_institute_id')
-            // No hydrate() here: this class does not extend BaseRepository —
-            // the ERP tables it reads are not Brain-owned and hold no JSON
-            // columns.
-            ->get()->map(fn ($r) => (array) $r)->all();
+            ->orderByDesc('d.sub_institute_id');
+
+        if ($tenantId !== null && $tenantId !== '') {
+            $q->where('d.sub_institute_id', $tenantId);
+        }
+
+        return $q->get()->map(fn ($r) => (array) $r)->all();
     }
 
     public function create(array $input): array

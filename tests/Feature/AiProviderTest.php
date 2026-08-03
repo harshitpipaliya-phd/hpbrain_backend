@@ -48,7 +48,6 @@ final class AiProviderTest extends TestCase
         Http::preventStrayRequests();
 
         $this->buildBrainSchema();
-        $this->buildAiSchema();
 
         // A named provider, so AiGateway::isConfigured() is true and the verbs
         // run. The bound driver is still the null one — see bindProvider().
@@ -71,42 +70,6 @@ final class AiProviderTest extends TestCase
             'confidence' => 0.82, 'hash' => str_repeat('a', 64), 'created_by' => self::ANALYST,
             'created_date' => now()->format('Y-m-d H:i:s'),
         ]);
-    }
-
-    /** The two AI tables, which the loop schema does not include. */
-    private function buildAiSchema(): void
-    {
-        \Illuminate\Support\Facades\Schema::create('hpbrain_ai_executions', function ($t) {
-            $t->string('id', 36)->primary();
-            $t->string('tenant_id', 36);
-            $t->string('user_id', 36);
-            $t->text('service_name');
-            $t->string('prompt_template_id', 36)->nullable();
-            $t->string('provider', 36);
-            $t->text('model')->nullable();
-            $t->text('status');
-            $t->integer('input_tokens')->nullable();
-            $t->integer('output_tokens')->nullable();
-            $t->integer('latency_ms')->nullable();
-            $t->decimal('estimated_cost_usd', 12, 4)->nullable();
-            $t->text('error')->nullable();
-            $t->text('entity_type')->nullable();
-            $t->string('entity_id', 36)->nullable();
-            $t->timestamp('created_date')->nullable();
-        });
-
-        \Illuminate\Support\Facades\Schema::create('hpbrain_prompt_templates', function ($t) {
-            $t->string('id', 36)->primary();
-            $t->string('tenant_id', 36);
-            $t->text('name');
-            $t->text('template');
-            $t->text('variables')->default('[]');
-            $t->integer('version')->default(1);
-            $t->string('previous_version_id', 36)->nullable();
-            $t->text('status')->default('active');
-            $t->text('created_by');
-            $t->timestamp('created_date')->nullable();
-        });
     }
 
     private function seedPromptTemplates(): void

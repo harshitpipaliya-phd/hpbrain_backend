@@ -99,4 +99,78 @@ final class RouteResolutionTest extends TestCase
             )
         );
     }
+
+    /**
+     * No two declarations claim the same method + URI.
+     *
+     * THE DEFECT THIS EXISTS FOR. `GET ai/providers` was declared twice — once
+     * for AiController@providers, and again inside the Prompt 3.3 group for
+     * AiProviderController@index. Laravel's RouteCollection is keyed on
+     * method+URI, so the second registration did not conflict, error, or warn:
+     * it REPLACED the first. The capability endpoint simply ceased to exist,
+     * `route:list` showed a single healthy row, and the previous test in this
+     * file passed because the surviving route did resolve to a real method.
+     *
+     * The failure surfaced instead as a crash in the browser, a layer away
+     * from its cause: the frontend read `.providers` off a payload that now
+     * had a different shape and died on `undefined.filter`.
+     *
+     * Reads routes/api.php as TEXT rather than the route table, and that is the
+     * whole point — by the time a route reaches the table the duplicate has
+     * already been silently discarded, so the table can never reveal this.
+     */
+    public function test_no_route_is_declared_twice_for_the_same_method_and_uri(): void
+    {
+        $source = file_get_contents(base_path('routes/api.php'));
+        self::assertIsString($source);
+
+        // Every [SomeController::class, 'method'] pair the file declares.
+        // Matching on the ACTION rather than on the path sidesteps group
+        // prefixes entirely: a text scan cannot know what prefix encloses a
+        // given line, but it does not need to — a shadowed route's action
+        // disappears from the table completely, and that is directly testable.
+        preg_match_all(
+            '/\[\s*([A-Za-z_][A-Za-z0-9_]*)::class\s*,\s*[\'"]([A-Za-z_][A-Za-z0-9_]*)[\'"]\s*\]/',
+            $source,
+            $matches,
+            PREG_SET_ORDER,
+        );
+
+        self::assertGreaterThan(
+            100,
+            count($matches),
+            'Almost no route declarations were parsed; this check would pass vacuously.'
+        );
+
+        $declared = [];
+        foreach ($matches as [, $class, $method]) {
+            $declared["{$class}@{$method}"] = true;
+        }
+
+        $reachable = [];
+        foreach (Route::getRoutes() as $route) {
+            $action = $route->getActionName();
+            if (! str_contains($action, '@')) {
+                continue;
+            }
+
+            [$fqcn, $method] = explode('@', $action, 2);
+            $reachable[class_basename($fqcn).'@'.$method] = true;
+        }
+
+        $shadowed = array_keys(array_diff_key($declared, $reachable));
+
+        self::assertSame(
+            [],
+            $shadowed,
+            sprintf(
+                "%d controller action(s) are declared in routes/api.php but absent from the route "
+                ."table. Laravel keys its route collection on method+URI, so a later declaration of "
+                ."the same pair REPLACES the earlier one without any error — the action below is "
+                ."simply unreachable. Give one of the colliding declarations a distinct path.\n  - %s",
+                count($shadowed),
+                implode("\n  - ", $shadowed),
+            )
+        );
+    }
 }

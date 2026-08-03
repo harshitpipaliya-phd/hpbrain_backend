@@ -93,4 +93,17 @@ final class SignalController extends Controller
 
         return $row ? response()->json($row) : response()->json(['error' => 'signal_not_found'], 404);
     }
+
+    public function generate(Request $request): JsonResponse
+    {
+        $tenant = $this->tenantId($request);
+
+        $generator = new \App\Domain\Signals\SignalGenerator($this->events);
+        $result = $generator->evaluate($tenant);
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+        ]);
+    }
 }

@@ -7,6 +7,7 @@ namespace App\Support;
 use Firebase\JWT\JWT as FirebaseJwt;
 use Firebase\JWT\Key;
 use RuntimeException;
+use Ramsey\Uuid\Uuid;
 
 /**
  * Access/refresh tokens. Mirrors api/src/auth/jwt.ts.
@@ -37,12 +38,12 @@ final class Jwt
         return self::sign($user, $ttlSeconds, 'access');
     }
 
-    public static function issueRefresh(array $user, int $ttlSeconds = 604800): string
+    public static function issueRefresh(array $user, int $ttlSeconds = 604800, ?string $jti = null): string
     {
-        return self::sign($user, $ttlSeconds, 'refresh');
+        return self::sign($user, $ttlSeconds, 'refresh', $jti);
     }
 
-    private static function sign(array $user, int $ttl, string $type): string
+    private static function sign(array $user, int $ttl, string $type, ?string $jti = null): string
     {
         $now = time();
 
@@ -51,6 +52,7 @@ final class Jwt
             'tenantId' => $user['tenantId'],
             'role'     => $user['role'],
             'type'     => $type,
+            'jti'      => $jti ?? Uuid::uuid4()->toString(),
             'iat'      => $now,
             'exp'      => $now + $ttl,
         ], self::secret(), self::ALGO);

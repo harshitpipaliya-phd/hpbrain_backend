@@ -312,5 +312,989 @@ trait BuildsBrainSchema
             $t->text('created_by');
             $t->timestamp('created_date')->nullable();
         });
+
+        // ---- Universal Platform Foundation (Prompt 3.1) ----------------------
+        Schema::create('hpbrain_industries', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('code');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('icon')->nullable();
+            $t->integer('sort_order')->default(0);
+            $t->string('status')->default('active');
+            $t->text('settings')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_organization_configs', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36);
+            $t->string('config_key');
+            $t->text('config_value')->nullable();
+            $t->string('config_type')->default('scalar');
+            $t->text('description')->nullable();
+            $t->boolean('is_active')->default(true);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_terminology', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('industry_code');
+            $t->string('entity_type');
+            $t->string('display_name');
+            $t->string('plural_name')->nullable();
+            $t->text('description')->nullable();
+            $t->string('icon')->nullable();
+            $t->integer('sort_order')->default(0);
+            $t->string('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_entity_mappings', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('source_system');
+            $t->string('source_entity');
+            $t->string('source_field');
+            $t->string('universal_entity');
+            $t->string('universal_field');
+            $t->string('mapping_type')->default('direct');
+            $t->text('transform_expression')->nullable();
+            $t->string('lookup_table')->nullable();
+            $t->boolean('is_active')->default(true);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_feature_flags', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('flag_key');
+            $t->string('flag_name');
+            $t->text('description')->nullable();
+            $t->boolean('enabled')->default(true);
+            $t->string('level')->default('platform');
+            $t->string('level_id')->nullable();
+            $t->integer('rollout_percentage')->default(100);
+            $t->text('rules')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_modules', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('module_key');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('version')->nullable();
+            $t->string('category')->nullable();
+            $t->boolean('is_core')->default(false);
+            $t->boolean('is_enabled')->default(true);
+            $t->text('dependencies')->nullable();
+            $t->text('config_schema')->nullable();
+            $t->integer('sort_order')->default(0);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_organization_modules', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36);
+            $t->string('module_id', 36);
+            $t->boolean('is_enabled')->default(true);
+            $t->text('config')->nullable();
+            $t->text('enabled_by')->nullable();
+            $t->timestamp('enabled_date')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_navigation_items', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('industry_code');
+            $t->string('role_key');
+            $t->string('item_key');
+            $t->string('label');
+            $t->string('icon')->nullable();
+            $t->string('route')->nullable();
+            $t->string('parent_id', 36)->nullable();
+            $t->integer('sort_order')->default(0);
+            $t->boolean('is_visible')->default(true);
+            $t->string('required_permission')->nullable();
+            $t->string('required_flag')->nullable();
+            $t->string('required_module')->nullable();
+            $t->text('children')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_dashboards', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('dashboard_key');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('industry_code')->nullable();
+            $t->string('role_key')->nullable();
+            $t->boolean('is_default')->default(false);
+            $t->boolean('is_system')->default(false);
+            $t->text('layout')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_dashboard_widgets', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('widget_key');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('category')->nullable();
+            $t->string('component_type');
+            $t->text('config_schema')->nullable();
+            $t->text('default_config')->nullable();
+            $t->string('icon')->nullable();
+            $t->boolean('is_system')->default(false);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_dashboard_layouts', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('dashboard_id', 36);
+            $t->string('layout_type')->default('grid');
+            $t->integer('grid_columns')->default(12);
+            $t->integer('grid_rows')->default(12);
+            $t->text('widgets')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_branding', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36);
+            $t->string('name')->nullable();
+            $t->text('logo_url')->nullable();
+            $t->text('favicon_url')->nullable();
+            $t->string('primary_color')->nullable();
+            $t->string('secondary_color')->nullable();
+            $t->string('accent_color')->nullable();
+            $t->string('font_family')->nullable();
+            $t->text('login_background_url')->nullable();
+            $t->text('email_header_url')->nullable();
+            $t->text('custom_css')->nullable();
+            $t->boolean('is_active')->default(true);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_themes', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('theme_key');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->text('colors')->nullable();
+            $t->text('typography')->nullable();
+            $t->text('spacing')->nullable();
+            $t->text('borderRadius')->nullable();
+            $t->text('shadows')->nullable();
+            $t->boolean('is_dark')->default(false);
+            $t->boolean('is_default')->default(false);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_forms', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36);
+            $t->string('form_key');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('entity_type')->nullable();
+            $t->text('fields')->nullable();
+            $t->text('validation_rules')->nullable();
+            $t->text('submit_action')->nullable();
+            $t->boolean('is_active')->default(true);
+            $t->integer('version')->default(1);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_config_versions', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36);
+            $t->string('config_type');
+            $t->string('config_key');
+            $t->integer('version');
+            $t->text('data')->nullable();
+            $t->string('status')->default('draft');
+            $t->text('activated_by')->nullable();
+            $t->timestamp('activated_date')->nullable();
+            $t->text('rolled_back_by')->nullable();
+            $t->timestamp('rolled_back_date')->nullable();
+            $t->text('change_summary')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_industry_templates', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('industry_code');
+            $t->string('template_name');
+            $t->text('description')->nullable();
+            $t->text('terminology')->nullable();
+            $t->text('modules')->nullable();
+            $t->text('navigation')->nullable();
+            $t->text('dashboards')->nullable();
+            $t->text('branding')->nullable();
+            $t->text('workflows')->nullable();
+            $t->text('integrations')->nullable();
+            $t->boolean('is_system')->default(false);
+            $t->boolean('is_active')->default(true);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_organization_types', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('type_key');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('icon')->nullable();
+            $t->integer('sort_order')->default(0);
+            $t->string('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_organization_units', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('unit_type')->default('department');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('code')->nullable();
+            $t->string('parent_unit_id', 36)->nullable();
+            $t->string('head_id', 36)->nullable();
+            $t->string('location')->nullable();
+            $t->string('cost_center')->nullable();
+            $t->string('status')->default('active');
+            $t->text('metadata')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_roles', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('role_key');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('category')->nullable();
+            $t->text('permissions')->nullable();
+            $t->boolean('is_system')->default(false);
+            $t->string('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_positions', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('unit_id', 36)->nullable();
+            $t->string('title');
+            $t->text('description')->nullable();
+            $t->string('employment_type')->nullable();
+            $t->boolean('is_vacant')->default(false);
+            $t->string('reports_to_position_id', 36)->nullable();
+            $t->text('metadata')->nullable();
+            $t->string('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_skills', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('skill_key');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('category')->nullable();
+            $t->string('level')->nullable();
+            $t->text('metadata')->nullable();
+            $t->string('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_competencies', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('competency_key');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('category')->nullable();
+            $t->string('framework')->nullable();
+            $t->text('level_descriptors')->nullable();
+            $t->text('metadata')->nullable();
+            $t->string('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_person_roles', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('person_id', 36);
+            $t->string('role_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('unit_id', 36)->nullable();
+            $t->date('start_date')->nullable();
+            $t->date('end_date')->nullable();
+            $t->boolean('is_primary')->default(false);
+            $t->text('metadata')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_person_skills', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('person_id', 36);
+            $t->string('skill_id', 36);
+            $t->string('proficiency_level')->nullable();
+            $t->integer('proficiency_score')->nullable();
+            $t->string('assessed_by', 36)->nullable();
+            $t->date('assessed_date')->nullable();
+            $t->text('metadata')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_person_competencies', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('person_id', 36);
+            $t->string('competency_id', 36);
+            $t->string('current_level')->nullable();
+            $t->string('target_level')->nullable();
+            $t->date('assessed_date')->nullable();
+            $t->text('metadata')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_location_types', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('type_key');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->text('metadata')->nullable();
+            $t->string('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_locations', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('location_type_id', 36)->nullable();
+            $t->string('name');
+            $t->text('address')->nullable();
+            $t->string('city')->nullable();
+            $t->string('state')->nullable();
+            $t->string('country')->nullable();
+            $t->string('postal_code')->nullable();
+            $t->string('timezone')->nullable();
+            $t->string('phone')->nullable();
+            $t->string('email')->nullable();
+            $t->text('metadata')->nullable();
+            $t->boolean('is_headquarters')->default(false);
+            $t->string('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_reporting_structures', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('reporter_person_id', 36);
+            $t->string('reportee_person_id', 36);
+            $t->string('reporting_type')->default('direct');
+            $t->string('unit_id', 36)->nullable();
+            $t->date('start_date')->nullable();
+            $t->date('end_date')->nullable();
+            $t->text('metadata')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_onboarding_sessions', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->integer('current_step')->default(1);
+            $t->integer('total_steps')->default(12);
+            $t->string('status')->default('draft');
+            $t->text('data')->nullable();
+            $t->text('completed_steps')->nullable();
+            $t->string('started_by')->nullable();
+            $t->string('completed_by')->nullable();
+            $t->timestamp('activated_date')->nullable();
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_import_jobs', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('import_type')->nullable();
+            $t->string('entity_type')->nullable();
+            $t->string('status')->default('pending');
+            $t->integer('total_rows')->default(0);
+            $t->integer('processed_rows')->default(0);
+            $t->integer('success_count')->default(0);
+            $t->integer('error_count')->default(0);
+            $t->integer('duplicate_count')->default(0);
+            $t->text('error_report')->nullable();
+            $t->text('rollback_data')->nullable();
+            $t->string('started_by')->nullable();
+            $t->timestamp('completed_date')->nullable();
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_import_logs', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('import_job_id', 36);
+            $t->integer('row_number')->nullable();
+            $t->string('action')->nullable();
+            $t->string('entity_type')->nullable();
+            $t->string('entity_id', 36)->nullable();
+            $t->text('data')->nullable();
+            $t->text('error_message')->nullable();
+            $t->timestamp('created_date')->nullable();
+        });
+
+        Schema::create('hpbrain_readiness_checks', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('check_type')->nullable();
+            $t->string('check_name')->nullable();
+            $t->string('status')->default('pending');
+            $t->text('message')->nullable();
+            $t->text('metadata')->nullable();
+            $t->timestamp('checked_date')->nullable();
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_template_overrides', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('template_type')->nullable();
+            $t->string('template_key')->nullable();
+            $t->string('override_level')->default('organization');
+            $t->text('override_data')->nullable();
+            $t->boolean('is_active')->default(true);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        // ---- Universal AI Brain (Prompt 3.3) --------------------------------
+        Schema::create('hpbrain_ai_providers', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('provider_name');
+            $t->string('provider_type');
+            $t->text('config')->nullable();
+            $t->boolean('is_active')->default(true);
+            $t->integer('priority')->default(0);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_ai_fallback_chains', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('chain_name');
+            $t->text('providers')->nullable();
+            $t->boolean('is_active')->default(true);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_ai_prompt_templates', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('prompt_key');
+            $t->integer('version');
+            $t->string('name');
+            $t->text('description')->nullable();
+            $t->string('purpose')->nullable();
+            $t->text('system_prompt');
+            $t->text('user_prompt_template');
+            $t->text('response_schema')->nullable();
+            $t->text('allowed_roles')->nullable();
+            $t->text('data_sources')->nullable();
+            $t->string('model_capability')->nullable();
+            $t->text('generation_settings')->nullable();
+            $t->string('safety_profile')->nullable();
+            $t->string('status')->default('draft');
+            $t->text('change_summary')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_ai_evaluations', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('evaluation_name');
+            $t->string('evaluation_type');
+            $t->text('dataset')->nullable();
+            $t->text('results')->nullable();
+            $t->string('model')->nullable();
+            $t->string('status')->default('pending');
+            $t->text('run_by')->nullable();
+            $t->timestamp('run_date')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_ai_feedback', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('execution_id');
+            $t->string('user_id');
+            $t->string('rating');
+            $t->text('feedback_text')->nullable();
+            $t->string('feedback_type')->nullable();
+            $t->text('metadata')->nullable();
+            $t->timestamp('created_date')->nullable();
+        });
+
+        Schema::create('hpbrain_ai_quotas', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('quota_type');
+            $t->string('quota_key');
+            $t->integer('limit_value');
+            $t->integer('current_usage')->default(0);
+            $t->string('reset_period')->default('monthly');
+            $t->boolean('is_active')->default(true);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_ai_safety_rules', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('rule_name');
+            $t->string('rule_type');
+            $t->text('pattern');
+            $t->string('action')->default('block');
+            $t->string('severity')->default('high');
+            $t->boolean('is_active')->default(true);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        $this->buildCoreErpSchema();
+    }
+
+    /**
+     * Tables that predate Part 3 but were never mirrored here.
+     *
+     * These are not new: every one has a 2026_01_01_* migration and exists in
+     * the live MySQL database. They were simply absent from this trait, so any
+     * service that touched them errored with "no such table" the moment a test
+     * exercised it — which is exactly what the Part 3.3 AI services did, since
+     * they ground answers against people, capabilities and policies rather than
+     * against the loop tables the original fixture covered.
+     *
+     * Same rule as the rest of the file: columns copied from the migration,
+     * live table wins on disagreement.
+     */
+    private function buildCoreErpSchema(): void
+    {
+        // ---- Person (2026_01_01_000300_person) ------------------------------
+        Schema::create('hpbrain_people', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('employee_id', 36);
+            $t->text('first_name');
+            $t->text('last_name');
+            $t->text('display_name')->nullable();
+            $t->string('email');
+            $t->text('phone')->nullable();
+            $t->text('profile_photo')->nullable();
+            $t->text('gender')->nullable();
+            $t->date('date_of_birth')->nullable();
+            $t->text('employment_type')->default('full_time');
+            $t->text('employment_status')->default('active');
+            $t->date('joining_date')->nullable();
+            $t->string('department_id', 36)->nullable();
+            $t->string('manager_id', 36)->nullable();
+            $t->text('designation')->nullable();
+            $t->text('location')->nullable();
+            $t->string('reporting_manager_id', 36)->nullable();
+            $t->string('org_id', 36);
+            $t->string('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        // ---- Capability (2026_01_01_000400_capability) ----------------------
+        Schema::create('hpbrain_capabilities', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36);
+            $t->string('capability_code');
+            $t->text('name');
+            $t->text('description')->nullable();
+            $t->string('category')->default('general');
+            $t->text('capability_type')->default('competency');
+            $t->text('difficulty')->default('intermediate');
+            $t->text('criticality')->default('medium');
+            $t->integer('version')->default(1);
+            $t->string('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+            $t->text('knowledge')->nullable();
+            $t->text('ability')->nullable();
+            $t->text('skill')->nullable();
+            $t->text('behaviour')->nullable();
+            $t->text('attitude')->nullable();
+        });
+
+        Schema::create('hpbrain_capability_versions', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('capability_id', 36);
+            $t->string('tenant_id', 36);
+            $t->integer('version');
+            $t->text('name');
+            $t->text('description')->nullable();
+            $t->text('category')->nullable();
+            $t->text('capability_type')->nullable();
+            $t->text('difficulty')->nullable();
+            $t->text('criticality')->nullable();
+            $t->text('knowledge')->nullable();
+            $t->text('ability')->nullable();
+            $t->text('skill')->nullable();
+            $t->text('behaviour')->nullable();
+            $t->text('attitude')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+        });
+
+        Schema::create('hpbrain_capability_assignments', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('capability_id', 36);
+            $t->string('target_type');
+            $t->string('target_id', 36);
+            $t->text('assigned_by');
+            $t->timestamp('assigned_date')->nullable();
+            $t->text('status')->default('active');
+        });
+
+        Schema::create('hpbrain_capability_tasks', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('capability_id', 36);
+            $t->string('parent_task_id', 36)->nullable();
+            $t->text('name');
+            $t->text('description')->nullable();
+            $t->boolean('evidence_required')->default(false);
+            $t->text('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+        });
+
+        Schema::create('hpbrain_capability_proficiency', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('assignment_id', 36);
+            $t->decimal('knowledge_level', 12, 4)->nullable();
+            $t->decimal('ability_level', 12, 4)->nullable();
+            $t->decimal('skill_level', 12, 4)->nullable();
+            $t->decimal('behaviour_level', 12, 4)->nullable();
+            $t->decimal('attitude_level', 12, 4)->nullable();
+            $t->decimal('evidence_confidence', 6, 4)->nullable();
+            $t->text('assessed_by')->nullable();
+            $t->timestamp('assessed_date')->nullable();
+            $t->timestamp('created_date')->nullable();
+        });
+
+        // ---- Observability (2026_01_01_000600_observability) ----------------
+        Schema::create('hpbrain_metrics', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36)->nullable();
+            $t->string('metric_name');
+            $t->decimal('metric_value', 18, 6);
+            $t->text('tags')->nullable();
+            $t->timestamp('recorded_at')->nullable();
+        });
+
+        // ---- Policies (000700_intelligence_entities + 003600 additions) -----
+        Schema::create('hpbrain_policies', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->text('name');
+            $t->text('scope');
+            $t->text('allowed_executor_classes')->nullable();
+            $t->text('trust_levels')->nullable();
+            $t->text('routing_criteria')->nullable();
+            $t->text('escalation_path')->nullable();
+            $t->text('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+            // Added later by 2026_01_01_003600_policy_library_additions.
+            $t->text('approval_gates')->nullable();
+            $t->text('data_access_rules')->nullable();
+            $t->text('regulatory_constraints')->nullable();
+        });
+
+        // ---- Executors (2026_01_01_001100_executors) ------------------------
+        Schema::create('hpbrain_executors', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('executor_type');
+            $t->text('name');
+            $t->string('person_id', 36)->nullable();
+            $t->text('capability_tags')->nullable();
+            $t->decimal('trust_level', 5, 2)->default(0.5);
+            $t->integer('max_concurrent')->default(1);
+            $t->integer('current_workload')->default(0);
+            $t->boolean('available')->default(true);
+            $t->text('status')->default('active');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        // ---- Risks (2026_01_01_001200_decision_intelligence) ----------------
+        Schema::create('hpbrain_risks', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('decision_id', 36)->nullable();
+            $t->string('recommendation_id', 36)->nullable();
+            $t->text('category');
+            $t->decimal('probability', 6, 4)->default(0.5);
+            $t->text('impact')->default('medium');
+            $t->decimal('score', 10, 4)->default(0);
+            $t->text('mitigation')->nullable();
+            $t->text('status')->default('open');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        // ---- Conversation engine (2026_01_01_001600_conversation_engine) ----
+        Schema::create('hpbrain_conversation_sessions', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->text('title')->nullable();
+            $t->text('context_type')->nullable();
+            $t->string('context_entity_id', 36)->nullable();
+            // The migration names this created_by; AiWorkspaceService writes
+            // user_id/is_pinned. Both are present so the fixture matches the
+            // live table, which carries the Part 3.3 columns.
+            $t->string('created_by')->nullable();
+            $t->string('user_id', 36)->nullable();
+            $t->boolean('is_pinned')->default(false);
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        Schema::create('hpbrain_conversation_messages', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('session_id', 36);
+            $t->text('role');
+            $t->text('content');
+            $t->text('citations')->nullable();
+            $t->timestamp('created_date')->nullable();
+        });
+
+        Schema::create('hpbrain_prompt_templates', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->text('name');
+            $t->text('template');
+            $t->text('variables')->nullable();
+            $t->integer('version')->default(1);
+            $t->string('previous_version_id', 36)->nullable();
+            $t->text('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            // Added later by 2026_01_01_001900_ai_governance.
+            $t->text('category')->nullable();
+            $t->text('default_model')->nullable();
+            $t->decimal('default_temperature', 4, 2)->default(0.7);
+        });
+
+        // ---- Notifications & settings (2026_01_01_001800) -------------------
+        Schema::create('hpbrain_notifications', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('user_id', 36);
+            $t->text('type');
+            $t->text('title');
+            $t->text('body')->nullable();
+            $t->text('entity_type')->nullable();
+            $t->string('entity_id', 36)->nullable();
+            $t->timestamp('read_date')->nullable();
+            $t->timestamp('created_date')->nullable();
+        });
+
+        Schema::create('hpbrain_settings', function ($t) {
+            $t->string('tenant_id', 36);
+            $t->string('user_id', 36)->default('_org_');
+            $t->string('key');
+            $t->text('value');
+            $t->timestamp('updated_date')->nullable();
+            $t->primary(['tenant_id', 'user_id', 'key']);
+        });
+
+        // ---- AI governance (2026_01_01_001900_ai_governance) ----------------
+        // The execution ledger AiGateway writes on EVERY call, success or
+        // failure. Without it here, any test that reaches the gateway errors
+        // rather than asserting on the trace it is supposed to leave.
+        Schema::create('hpbrain_ai_executions', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('user_id', 36);
+            $t->text('service_name');
+            $t->string('prompt_template_id', 36)->nullable();
+            $t->string('provider', 36);
+            $t->text('model')->nullable();
+            $t->text('status');
+            $t->integer('input_tokens')->nullable();
+            $t->integer('output_tokens')->nullable();
+            $t->integer('latency_ms')->nullable();
+            $t->decimal('estimated_cost_usd', 12, 4)->nullable();
+            $t->text('error')->nullable();
+            $t->text('entity_type')->nullable();
+            $t->string('entity_id', 36)->nullable();
+            $t->timestamp('created_date')->nullable();
+        });
+
+        // ---- Knowledge assets (2026_01_01_002000_knowledge_assets) ----------
+        Schema::create('hpbrain_knowledge_assets', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->text('title');
+            $t->string('category');
+            $t->text('content');
+            $t->text('tags')->nullable();
+            $t->decimal('confidence', 6, 4)->default(0.7);
+            $t->string('department_id', 36)->nullable();
+            $t->text('related_person_ids')->nullable();
+            $t->text('related_capability_ids')->nullable();
+            $t->integer('reuse_count')->default(0);
+            $t->text('status')->default('active');
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
+        // ---- Placement taxonomy (2026_01_01_002500_placement_taxonomy) ------
+        Schema::create('hpbrain_job_role_capability_requirements', function ($t) {
+            $t->string('tenant_id', 36);
+            $t->string('job_role_id', 36);
+            $t->string('capability_id', 36);
+            $t->decimal('required_level', 5, 2)->default(3);
+            $t->primary(['job_role_id', 'capability_id']);
+        });
+
+        // ---- Guardians (2026_01_01_002700_guardians) ------------------------
+        Schema::create('hpbrain_guardians', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('student_person_id', 36);
+            $t->text('first_name');
+            $t->text('last_name');
+            $t->text('relationship');
+            $t->text('email')->nullable();
+            $t->text('phone')->nullable();
+            $t->boolean('is_primary_contact')->default(false);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+        });
+
+        // ---- Refresh tokens (2026_07_31_000100_refresh_tokens) --------------
+        Schema::create('hpbrain_refresh_tokens', function ($t) {
+            $t->string('jti')->primary();
+            $t->string('tenant_id');
+            $t->string('user_id');
+            $t->timestamp('expires_at');
+            $t->timestamp('revoked_at')->nullable();
+            $t->timestamp('created_at')->nullable();
+        });
     }
 }

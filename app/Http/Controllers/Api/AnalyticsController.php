@@ -328,4 +328,224 @@ final class AnalyticsController extends Controller
             fclose($out);
         }, "decisions-{$t}.csv", ['Content-Type' => 'text/csv']);
     }
+
+    /**
+     * Organization overview report.
+     *
+     * Returns ERP-derived organization metrics plus Brain-derived intelligence
+     * metrics in one call. Every figure is tenant-scoped and computed from real
+     * data.
+     */
+    public function organizationReport(Request $request, string $tenantId): JsonResponse
+    {
+        $t = $this->tenantId($request);
+
+        $activePeople = DB::table('tbluser')
+            ->where('sub_institute_id', $t)
+            ->where('status', 1)
+            ->whereNull('deleted_at')
+            ->count();
+
+        $activeDepartments = DB::table('hrms_departments')
+            ->where('sub_institute_id', $t)
+            ->where('status', 1)
+            ->whereNull('deleted_at')
+            ->count();
+
+        $peopleWithoutDepartment = DB::table('tbluser')
+            ->where('sub_institute_id', $t)
+            ->where('status', 1)
+            ->whereNull('deleted_at')
+            ->where(function ($q) {
+                $q->whereNull('department_id')->orWhere('department_id', 0);
+            })
+            ->count();
+
+        $peopleWithoutProfile = DB::table('tbluser')
+            ->where('sub_institute_id', $t)
+            ->where('status', 1)
+            ->whereNull('deleted_at')
+            ->where(function ($q) {
+                $q->whereNull('user_profile_id')->orWhere('user_profile_id', 0);
+            })
+            ->count();
+
+        $openSignals = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->whereNotIn('status', ['resolved', 'closed', 'dismissed'])
+            ->count();
+
+        $highSignals = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->whereIn('severity', ['high', 'critical'])
+            ->whereNotIn('status', ['resolved', 'closed', 'dismissed'])
+            ->count();
+
+        $pendingRecommendations = DB::table('hpbrain_recommendations')
+            ->where('tenant_id', $t)
+            ->whereIn('status', ['pending', 'proposed'])
+            ->count();
+
+        $openDecisions = DB::table('hpbrain_decisions')
+            ->where('tenant_id', $t)
+            ->whereIn('status', ['pending', 'proposed'])
+            ->count();
+
+        return response()->json([
+            'tenantId' => $t,
+            'generatedAt' => now()->format('Y-m-d H:i:s'),
+            'organization' => [
+                'activePeople' => $activePeople,
+                'activeDepartments' => $activeDepartments,
+                'peopleWithoutDepartment' => $peopleWithoutDepartment,
+                'peopleWithoutProfile' => $peopleWithoutProfile,
+            ],
+            'intelligence' => [
+                'openSignals' => $openSignals,
+                'highSignals' => $highSignals,
+                'pendingRecommendations' => $pendingRecommendations,
+                'openDecisions' => $openDecisions,
+            ],
+            'dataQuality' => [
+                'score' => $activePeople + $activeDepartments > 0
+                    ? max(0.0, min(100.0, round((1 - ($peopleWithoutDepartment + $peopleWithoutProfile) / ($activePeople + $activeDepartments)) * 100, 1)))
+                    : 100.0,
+            ],
+        ]);
+    }
+
+    /**
+     * People report — distribution and data quality.
+     */
+    public function peopleReport(Request $request, string $tenantId): JsonResponse
+    {
+        $t = $this->tenantId($request);
+
+        $byDepartment = DB::table('tbluser as u')
+            ->join('hrms_departments as d', function ($j) use ($t) {
+                $j->on('d.id', '=', 'u.department_id')->where('d.sub_institute_id', '=', $t)->where('d.status', '=', 1)->whereNull('d.deleted_at');
+            })
+            ->where('u.sub_institute_id', $t)
+            ->where('u.status', 1)
+            ->whereNull('u.deleted_at')
+            ->select('d.department', DB::raw('COUNT(*) as count'))
+            ->groupBy('d.department')
+            ->orderByDesc('count')
+            ->get();
+
+        $byRole = DB::table('tbluser as u')
+            ->join('tbluserprofilemaster as p', function ($j) use ($t) {
+                $j->on('p.id', '=', 'u.user_profile_id')->where('p.sub_institute_id', '=', $t)->where('p.status', '=', 1);
+            })
+            ->where('u.sub_institute_id', $t)
+            ->where('u.status', 1)
+            ->whereNull('u.deleted_at')
+            ->select('p.name as role', DB::raw('COUNT(*) as count'))
+            ->groupBy('p.name')
+            ->orderByDesc('count')
+            ->get();
+
+        $missingProfile = DB::table('tbluser')
+            ->where('sub_institute_id', $t)
+            ->where('status', 1)
+            ->whereNull('deleted_at')
+            ->where(function ($q) {
+                $q->whereNull('user_profile_id')->orWhere('user_profile_id', 0);
+            })
+            ->count();
+
+        $missingDepartment = DB::table('tbluser')
+            ->where('sub_institute_id', $t)
+            ->where('status', 1)
+            ->whereNull('deleted_at')
+            ->where(function ($q) {
+                $q->whereNull('department_id')->orWhere('department_id', 0);
+            })
+            ->count();
+
+        $inactive = DB::table('tbluser')
+            ->where('sub_institute_id', $t)
+            ->where('status', '!=', 1)
+            ->orWhereNull('status')
+            ->count();
+
+        return response()->json([
+            'tenantId' => $t,
+            'generatedAt' => now()->format('Y-m-d H:i:s'),
+            'byDepartment' => $byDepartment,
+            'byRole' => $byRole,
+            'missingProfile' => $missingProfile,
+            'missingDepartment' => $missingDepartment,
+            'inactive' => $inactive,
+        ]);
+    }
+
+    /**
+     * Intelligence report — signals, cases, recommendations, decisions, outcomes, learnings.
+     */
+    public function intelligenceReport(Request $request, string $tenantId): JsonResponse
+    {
+        $t = $this->tenantId($request);
+
+        $signals = DB::table('hpbrain_signals')->where('tenant_id', $t)->get();
+        $cases = DB::table('hpbrain_cases')->where('tenant_id', $t)->get();
+        $recommendations = DB::table('hpbrain_recommendations')->where('tenant_id', $t)->get();
+        $decisions = DB::table('hpbrain_decisions')->where('tenant_id', $t)->get();
+        $outcomes = DB::table('hpbrain_outcomes')->where('tenant_id', $t)->get();
+        $learnings = DB::table('hpbrain_learnings')->where('tenant_id', $t)->get();
+        $evidence = DB::table('hpbrain_evidence')->where('tenant_id', $t)->get();
+
+        $avgConfidence = $evidence->isEmpty() ? 0.0 : round((float) $evidence->avg('confidence'), 4);
+
+        return response()->json([
+            'tenantId' => $t,
+            'generatedAt' => now()->format('Y-m-d H:i:s'),
+            'signals' => [
+                'total' => $signals->count(),
+                'byStatus' => $this->groupByField($signals, 'status'),
+                'bySeverity' => $this->groupByField($signals, 'severity'),
+            ],
+            'cases' => [
+                'total' => $cases->count(),
+                'byStatus' => $this->groupByField($cases, 'status'),
+            ],
+            'recommendations' => [
+                'total' => $recommendations->count(),
+                'byStatus' => $this->groupByField($recommendations, 'status'),
+                'byCategory' => $this->groupByField($recommendations, 'category'),
+            ],
+            'decisions' => [
+                'total' => $decisions->count(),
+                'byStatus' => $this->groupByField($decisions, 'status'),
+            ],
+            'outcomes' => [
+                'total' => $outcomes->count(),
+                'byResult' => $this->groupByField($outcomes, 'result'),
+            ],
+            'learnings' => [
+                'total' => $learnings->count(),
+                'reusable' => $learnings->filter(fn ($l) => (bool) ($l->reusable ?? false))->count(),
+            ],
+            'evidence' => [
+                'total' => $evidence->count(),
+                'averageConfidence' => $avgConfidence,
+            ],
+        ]);
+    }
+
+    /**
+     * Helper: group a collection of objects by a field and count occurrences.
+     *
+     * @param iterable<object> $rows
+     * @return array<string, int>
+     */
+    private function groupByField(iterable $rows, string $field): array
+    {
+        $groups = [];
+        foreach ($rows as $row) {
+            $value = (string) ($row->$field ?? 'unknown');
+            $groups[$value] = ($groups[$value] ?? 0) + 1;
+        }
+        return $groups;
+    }
 }

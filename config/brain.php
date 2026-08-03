@@ -120,4 +120,65 @@ return [
         'person'         => 'tbluser',
         'person_profile' => 'tbluserprofilemaster',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Universal Platform Foundation (Prompt 3.1)
+    |--------------------------------------------------------------------------
+    |
+    | Industry codes, default terminology, feature flag keys, module keys,
+    | navigation structure, default dashboard layouts, and default themes.
+    |
+    */
+    'universal' => [
+        'industries' => [
+            'healthcare', 'k12_education', 'higher_education', 'corporate',
+            'manufacturing', 'retail', 'government', 'bfsi', 'ngo', 'technology',
+        ],
+
+        'default_terminology' => [
+            'Person'            => 'Employee',
+            'OrganizationUnit'   => 'Department',
+            'Role'               => 'Role',
+            'Skill'              => 'Skill',
+            'Competency'         => 'Competency',
+            'Capability'         => 'Capability',
+        ],
+
+        'feature_flags' => [
+            'ai_workspace',
+            'graph_explorer',
+            'advanced_analytics',
+            'beta_features',
+        ],
+
+        'modules' => [
+            'intelligence', 'capabilities', 'decisions', 'analytics',
+            'ai_workspace', 'graph_explorer', 'learning', 'policies',
+            'risks', 'notifications',
+        ],
+
+        'navigation' => [
+            'dashboard',
+            'intelligence',
+            'capabilities',
+            'decisions',
+            'analytics',
+            'settings',
+        ],
+
+        'default_dashboard_layouts' => [
+            'default' => [
+                'layout_type'  => 'grid',
+                'grid_columns' => 12,
+                'grid_rows'    => 12,
+                'widgets'      => [],
+            ],
+        ],
+
+        'default_themes' => [
+            'light',
+            'dark',
+        ],
+    ],
 ];

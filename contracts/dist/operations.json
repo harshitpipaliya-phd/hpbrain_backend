@@ -1,5 +1,60 @@
 [
   {
+    "name": "AiEvaluationStorePostAiEvaluations",
+    "method": "POST",
+    "path": "/ai/evaluations",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiEvaluationController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiEvaluationIndexGetAiEvaluationsTenantId",
+    "method": "GET",
+    "path": "/ai/evaluations/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiEvaluationController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiEvaluationShowGetAiEvaluationsTenantIdId",
+    "method": "GET",
+    "path": "/ai/evaluations/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiEvaluationController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiEvaluationResultsGetAiEvaluationsTenantIdIdResults",
+    "method": "GET",
+    "path": "/ai/evaluations/{tenantId}/{id}/results",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiEvaluationController@results",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiEvaluationRunPostAiEvaluationsTenantIdIdRun",
+    "method": "POST",
+    "path": "/ai/evaluations/{tenantId}/{id}/run",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiEvaluationController@run",
+    "unverifiedResponse": true
+  },
+  {
     "name": "AiSummarizeEvidencePostAiEvidenceSummarize",
     "method": "POST",
     "path": "/ai/evidence/summarize",
@@ -20,6 +75,111 @@
     "unverifiedResponse": true
   },
   {
+    "name": "AiFeedbackStorePostAiFeedback",
+    "method": "POST",
+    "path": "/ai/feedback",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiFeedbackController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiFeedbackIndexGetAiFeedbackTenantId",
+    "method": "GET",
+    "path": "/ai/feedback/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiFeedbackController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiFeedbackShowGetAiFeedbackTenantIdId",
+    "method": "GET",
+    "path": "/ai/feedback/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiFeedbackController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiPromptTemplateStorePostAiPromptTemplates",
+    "method": "POST",
+    "path": "/ai/prompt-templates",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiPromptTemplateController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiPromptTemplateIndexGetAiPromptTemplatesTenantId",
+    "method": "GET",
+    "path": "/ai/prompt-templates/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiPromptTemplateController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiPromptTemplateShowGetAiPromptTemplatesTenantIdId",
+    "method": "GET",
+    "path": "/ai/prompt-templates/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiPromptTemplateController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiPromptTemplateUpdatePatchAiPromptTemplatesTenantIdId",
+    "method": "PATCH",
+    "path": "/ai/prompt-templates/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiPromptTemplateController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiPromptTemplateDestroyDeleteAiPromptTemplatesTenantIdId",
+    "method": "DELETE",
+    "path": "/ai/prompt-templates/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiPromptTemplateController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiPromptTemplateRenderGetAiPromptTemplatesTenantIdIdRender",
+    "method": "GET",
+    "path": "/ai/prompt-templates/{tenantId}/{id}/render",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiPromptTemplateController@render",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiPromptTemplateVersionsGetAiPromptTemplatesTenantIdIdVersions",
+    "method": "GET",
+    "path": "/ai/prompt-templates/{tenantId}/{id}/versions",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiPromptTemplateController@versions",
+    "unverifiedResponse": true
+  },
+  {
     "name": "AiProvidersGetAiProviders",
     "method": "GET",
     "path": "/ai/providers",
@@ -27,6 +187,217 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\AiController@providers",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiProviderStorePostAiProviders",
+    "method": "POST",
+    "path": "/ai/providers",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiProviderController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiProviderIndexGetAiProvidersTenantId",
+    "method": "GET",
+    "path": "/ai/providers/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiProviderController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiProviderShowGetAiProvidersTenantIdId",
+    "method": "GET",
+    "path": "/ai/providers/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiProviderController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiProviderUpdatePatchAiProvidersTenantIdId",
+    "method": "PATCH",
+    "path": "/ai/providers/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiProviderController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiProviderDestroyDeleteAiProvidersTenantIdId",
+    "method": "DELETE",
+    "path": "/ai/providers/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiProviderController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiProviderSetActivePostAiProvidersTenantIdIdActivate",
+    "method": "POST",
+    "path": "/ai/providers/{tenantId}/{id}/activate",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiProviderController@setActive",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiProviderTestPostAiProvidersTenantIdIdTest",
+    "method": "POST",
+    "path": "/ai/providers/{tenantId}/{id}/test",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiProviderController@test",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiQuotaStorePostAiQuotas",
+    "method": "POST",
+    "path": "/ai/quotas",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiQuotaController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiQuotaIndexGetAiQuotasTenantId",
+    "method": "GET",
+    "path": "/ai/quotas/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiQuotaController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiQuotaShowGetAiQuotasTenantIdId",
+    "method": "GET",
+    "path": "/ai/quotas/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiQuotaController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiQuotaUpdatePatchAiQuotasTenantIdId",
+    "method": "PATCH",
+    "path": "/ai/quotas/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiQuotaController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiQuotaResetPostAiQuotasTenantIdIdReset",
+    "method": "POST",
+    "path": "/ai/quotas/{tenantId}/{id}/reset",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiQuotaController@reset",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiWorkspaceSessionsGetAiWorkspaceSessions",
+    "method": "GET",
+    "path": "/ai/workspace/sessions",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiWorkspaceController@sessions",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiWorkspaceStorePostAiWorkspaceSessions",
+    "method": "POST",
+    "path": "/ai/workspace/sessions",
+    "permissions": [
+      "read",
+      "create"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiWorkspaceController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiWorkspaceHistoryGetAiWorkspaceSessionsSessionIdHistory",
+    "method": "GET",
+    "path": "/ai/workspace/sessions/{sessionId}/history",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiWorkspaceController@history",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiWorkspaceMessagesGetAiWorkspaceSessionsSessionIdMessages",
+    "method": "GET",
+    "path": "/ai/workspace/sessions/{sessionId}/messages",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiWorkspaceController@messages",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiWorkspaceSendPostAiWorkspaceSessionsSessionIdMessages",
+    "method": "POST",
+    "path": "/ai/workspace/sessions/{sessionId}/messages",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiWorkspaceController@send",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiWorkspaceExplainPostAiWorkspaceSessionsSessionIdMessagesMessageIdExplain",
+    "method": "POST",
+    "path": "/ai/workspace/sessions/{sessionId}/messages/{messageId}/explain",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiWorkspaceController@explain",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiWorkspaceFollowUpGetAiWorkspaceSessionsSessionIdMessagesMessageIdFollowUp",
+    "method": "GET",
+    "path": "/ai/workspace/sessions/{sessionId}/messages/{messageId}/follow-up",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiWorkspaceController@followUp",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AiWorkspaceRegeneratePostAiWorkspaceSessionsSessionIdMessagesMessageIdRegenerate",
+    "method": "POST",
+    "path": "/ai/workspace/sessions/{sessionId}/messages/{messageId}/regenerate",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AiWorkspaceController@regenerate",
     "unverifiedResponse": true
   },
   {
@@ -70,6 +441,36 @@
     "unverifiedResponse": true
   },
   {
+    "name": "AnalyticsIntelligenceReportGetAnalyticsTenantIdReportsIntelligence",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/reports/intelligence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@intelligenceReport",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AnalyticsOrganizationReportGetAnalyticsTenantIdReportsOrganization",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/reports/organization",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@organizationReport",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AnalyticsPeopleReportGetAnalyticsTenantIdReportsPeople",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/reports/people",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@peopleReport",
+    "unverifiedResponse": true
+  },
+  {
     "name": "AuditIndexGetAudit",
     "method": "GET",
     "path": "/audit",
@@ -110,14 +511,6 @@
     "unverifiedResponse": true
   },
   {
-    "name": "AuthDevTokenPostAuthDevToken",
-    "method": "POST",
-    "path": "/auth/dev-token",
-    "permissions": {},
-    "controller": "App\\Http\\Controllers\\Api\\AuthController@devToken",
-    "unverifiedResponse": true
-  },
-  {
     "name": "AuthLoginPostAuthLogin",
     "method": "POST",
     "path": "/auth/login",
@@ -126,11 +519,72 @@
     "unverifiedResponse": true
   },
   {
+    "name": "AuthLogoutPostAuthLogout",
+    "method": "POST",
+    "path": "/auth/logout",
+    "permissions": {},
+    "controller": "App\\Http\\Controllers\\Api\\AuthController@logout",
+    "unverifiedResponse": true
+  },
+  {
     "name": "AuthRefreshPostAuthRefresh",
     "method": "POST",
     "path": "/auth/refresh",
     "permissions": {},
     "controller": "App\\Http\\Controllers\\Api\\AuthController@refresh",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "BrandingStorePostBranding",
+    "method": "POST",
+    "path": "/branding",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\BrandingController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "BrandingIndexGetBrandingTenantId",
+    "method": "GET",
+    "path": "/branding/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\BrandingController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "BrandingShowGetBrandingTenantIdId",
+    "method": "GET",
+    "path": "/branding/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\BrandingController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "BrandingUpdatePatchBrandingTenantIdId",
+    "method": "PATCH",
+    "path": "/branding/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\BrandingController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "BrandingDestroyDeleteBrandingTenantIdId",
+    "method": "DELETE",
+    "path": "/branding/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\BrandingController@destroy",
     "unverifiedResponse": true
   },
   {
@@ -312,6 +766,114 @@
     "unverifiedResponse": true
   },
   {
+    "name": "CompetencyStorePostCompetencies",
+    "method": "POST",
+    "path": "/competencies",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CompetencyController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CompetencyIndexGetCompetenciesTenantId",
+    "method": "GET",
+    "path": "/competencies/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CompetencyController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CompetencyShowGetCompetenciesTenantIdId",
+    "method": "GET",
+    "path": "/competencies/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CompetencyController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CompetencyUpdatePatchCompetenciesTenantIdId",
+    "method": "PATCH",
+    "path": "/competencies/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CompetencyController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CompetencyDestroyDeleteCompetenciesTenantIdId",
+    "method": "DELETE",
+    "path": "/competencies/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CompetencyController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConfigVersionStorePostConfigVersions",
+    "method": "POST",
+    "path": "/config-versions",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConfigVersionController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConfigVersionIndexGetConfigVersionsTenantId",
+    "method": "GET",
+    "path": "/config-versions/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConfigVersionController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConfigVersionShowGetConfigVersionsTenantIdId",
+    "method": "GET",
+    "path": "/config-versions/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConfigVersionController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConfigVersionActivatePostConfigVersionsTenantIdIdActivate",
+    "method": "POST",
+    "path": "/config-versions/{tenantId}/{id}/activate",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConfigVersionController@activate",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ConfigVersionRollbackPostConfigVersionsTenantIdIdRollback",
+    "method": "POST",
+    "path": "/config-versions/{tenantId}/{id}/rollback",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ConfigVersionController@rollback",
+    "unverifiedResponse": true
+  },
+  {
     "name": "ConversationStorePromptTemplatePostConversationsPromptTemplates",
     "method": "POST",
     "path": "/conversations/prompt-templates",
@@ -428,6 +990,114 @@
     "unverifiedResponse": true
   },
   {
+    "name": "DashboardWidgetStorePostDashboardWidgets",
+    "method": "POST",
+    "path": "/dashboard-widgets",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DashboardWidgetController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DashboardWidgetIndexGetDashboardWidgetsTenantId",
+    "method": "GET",
+    "path": "/dashboard-widgets/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DashboardWidgetController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DashboardWidgetShowGetDashboardWidgetsTenantIdId",
+    "method": "GET",
+    "path": "/dashboard-widgets/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DashboardWidgetController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DashboardWidgetUpdatePatchDashboardWidgetsTenantIdId",
+    "method": "PATCH",
+    "path": "/dashboard-widgets/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DashboardWidgetController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DashboardWidgetDestroyDeleteDashboardWidgetsTenantIdId",
+    "method": "DELETE",
+    "path": "/dashboard-widgets/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DashboardWidgetController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DashboardStorePostDashboards",
+    "method": "POST",
+    "path": "/dashboards",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DashboardController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DashboardIndexGetDashboardsTenantId",
+    "method": "GET",
+    "path": "/dashboards/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DashboardController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DashboardShowGetDashboardsTenantIdId",
+    "method": "GET",
+    "path": "/dashboards/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DashboardController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DashboardUpdatePatchDashboardsTenantIdId",
+    "method": "PATCH",
+    "path": "/dashboards/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DashboardController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DashboardDestroyDeleteDashboardsTenantIdId",
+    "method": "DELETE",
+    "path": "/dashboards/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DashboardController@destroy",
+    "unverifiedResponse": true
+  },
+  {
     "name": "DecisionStorePostDecisions",
     "method": "POST",
     "path": "/decisions",
@@ -530,6 +1200,59 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\DepartmentController@twin",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EntityMappingStorePostEntityMappings",
+    "method": "POST",
+    "path": "/entity-mappings",
+    "permissions": [
+      "read",
+      "tenant.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EntityMappingController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EntityMappingIndexGetEntityMappingsTenantId",
+    "method": "GET",
+    "path": "/entity-mappings/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EntityMappingController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EntityMappingShowGetEntityMappingsTenantIdId",
+    "method": "GET",
+    "path": "/entity-mappings/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EntityMappingController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EntityMappingUpdatePatchEntityMappingsTenantIdId",
+    "method": "PATCH",
+    "path": "/entity-mappings/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "tenant.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EntityMappingController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EntityMappingDestroyDeleteEntityMappingsTenantIdId",
+    "method": "DELETE",
+    "path": "/entity-mappings/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "tenant.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EntityMappingController@destroy",
     "unverifiedResponse": true
   },
   {
@@ -732,6 +1455,112 @@
     "unverifiedResponse": true
   },
   {
+    "name": "FeatureFlagStorePostFeatureFlags",
+    "method": "POST",
+    "path": "/feature-flags",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\FeatureFlagController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "FeatureFlagIndexGetFeatureFlagsTenantId",
+    "method": "GET",
+    "path": "/feature-flags/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\FeatureFlagController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "FeatureFlagShowGetFeatureFlagsTenantIdId",
+    "method": "GET",
+    "path": "/feature-flags/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\FeatureFlagController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "FeatureFlagUpdatePatchFeatureFlagsTenantIdId",
+    "method": "PATCH",
+    "path": "/feature-flags/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\FeatureFlagController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "FeatureFlagDestroyDeleteFeatureFlagsTenantIdId",
+    "method": "DELETE",
+    "path": "/feature-flags/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\FeatureFlagController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "FormStorePostForms",
+    "method": "POST",
+    "path": "/forms",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\FormController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "FormIndexGetFormsTenantId",
+    "method": "GET",
+    "path": "/forms/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\FormController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "FormShowGetFormsTenantIdId",
+    "method": "GET",
+    "path": "/forms/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\FormController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "FormUpdatePatchFormsTenantIdId",
+    "method": "PATCH",
+    "path": "/forms/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\FormController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "FormDestroyDeleteFormsTenantIdId",
+    "method": "DELETE",
+    "path": "/forms/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\FormController@destroy",
+    "unverifiedResponse": true
+  },
+  {
     "name": "GraphEntityGetGraphTenantIdEntityLabelId",
     "method": "GET",
     "path": "/graph/{tenantId}/entity/{label}/{id}",
@@ -824,6 +1653,213 @@
       "update"
     ],
     "controller": "App\\Http\\Controllers\\Api\\HypothesisController@setStatus",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ImportStartPostImports",
+    "method": "POST",
+    "path": "/imports",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ImportController@start",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ImportDetectDuplicatesPostImportsDetectDuplicates",
+    "method": "POST",
+    "path": "/imports/detect-duplicates",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ImportController@detectDuplicates",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ImportPreviewPostImportsPreview",
+    "method": "POST",
+    "path": "/imports/preview",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ImportController@preview",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ImportValidatePostImportsValidate",
+    "method": "POST",
+    "path": "/imports/validate",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ImportController@validate",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ImportIndexGetImportsTenantId",
+    "method": "GET",
+    "path": "/imports/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ImportController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ImportShowGetImportsTenantIdId",
+    "method": "GET",
+    "path": "/imports/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ImportController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ImportLogsGetImportsTenantIdIdLogs",
+    "method": "GET",
+    "path": "/imports/{tenantId}/{id}/logs",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ImportController@logs",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ImportProcessPostImportsTenantIdIdProcess",
+    "method": "POST",
+    "path": "/imports/{tenantId}/{id}/process",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ImportController@process",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ImportRollbackPostImportsTenantIdIdRollback",
+    "method": "POST",
+    "path": "/imports/{tenantId}/{id}/rollback",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ImportController@rollback",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IndustryStorePostIndustries",
+    "method": "POST",
+    "path": "/industries",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IndustryController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IndustryIndexGetIndustriesTenantId",
+    "method": "GET",
+    "path": "/industries/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IndustryController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IndustryShowGetIndustriesTenantIdId",
+    "method": "GET",
+    "path": "/industries/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IndustryController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IndustryUpdatePatchIndustriesTenantIdId",
+    "method": "PATCH",
+    "path": "/industries/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IndustryController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IndustryDestroyDeleteIndustriesTenantIdId",
+    "method": "DELETE",
+    "path": "/industries/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IndustryController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IndustryTemplateStorePostIndustryTemplates",
+    "method": "POST",
+    "path": "/industry-templates",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IndustryTemplateController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IndustryTemplateIndexGetIndustryTemplatesTenantId",
+    "method": "GET",
+    "path": "/industry-templates/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IndustryTemplateController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IndustryTemplateShowGetIndustryTemplatesTenantIdId",
+    "method": "GET",
+    "path": "/industry-templates/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IndustryTemplateController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IndustryTemplateUpdatePatchIndustryTemplatesTenantIdId",
+    "method": "PATCH",
+    "path": "/industry-templates/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IndustryTemplateController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IndustryTemplateDestroyDeleteIndustryTemplatesTenantIdId",
+    "method": "DELETE",
+    "path": "/industry-templates/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IndustryTemplateController@destroy",
     "unverifiedResponse": true
   },
   {
@@ -972,6 +2008,116 @@
     "unverifiedResponse": true
   },
   {
+    "name": "LocationTypeStorePostLocationTypes",
+    "method": "POST",
+    "path": "/location-types",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LocationTypeController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LocationTypeIndexGetLocationTypesTenantId",
+    "method": "GET",
+    "path": "/location-types/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LocationTypeController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LocationTypeShowGetLocationTypesTenantIdId",
+    "method": "GET",
+    "path": "/location-types/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LocationTypeController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LocationTypeUpdatePatchLocationTypesTenantIdId",
+    "method": "PATCH",
+    "path": "/location-types/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LocationTypeController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LocationTypeDestroyDeleteLocationTypesTenantIdId",
+    "method": "DELETE",
+    "path": "/location-types/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LocationTypeController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LocationStorePostLocations",
+    "method": "POST",
+    "path": "/locations",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LocationController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LocationIndexGetLocationsTenantId",
+    "method": "GET",
+    "path": "/locations/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LocationController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LocationShowGetLocationsTenantIdId",
+    "method": "GET",
+    "path": "/locations/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LocationController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LocationUpdatePatchLocationsTenantIdId",
+    "method": "PATCH",
+    "path": "/locations/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LocationController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "LocationDestroyDeleteLocationsTenantIdId",
+    "method": "DELETE",
+    "path": "/locations/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\LocationController@destroy",
+    "unverifiedResponse": true
+  },
+  {
     "name": "MeasurementPlanStorePostMeasurementPlans",
     "method": "POST",
     "path": "/measurement-plans",
@@ -1000,6 +2146,114 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\MentalModelController@byDomain",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ModuleStorePostModules",
+    "method": "POST",
+    "path": "/modules",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ModuleController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ModuleIndexGetModulesTenantId",
+    "method": "GET",
+    "path": "/modules/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ModuleController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ModuleShowGetModulesTenantIdId",
+    "method": "GET",
+    "path": "/modules/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ModuleController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ModuleUpdatePatchModulesTenantIdId",
+    "method": "PATCH",
+    "path": "/modules/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ModuleController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ModuleDestroyDeleteModulesTenantIdId",
+    "method": "DELETE",
+    "path": "/modules/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ModuleController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "NavigationStorePostNavigation",
+    "method": "POST",
+    "path": "/navigation",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\NavigationController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "NavigationIndexGetNavigationTenantId",
+    "method": "GET",
+    "path": "/navigation/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\NavigationController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "NavigationShowGetNavigationTenantIdId",
+    "method": "GET",
+    "path": "/navigation/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\NavigationController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "NavigationUpdatePatchNavigationTenantIdId",
+    "method": "PATCH",
+    "path": "/navigation/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\NavigationController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "NavigationDestroyDeleteNavigationTenantIdId",
+    "method": "DELETE",
+    "path": "/navigation/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\NavigationController@destroy",
     "unverifiedResponse": true
   },
   {
@@ -1113,6 +2367,354 @@
     "unverifiedResponse": true
   },
   {
+    "name": "OnboardingIndexGetOnboardingTenantId",
+    "method": "GET",
+    "path": "/onboarding/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OnboardingController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OnboardingStartPostOnboardingTenantIdStart",
+    "method": "POST",
+    "path": "/onboarding/{tenantId}/start",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OnboardingController@start",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OnboardingShowGetOnboardingTenantIdId",
+    "method": "GET",
+    "path": "/onboarding/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OnboardingController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OnboardingAbandonPostOnboardingTenantIdIdAbandon",
+    "method": "POST",
+    "path": "/onboarding/{tenantId}/{id}/abandon",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OnboardingController@abandon",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OnboardingActivatePostOnboardingTenantIdIdActivate",
+    "method": "POST",
+    "path": "/onboarding/{tenantId}/{id}/activate",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OnboardingController@activate",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OnboardingCompleteStepPostOnboardingTenantIdIdCompleteStep",
+    "method": "POST",
+    "path": "/onboarding/{tenantId}/{id}/complete-step",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OnboardingController@completeStep",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OnboardingGetNextStepGetOnboardingTenantIdIdNextStep",
+    "method": "GET",
+    "path": "/onboarding/{tenantId}/{id}/next-step",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OnboardingController@getNextStep",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OnboardingReadinessGetOnboardingTenantIdIdReadiness",
+    "method": "GET",
+    "path": "/onboarding/{tenantId}/{id}/readiness",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OnboardingController@readiness",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OnboardingRunReadinessChecksPostOnboardingTenantIdIdReadinessRun",
+    "method": "POST",
+    "path": "/onboarding/{tenantId}/{id}/readiness/run",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OnboardingController@runReadinessChecks",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OnboardingValidateStepPostOnboardingTenantIdIdValidateStep",
+    "method": "POST",
+    "path": "/onboarding/{tenantId}/{id}/validate-step",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OnboardingController@validateStep",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationConfigStorePostOrganizationConfigs",
+    "method": "POST",
+    "path": "/organization-configs",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationConfigController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationConfigIndexGetOrganizationConfigsTenantId",
+    "method": "GET",
+    "path": "/organization-configs/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationConfigController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationConfigShowGetOrganizationConfigsTenantIdId",
+    "method": "GET",
+    "path": "/organization-configs/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationConfigController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationConfigUpdatePatchOrganizationConfigsTenantIdId",
+    "method": "PATCH",
+    "path": "/organization-configs/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationConfigController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationConfigDestroyDeleteOrganizationConfigsTenantIdId",
+    "method": "DELETE",
+    "path": "/organization-configs/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationConfigController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationModuleStorePostOrganizationModules",
+    "method": "POST",
+    "path": "/organization-modules",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationModuleController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationModuleIndexGetOrganizationModulesTenantId",
+    "method": "GET",
+    "path": "/organization-modules/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationModuleController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationModuleShowGetOrganizationModulesTenantIdId",
+    "method": "GET",
+    "path": "/organization-modules/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationModuleController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationModuleUpdatePatchOrganizationModulesTenantIdId",
+    "method": "PATCH",
+    "path": "/organization-modules/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationModuleController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationModuleDestroyDeleteOrganizationModulesTenantIdId",
+    "method": "DELETE",
+    "path": "/organization-modules/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationModuleController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationTypeStorePostOrganizationTypes",
+    "method": "POST",
+    "path": "/organization-types",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationTypeController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationTypeIndexGetOrganizationTypesTenantId",
+    "method": "GET",
+    "path": "/organization-types/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationTypeController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationTypeShowGetOrganizationTypesTenantIdId",
+    "method": "GET",
+    "path": "/organization-types/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationTypeController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationTypeUpdatePatchOrganizationTypesTenantIdId",
+    "method": "PATCH",
+    "path": "/organization-types/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationTypeController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationTypeDestroyDeleteOrganizationTypesTenantIdId",
+    "method": "DELETE",
+    "path": "/organization-types/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationTypeController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationUnitStorePostOrganizationUnits",
+    "method": "POST",
+    "path": "/organization-units",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationUnitController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationUnitIndexGetOrganizationUnitsTenantId",
+    "method": "GET",
+    "path": "/organization-units/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationUnitController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationUnitHierarchyGetOrganizationUnitsTenantIdHierarchy",
+    "method": "GET",
+    "path": "/organization-units/{tenantId}/hierarchy",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationUnitController@hierarchy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationUnitTreeGetOrganizationUnitsTenantIdTree",
+    "method": "GET",
+    "path": "/organization-units/{tenantId}/tree",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationUnitController@tree",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationUnitShowGetOrganizationUnitsTenantIdId",
+    "method": "GET",
+    "path": "/organization-units/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationUnitController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationUnitUpdatePatchOrganizationUnitsTenantIdId",
+    "method": "PATCH",
+    "path": "/organization-units/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationUnitController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationUnitDestroyDeleteOrganizationUnitsTenantIdId",
+    "method": "DELETE",
+    "path": "/organization-units/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationUnitController@destroy",
+    "unverifiedResponse": true
+  },
+  {
     "name": "OrganizationStorePostOrganizations",
     "method": "POST",
     "path": "/organizations",
@@ -1173,6 +2775,26 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\OrganizationController@audit",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationDataQualityGetOrganizationsTenantIdIdDataQuality",
+    "method": "GET",
+    "path": "/organizations/{tenantId}/{id}/data-quality",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationController@dataQuality",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationStructureGetOrganizationsTenantIdIdStructure",
+    "method": "GET",
+    "path": "/organizations/{tenantId}/{id}/structure",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationController@structure",
     "unverifiedResponse": true
   },
   {
@@ -1280,6 +2902,171 @@
     "unverifiedResponse": true
   },
   {
+    "name": "PersonCompetencyStorePostPersonCompetencies",
+    "method": "POST",
+    "path": "/person-competencies",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonCompetencyController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonCompetencyIndexGetPersonCompetenciesTenantId",
+    "method": "GET",
+    "path": "/person-competencies/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonCompetencyController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonCompetencyShowGetPersonCompetenciesTenantIdId",
+    "method": "GET",
+    "path": "/person-competencies/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonCompetencyController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonCompetencyUpdatePatchPersonCompetenciesTenantIdId",
+    "method": "PATCH",
+    "path": "/person-competencies/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonCompetencyController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonCompetencyDestroyDeletePersonCompetenciesTenantIdId",
+    "method": "DELETE",
+    "path": "/person-competencies/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonCompetencyController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonRoleStorePostPersonRoles",
+    "method": "POST",
+    "path": "/person-roles",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonRoleController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonRoleIndexGetPersonRolesTenantId",
+    "method": "GET",
+    "path": "/person-roles/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonRoleController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonRoleShowGetPersonRolesTenantIdId",
+    "method": "GET",
+    "path": "/person-roles/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonRoleController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonRoleUpdatePatchPersonRolesTenantIdId",
+    "method": "PATCH",
+    "path": "/person-roles/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonRoleController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonRoleDestroyDeletePersonRolesTenantIdId",
+    "method": "DELETE",
+    "path": "/person-roles/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonRoleController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonSkillStorePostPersonSkills",
+    "method": "POST",
+    "path": "/person-skills",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonSkillController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonSkillIndexGetPersonSkillsTenantId",
+    "method": "GET",
+    "path": "/person-skills/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonSkillController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonSkillShowGetPersonSkillsTenantIdId",
+    "method": "GET",
+    "path": "/person-skills/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonSkillController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonSkillUpdatePatchPersonSkillsTenantIdId",
+    "method": "PATCH",
+    "path": "/person-skills/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonSkillController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonSkillDestroyDeletePersonSkillsTenantIdId",
+    "method": "DELETE",
+    "path": "/person-skills/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonSkillController@destroy",
+    "unverifiedResponse": true
+  },
+  {
     "name": "PolicyStorePostPolicies",
     "method": "POST",
     "path": "/policies",
@@ -1339,6 +3126,116 @@
       "create"
     ],
     "controller": "App\\Http\\Controllers\\Api\\PolicyController@createVersion",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PositionStorePostPositions",
+    "method": "POST",
+    "path": "/positions",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PositionController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PositionIndexGetPositionsTenantId",
+    "method": "GET",
+    "path": "/positions/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PositionController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PositionShowGetPositionsTenantIdId",
+    "method": "GET",
+    "path": "/positions/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PositionController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PositionUpdatePatchPositionsTenantIdId",
+    "method": "PATCH",
+    "path": "/positions/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PositionController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PositionDestroyDeletePositionsTenantIdId",
+    "method": "DELETE",
+    "path": "/positions/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PositionController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReadinessCheckStorePostReadinessChecks",
+    "method": "POST",
+    "path": "/readiness-checks",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReadinessCheckController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReadinessCheckIndexGetReadinessChecksTenantId",
+    "method": "GET",
+    "path": "/readiness-checks/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReadinessCheckController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReadinessCheckShowGetReadinessChecksTenantIdId",
+    "method": "GET",
+    "path": "/readiness-checks/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReadinessCheckController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReadinessCheckUpdatePatchReadinessChecksTenantIdId",
+    "method": "PATCH",
+    "path": "/readiness-checks/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReadinessCheckController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReadinessCheckDestroyDeleteReadinessChecksTenantIdId",
+    "method": "DELETE",
+    "path": "/readiness-checks/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReadinessCheckController@destroy",
     "unverifiedResponse": true
   },
   {
@@ -1466,6 +3363,61 @@
     "unverifiedResponse": true
   },
   {
+    "name": "ReportingStructureStorePostReportingStructures",
+    "method": "POST",
+    "path": "/reporting-structures",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReportingStructureController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReportingStructureIndexGetReportingStructuresTenantId",
+    "method": "GET",
+    "path": "/reporting-structures/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReportingStructureController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReportingStructureShowGetReportingStructuresTenantIdId",
+    "method": "GET",
+    "path": "/reporting-structures/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReportingStructureController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReportingStructureUpdatePatchReportingStructuresTenantIdId",
+    "method": "PATCH",
+    "path": "/reporting-structures/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReportingStructureController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ReportingStructureDestroyDeleteReportingStructuresTenantIdId",
+    "method": "DELETE",
+    "path": "/reporting-structures/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ReportingStructureController@destroy",
+    "unverifiedResponse": true
+  },
+  {
     "name": "RiskAssessPostRisks",
     "method": "POST",
     "path": "/risks",
@@ -1495,6 +3447,61 @@
       "update"
     ],
     "controller": "App\\Http\\Controllers\\Api\\RiskController@mitigate",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RoleStorePostRoles",
+    "method": "POST",
+    "path": "/roles",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RoleController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RoleIndexGetRolesTenantId",
+    "method": "GET",
+    "path": "/roles/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RoleController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RoleShowGetRolesTenantIdId",
+    "method": "GET",
+    "path": "/roles/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RoleController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RoleUpdatePatchRolesTenantIdId",
+    "method": "PATCH",
+    "path": "/roles/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RoleController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RoleDestroyDeleteRolesTenantIdId",
+    "method": "DELETE",
+    "path": "/roles/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RoleController@destroy",
     "unverifiedResponse": true
   },
   {
@@ -1540,6 +3547,17 @@
     "unverifiedResponse": true
   },
   {
+    "name": "SignalGeneratePostSignalsGenerate",
+    "method": "POST",
+    "path": "/signals/generate",
+    "permissions": [
+      "read",
+      "events.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SignalController@generate",
+    "unverifiedResponse": true
+  },
+  {
     "name": "SignalIndexGetSignalsTenantId",
     "method": "GET",
     "path": "/signals/{tenantId}",
@@ -1571,6 +3589,61 @@
     "unverifiedResponse": true
   },
   {
+    "name": "SkillStorePostSkills",
+    "method": "POST",
+    "path": "/skills",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SkillController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SkillIndexGetSkillsTenantId",
+    "method": "GET",
+    "path": "/skills/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SkillController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SkillShowGetSkillsTenantIdId",
+    "method": "GET",
+    "path": "/skills/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SkillController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SkillUpdatePatchSkillsTenantIdId",
+    "method": "PATCH",
+    "path": "/skills/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SkillController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "SkillDestroyDeleteSkillsTenantIdId",
+    "method": "DELETE",
+    "path": "/skills/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\SkillController@destroy",
+    "unverifiedResponse": true
+  },
+  {
     "name": "TaskRegistryGetTasksRegistry",
     "method": "GET",
     "path": "/tasks/registry",
@@ -1592,6 +3665,169 @@
     "unverifiedResponse": true
   },
   {
+    "name": "TemplateOverrideStorePostTemplateOverrides",
+    "method": "POST",
+    "path": "/template-overrides",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TemplateOverrideController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TemplateOverrideIndexGetTemplateOverridesTenantId",
+    "method": "GET",
+    "path": "/template-overrides/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TemplateOverrideController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TemplateOverrideShowGetTemplateOverridesTenantIdId",
+    "method": "GET",
+    "path": "/template-overrides/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TemplateOverrideController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TemplateOverrideUpdatePatchTemplateOverridesTenantIdId",
+    "method": "PATCH",
+    "path": "/template-overrides/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TemplateOverrideController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TemplateOverrideDestroyDeleteTemplateOverridesTenantIdId",
+    "method": "DELETE",
+    "path": "/template-overrides/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TemplateOverrideController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TerminologyStorePostTerminology",
+    "method": "POST",
+    "path": "/terminology",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TerminologyController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TerminologyIndexGetTerminologyTenantId",
+    "method": "GET",
+    "path": "/terminology/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TerminologyController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TerminologyShowGetTerminologyTenantIdId",
+    "method": "GET",
+    "path": "/terminology/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TerminologyController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TerminologyUpdatePatchTerminologyTenantIdId",
+    "method": "PATCH",
+    "path": "/terminology/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TerminologyController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "TerminologyDestroyDeleteTerminologyTenantIdId",
+    "method": "DELETE",
+    "path": "/terminology/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\TerminologyController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ThemeStorePostThemes",
+    "method": "POST",
+    "path": "/themes",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ThemeController@store",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ThemeIndexGetThemesTenantId",
+    "method": "GET",
+    "path": "/themes/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ThemeController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ThemeShowGetThemesTenantIdId",
+    "method": "GET",
+    "path": "/themes/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ThemeController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ThemeUpdatePatchThemesTenantIdId",
+    "method": "PATCH",
+    "path": "/themes/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ThemeController@update",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "ThemeDestroyDeleteThemesTenantIdId",
+    "method": "DELETE",
+    "path": "/themes/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\ThemeController@destroy",
+    "unverifiedResponse": true
+  },
+  {
     "name": "WorkspaceSummaryGetWorkspaceTenantId",
     "method": "GET",
     "path": "/workspace/{tenantId}",
@@ -1599,6 +3835,16 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\WorkspaceController@summary",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "WorkspaceHomeMetricsGetWorkspaceTenantIdHomeMetrics",
+    "method": "GET",
+    "path": "/workspace/{tenantId}/home-metrics",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\WorkspaceController@homeMetrics",
     "unverifiedResponse": true
   },
   {
