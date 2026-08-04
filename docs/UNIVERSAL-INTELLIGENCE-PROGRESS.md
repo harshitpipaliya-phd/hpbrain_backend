@@ -282,6 +282,48 @@ row carries `sub_institute_id` 1 — a mismatch the old tenant-blind login never
 
 ---
 
+## Phases 3–5, 8 — summary
+
+**Phase 3 — rules as data.** Five private methods became five rows in
+`hpbrain_signal_rules`. Predicates are JSON with a **closed** operator set; fields name
+universal fields the resolver maps; every value is bound. There is no `raw` operator
+and `PredicateTest` asserts its absence, so adding an escape hatch means deleting a
+test that says why it must not exist. Soft-delete is not assumed — `deletedAt` is a
+mapped field and each rule states its own position, which is what made the one rule
+that *wants* deleted rows expressible. `evidence_fields` maps output key → source, so
+the shipped rules reproduce the previous payloads exactly.
+
+**Phase 4 — per-industry assessment model.** `assessment_model` on
+`hpbrain_industry_templates`, resolved per tenant, `config('brain.kasba')` as fallback
+only. A four-dimension tenant gets four axes, columns and roll-up rows with zero
+frontend change, because the dimension list travels in the response.
+
+**Phase 5 — demand and history.** `DemandService` computes demand from positions and
+deficit against supply, returning **null** wherever either side is unknown.
+`hpbrain_metric_snapshots` + `brain:snapshot` (scheduled 02:00 UTC) give the system a
+memory of its own numbers; `GET /analytics/{t}/trend` serves the series with nulls
+intact.
+
+**Phase 8 (backend) — proof.** A hospital on `hc_staff` / `hc_wards` / `hc_roles`,
+sharing no table with the institute ERP, onboarded by INSERT alone and verified end to
+end including login, rules, assessment model, demand and snapshots.
+
+### Defects found, and what was done with each
+
+| Defect | Phase | Action |
+|---|---|---|
+| `hpbrain_entity_mappings` UNIQUE key permitted one field per entity | 1 | **Fixed** — new unique key; test fixture had no index at all, also fixed |
+| `config('brain.erp_tables')` — hardcoded, zero readers, now contradictory | 2 | **Removed** |
+| Missing `use` + broad `catch` reported a binding error as "org does not exist" | 2 | **Fixed** (introduced and caught same phase) |
+| `peopleReport` unparenthesised `orWhereNull` counts every tenant's rows | 2 | Carried, marked in code |
+| "Departments Without Manager" detects *root* units — no manager column exists | 1–3 | Carried, documented at the rule row |
+| Signal idempotency keys on the signal's own fresh UUID, so re-evaluation duplicates | 3 | Carried, documented; docblock claimed the opposite |
+| Evidence rows store the **tenant id** in `signal_id` | 3 | Carried, documented |
+| `UNIQUE` over nullable `dimension_key` cannot enforce daily idempotency | 5 | **Worked around** in `SnapshotWriter` |
+| `recompute-signal-confidence` does not exist anywhere | 5 | **Reported** — not scheduled, see below |
+
+---
+
 ## Phase log
 
 | Phase | Tests | Assertions | Fails | standalone | security | Routes | Unresolved | Commit |
@@ -293,6 +335,73 @@ row carries `sub_institute_id` 1 — a mismatch the old tenant-blind login never
 | 2.3 people + auth | 352 | 1273 | 0 | 42/2 | 25/0 | 364 | 0 | `92b245e` |
 | 2.4 workspace/analytics/kasba | 352 | 1273 | 0 | 42/2 | 25/0 | 364 | 0 | `9ff934c` |
 | 2.5 signals/events/tenancy | 352 | 1273 | 0 | 42/2 | 25/0 | 364 | 0 | `214a18b` |
+| 3 rules as data | 387 | 1391 | 0 | 42/2 | 25/0 | 364 | 0 | `1ac34bd` |
+| 4 assessment model | 398 | 1425 | 0 | 42/2 | 25/0 | 364 | 0 | `1015b6e` |
+| 5 demand + snapshots | 413 | 1479 | 0 | 42/2 | 25/0 | **365** | 0 | `aa66eb5` |
+| 8 second industry | 427 | 1545 | 0 | 42/2 | 25/0 | 365 | 0 | `0a5c213` |
 
 A commit cannot record its own hash, so each phase's hash is written into the next
-phase's commit. The row above is filled in once the commit exists.
+phase's commit.
+
+**No phase increased failures or unresolved routes.** Nothing was reverted.
+The 2 standing `standalone/run.php` failures are the Phase 0 baseline pair, unchanged
+throughout. Route count rose by one (`analytics/{tenantId}/trend`), declared and
+resolving.
+
+---
+
+## Not done
+
+**Phase 6 (frontend primitives and 17 hand-built SVG charts)**, **Phase 7 (22 screens
+upgraded to State / Movement / Consequence)** and the **frontend half of Phase 8** were
+not attempted. No `web/src` file was modified by this work.
+
+This is a scope call, stated plainly rather than disguised as partial delivery: Phase 6
+alone is four primitives plus seventeen charts, each needing null-encoding, empty and
+partial states and a light/dark theme; Phase 7 is twenty-two screens each requiring a
+question, three weighted bands and a Consequence layer with something real in it.
+Shipping thin versions would have produced exactly what the plan's ship test exists to
+catch — labels where sentences should be.
+
+**What this means for the Phase 8 gate.** The backend half is proven: a second industry
+on its own tables, onboarded by INSERT alone. The clause "every screen renders in that
+industry's vocabulary" is **not** verified, because the screens have not been converted
+to read from the terminology engine. `useConfig().terminology` exists; the screens do
+not yet use it consistently.
+
+### Also outstanding
+
+- **`recompute-signal-confidence` does not exist.** The plan says to schedule it. No such
+  command is in the repository, so scheduling it would have added a cron entry that fails
+  every night. Confidence does drift. Building it deserves its own phase — and note that
+  the two standing standalone failures live in that same formula.
+- **Soft-delete, audit and credential columns are not universal.** `deleted_at`,
+  `created_at`, `updated_at`, `created_by`, `password`, `plain_password` are still
+  written literally. `SecondIndustryTest` asserts this limit rather than describing it,
+  so closing it deletes a failing test.
+- **The 35 SPA calls to non-existent endpoints** from the Phase 0 baseline are untouched.
+- **Nothing has been verified against a live database.** See the note below.
+
+### Live-database verification: not performed
+
+Everything above is measured on the suite's in-memory SQLite. The `.env` points at a
+**shared production MySQL** (`hp_erp`, 311 tables, 59 `hpbrain_*`) that is also the
+institute's live ERP, and `hpbrain_entity_mappings` does not exist there — migrations are
+only partly applied. Running migrations or seeders against a shared production database
+is not something to do unattended, so it was not done.
+
+Consequently these are **implemented and tested but not exercised against live data**:
+
+| Item | Why it matters |
+|---|---|
+| `2026_08_03_000100` entity-mapping unique key | `ALTER TABLE`, MySQL-only; guarded but unrun |
+| `2026_08_03_000200` signal rules | `JSON` columns behave differently from SQLite `TEXT` |
+| `2026_08_03_000300` assessment model | `ALTER TABLE ... ADD COLUMN ... AFTER` |
+| `2026_08_03_000400` metric snapshots | `DECIMAL(18,4)`, and the NULL-in-UNIQUE behaviour that `SnapshotWriter` works around is a **MySQL** behaviour reasoned about, not observed |
+| `EntityMappingSeeder` against real tenants | Reads `institute_detail`; six live tenants |
+| `brain:snapshot` at real volume | Per-capability loop over real assignment counts |
+
+Recommended first step on a non-production copy: `php artisan migrate`, then
+`db:seed --class=EntityMappingSeeder`, then `--class=SignalRuleSeeder`, then
+`php artisan brain:snapshot --date=<today>` twice and confirm the row count does not
+change.
