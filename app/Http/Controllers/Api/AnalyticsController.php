@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,6 +33,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 final class AnalyticsController extends Controller
 {
+    public function __construct(private readonly EntityResolver $resolver)
+    {
+    }
+
     /** Statuses that count as a decision having been accepted. */
     private const APPROVED = ['approved', 'accepted'];
     private const REJECTED = ['rejected', 'declined'];
@@ -340,33 +345,36 @@ final class AnalyticsController extends Controller
     {
         $t = $this->tenantId($request);
 
-        $activePeople = DB::table('tbluser')
-            ->where('sub_institute_id', $t)
-            ->where('status', 1)
+        $person = $this->resolver->resolve($t, 'Person');
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
+
+        // One builder per entity, so the four counts below read as four
+        // questions rather than four repetitions of the same predicate.
+        $activePersonRows = fn () => DB::table($person->table)
+            ->where($person->tenantKey, $t)
+            ->where($person->field('status'), 1)
+            ->whereNull('deleted_at');
+
+        $personUnit = $person->field('unit');
+        $personProfile = $person->field('profile');
+
+        $activePeople = $activePersonRows()->count();
+
+        $activeDepartments = DB::table($unit->table)
+            ->where($unit->tenantKey, $t)
+            ->where($unit->field('status'), 1)
             ->whereNull('deleted_at')
             ->count();
 
-        $activeDepartments = DB::table('hrms_departments')
-            ->where('sub_institute_id', $t)
-            ->where('status', 1)
-            ->whereNull('deleted_at')
-            ->count();
-
-        $peopleWithoutDepartment = DB::table('tbluser')
-            ->where('sub_institute_id', $t)
-            ->where('status', 1)
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->whereNull('department_id')->orWhere('department_id', 0);
+        $peopleWithoutDepartment = $activePersonRows()
+            ->where(function ($q) use ($personUnit) {
+                $q->whereNull($personUnit)->orWhere($personUnit, 0);
             })
             ->count();
 
-        $peopleWithoutProfile = DB::table('tbluser')
-            ->where('sub_institute_id', $t)
-            ->where('status', 1)
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->whereNull('user_profile_id')->orWhere('user_profile_id', 0);
+        $peopleWithoutProfile = $activePersonRows()
+            ->where(function ($q) use ($personProfile) {
+                $q->whereNull($personProfile)->orWhere($personProfile, 0);
             })
             ->count();
 
@@ -421,52 +429,72 @@ final class AnalyticsController extends Controller
     {
         $t = $this->tenantId($request);
 
-        $byDepartment = DB::table('tbluser as u')
-            ->join('hrms_departments as d', function ($j) use ($t) {
-                $j->on('d.id', '=', 'u.department_id')->where('d.sub_institute_id', '=', $t)->where('d.status', '=', 1)->whereNull('d.deleted_at');
+        $person = $this->resolver->resolve($t, 'Person');
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
+        $profile = $this->resolver->resolve($t, 'PersonProfile');
+
+        $personUnit = $person->field('unit');
+        $personProfile = $person->field('profile');
+        $personStatus = $person->field('status');
+        $unitName = $unit->field('name');
+        $profileName = $profile->field('name');
+
+        $byDepartment = DB::table($person->table.' as u')
+            ->join($unit->table.' as d', function ($j) use ($t, $person, $unit, $personUnit) {
+                $j->on('d.'.$unit->primaryKey, '=', 'u.'.$personUnit)
+                    ->where('d.'.$unit->tenantKey, '=', $t)
+                    ->where('d.'.$unit->field('status'), '=', 1)
+                    ->whereNull('d.deleted_at');
             })
-            ->where('u.sub_institute_id', $t)
-            ->where('u.status', 1)
+            ->where('u.'.$person->tenantKey, $t)
+            ->where('u.'.$personStatus, 1)
             ->whereNull('u.deleted_at')
-            ->select('d.department', DB::raw('COUNT(*) as count'))
-            ->groupBy('d.department')
+            ->select('d.'.$unitName, DB::raw('COUNT(*) as count'))
+            ->groupBy('d.'.$unitName)
             ->orderByDesc('count')
             ->get();
 
-        $byRole = DB::table('tbluser as u')
-            ->join('tbluserprofilemaster as p', function ($j) use ($t) {
-                $j->on('p.id', '=', 'u.user_profile_id')->where('p.sub_institute_id', '=', $t)->where('p.status', '=', 1);
+        $byRole = DB::table($person->table.' as u')
+            ->join($profile->table.' as p', function ($j) use ($t, $profile, $personProfile) {
+                $j->on('p.'.$profile->primaryKey, '=', 'u.'.$personProfile)
+                    ->where('p.'.$profile->tenantKey, '=', $t)
+                    ->where('p.'.$profile->field('status'), '=', 1);
             })
-            ->where('u.sub_institute_id', $t)
-            ->where('u.status', 1)
+            ->where('u.'.$person->tenantKey, $t)
+            ->where('u.'.$personStatus, 1)
             ->whereNull('u.deleted_at')
-            ->select('p.name as role', DB::raw('COUNT(*) as count'))
-            ->groupBy('p.name')
+            ->select('p.'.$profileName.' as role', DB::raw('COUNT(*) as count'))
+            ->groupBy('p.'.$profileName)
             ->orderByDesc('count')
             ->get();
 
-        $missingProfile = DB::table('tbluser')
-            ->where('sub_institute_id', $t)
-            ->where('status', 1)
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->whereNull('user_profile_id')->orWhere('user_profile_id', 0);
+        $activePersonRows = fn () => DB::table($person->table)
+            ->where($person->tenantKey, $t)
+            ->where($personStatus, 1)
+            ->whereNull('deleted_at');
+
+        $missingProfile = $activePersonRows()
+            ->where(function ($q) use ($personProfile) {
+                $q->whereNull($personProfile)->orWhere($personProfile, 0);
             })
             ->count();
 
-        $missingDepartment = DB::table('tbluser')
-            ->where('sub_institute_id', $t)
-            ->where('status', 1)
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->whereNull('department_id')->orWhere('department_id', 0);
+        $missingDepartment = $activePersonRows()
+            ->where(function ($q) use ($personUnit) {
+                $q->whereNull($personUnit)->orWhere($personUnit, 0);
             })
             ->count();
 
-        $inactive = DB::table('tbluser')
-            ->where('sub_institute_id', $t)
-            ->where('status', '!=', 1)
-            ->orWhereNull('status')
+        // Left exactly as it was, including the missing parentheses around the
+        // status/orWhereNull pair — which makes this count every tenant's
+        // status-null rows, not just this one's. Correcting it here would be a
+        // behaviour change inside a commit that promises none. Logged for the
+        // rule work in Phase 3, where the predicate becomes data and can be
+        // fixed with its own gate.
+        $inactive = DB::table($person->table)
+            ->where($person->tenantKey, $t)
+            ->where($personStatus, '!=', 1)
+            ->orWhereNull($personStatus)
             ->count();
 
         return response()->json([

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\Capability\CapabilityState;
 use App\Domain\Kasba\KasbaService;
+use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,10 @@ use InvalidArgumentException;
 
 final class KasbaController extends Controller
 {
-    public function __construct(private readonly KasbaService $kasba)
+    public function __construct(
+        private readonly KasbaService $kasba,
+        private readonly EntityResolver $resolver,
+    )
     {
     }
 
@@ -119,11 +123,13 @@ final class KasbaController extends Controller
         // null departmentId rather than dropped.
         $personIds = $assignments->where('target_type', 'Person')->pluck('target_id')->unique()->all();
 
-        $departmentOfPerson = $personIds === [] ? collect() : DB::table('tbluser')
-            ->whereIn('id', $personIds)
-            ->where('sub_institute_id', $tenant)
+        $person = $this->resolver->resolve($tenant, 'Person');
+
+        $departmentOfPerson = $personIds === [] ? collect() : DB::table($person->table)
+            ->whereIn($person->primaryKey, $personIds)
+            ->where($person->tenantKey, $tenant)
             ->whereNull('deleted_at')
-            ->pluck('department_id', 'id');
+            ->pluck($person->field('unit'), $person->primaryKey);
 
         $buckets = [];
 

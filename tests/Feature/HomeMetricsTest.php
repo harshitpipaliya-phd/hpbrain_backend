@@ -15,6 +15,8 @@ use Tests\TestCase;
  */
 final class HomeMetricsTest extends TestCase
 {
+    use \Tests\Support\SeedsEntityMappings;
+
     private const TENANT = '1';
 
     protected function setUp(): void
@@ -181,6 +183,10 @@ final class HomeMetricsTest extends TestCase
         DB::table('tbluserprofilemaster')->insert([
             'id' => 1, 'sub_institute_id' => 1, 'name' => 'Employee', 'status' => 1,
         ]);
+
+        // Home metrics resolve their source instead of naming it, so the
+        // fixture has to say where this tenant keeps its people.
+        $this->installEntityMappings([self::TENANT]);
     }
 
     public function test_home_metrics_returns_erp_and_intelligence_counts(): void
