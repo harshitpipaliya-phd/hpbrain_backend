@@ -7,8 +7,8 @@ namespace Tests\Feature;
 use App\Support\Jwt;
 use Database\Seeders\EntityMappingSeeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Tests\Support\BuildsBrainSchema;
+use Tests\Support\BuildsErpFixture;
 use Tests\TestCase;
 
 /**
@@ -22,14 +22,15 @@ use Tests\TestCase;
  * suite would still have gone green.
  *
  * The expected values below are the ones the pre-Phase-2 code produced for this
- * fixture, derived by reading that code — a `score` of 62.5 is what
- * (1 - 3/8) * 100 gives for three flawed rows out of five people and three
- * departments, and the `field` values are the ERP's own column names, which is
- * what the SPA renders today.
+ * fixture, derived by reading that code: a `score` of 50.0 is (1 - 4/8) * 100
+ * for four flagged conditions over five people plus three departments, and the
+ * `field` values are the ERP's own column names, which is what the SPA renders
+ * today.
  */
 final class OrganizationResolverParityTest extends TestCase
 {
     use BuildsBrainSchema;
+    use BuildsErpFixture;
 
     private const TENANT = '4';
 
@@ -38,7 +39,7 @@ final class OrganizationResolverParityTest extends TestCase
         parent::setUp();
         $this->buildBrainSchema();
         $this->buildErpSchema();
-        $this->seedErp();
+        $this->seedErpFixture();
         (new EntityMappingSeeder())->run();
     }
 
@@ -47,114 +48,6 @@ final class OrganizationResolverParityTest extends TestCase
         return ['Authorization' => 'Bearer '.Jwt::issueAccess([
             'id' => 'user-1', 'tenantId' => self::TENANT, 'role' => 'admin',
         ])];
-    }
-
-    private function buildErpSchema(): void
-    {
-        Schema::create('institute_detail', function ($t) {
-            $t->increments('id');
-            $t->integer('sub_institute_id');
-            $t->string('organization_name')->nullable();
-            $t->string('organization_code')->nullable();
-            $t->string('industry_type')->nullable();
-            $t->integer('created_by')->nullable();
-            $t->timestamp('created_at')->nullable();
-            $t->timestamp('updated_at')->nullable();
-            $t->timestamp('deleted_at')->nullable();
-        });
-
-        Schema::create('org_details', function ($t) {
-            $t->increments('id');
-            $t->integer('sub_institute_id');
-            $t->string('legal_name')->nullable();
-            $t->string('logo')->nullable();
-            $t->integer('created_by')->nullable();
-            $t->timestamp('created_at')->nullable();
-            $t->timestamp('updated_at')->nullable();
-        });
-
-        Schema::create('hrms_departments', function ($t) {
-            $t->integer('id')->primary();
-            $t->integer('sub_institute_id');
-            $t->string('department');
-            $t->text('roles_responsibility')->nullable();
-            $t->integer('parent_id')->default(0);
-            $t->integer('status')->default(1);
-            $t->timestamp('deleted_at')->nullable();
-        });
-
-        Schema::create('tbluser', function ($t) {
-            $t->integer('id')->primary();
-            $t->integer('sub_institute_id');
-            $t->string('employee_no')->nullable();
-            $t->string('first_name')->nullable();
-            $t->string('last_name')->nullable();
-            $t->string('email')->nullable();
-            $t->string('mobile')->nullable();
-            $t->integer('department_id')->nullable();
-            $t->integer('jobtitle_id')->nullable();
-            $t->integer('user_profile_id')->nullable();
-            $t->date('joined_date')->nullable();
-            $t->integer('status')->default(1);
-            $t->timestamp('deleted_at')->nullable();
-        });
-
-        Schema::create('tbluserprofilemaster', function ($t) {
-            $t->increments('id');
-            $t->integer('sub_institute_id');
-            $t->string('name');
-            $t->integer('status')->default(1);
-        });
-
-        Schema::create('hrms_job_titles', function ($t) {
-            $t->integer('id')->primary();
-            $t->integer('sub_institute_id');
-            $t->string('title');
-            $t->integer('is_active')->default(1);
-        });
-    }
-
-    private function seedErp(): void
-    {
-        DB::table('institute_detail')->insert([
-            'sub_institute_id' => 4, 'organization_name' => 'SIDS HealthCare',
-            'organization_code' => 'SIDS', 'industry_type' => 'Healthcare',
-            'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-02 00:00:00',
-        ]);
-        DB::table('org_details')->insert([
-            'sub_institute_id' => 4, 'legal_name' => 'SIDS HealthCare Pvt Ltd', 'logo' => 'sids.png',
-        ]);
-
-        DB::table('hrms_departments')->insert([
-            ['id' => 1, 'sub_institute_id' => 4, 'department' => 'Nursing',
-             'roles_responsibility' => 'Ward care', 'parent_id' => 0, 'status' => 1, 'deleted_at' => null],
-            ['id' => 2, 'sub_institute_id' => 4, 'department' => 'Surgery',
-             'roles_responsibility' => null, 'parent_id' => 1, 'status' => 1, 'deleted_at' => null],
-            ['id' => 3, 'sub_institute_id' => 4, 'department' => 'Radiology',
-             'roles_responsibility' => null, 'parent_id' => 1, 'status' => 1, 'deleted_at' => null],
-        ]);
-
-        // Five active people. One has no department, one has no profile, one has
-        // no email — three flawed rows, which is what makes the score checkable.
-        $people = [
-            [1, 'E1', 'Asha',  'Rao',   'asha@x.test',  1, 1],
-            [2, 'E2', 'Bilal', 'Khan',  'bilal@x.test', 2, 1],
-            [3, 'E3', 'Chen',  'Wu',    'chen@x.test',  0, 1],   // no department
-            [4, 'E4', 'Dev',   'Patel', 'dev@x.test',   2, 0],   // no profile
-            [5, 'E5', 'Eve',   'Silva', '',             3, 1],   // no email
-        ];
-
-        foreach ($people as [$id, $no, $first, $last, $email, $dept, $profile]) {
-            DB::table('tbluser')->insert([
-                'id' => $id, 'sub_institute_id' => 4, 'employee_no' => $no,
-                'first_name' => $first, 'last_name' => $last, 'email' => $email,
-                'department_id' => $dept, 'user_profile_id' => $profile, 'status' => 1,
-            ]);
-        }
-
-        DB::table('tbluserprofilemaster')->insert([
-            'sub_institute_id' => 4, 'name' => 'Employee', 'status' => 1,
-        ]);
     }
 
     /** @test */
