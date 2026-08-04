@@ -418,6 +418,47 @@ Verified after the fixes:
 
 Still unexercised: real data volumes, and the six live tenants.
 
+### Deployed to the live database `hp_erp` (2026-08-04)
+
+Prompted by a 500 on login. Phase 2 made login resolve `Person` before it can look
+anyone up, and `hp_erp` had never had this repository's migrations applied — 48 were
+pending, of which only the last four were Phase 3–5's. **This was a regression**: login
+previously read `tbluser` by hardcoded name and worked on a database with no Brain
+configuration at all.
+
+Checked before running anything, all read-only:
+
+| Question | Answer |
+|---|---|
+| Do the 44 tables the pending migrations create already exist? | None of them. No collisions. |
+| Is any `CREATE TABLE` unguarded? | No; every one is `IF NOT EXISTS`. |
+| What would `erp_lookup_indexes` do to the ERP's own tables? | **Nothing.** All six leading columns are already indexed, so every statement skips. The lock-and-rebuild risk was hypothetical. |
+| Does `backfill_missing_indexes` touch existing rows? | Adds only, guarded per statement, skips absent tables. |
+
+Result: 48 migrations applied with `--step`, zero failures, zero pending.
+`EntityMappingSeeder` wrote **234** mapping rows across 6 tenants, `SignalRuleSeeder` 5
+rules. `POST /api/v1/auth/login` with a wrong password now returns **401
+invalid_credentials** where it returned 500, which exercises the whole resolution path.
+
+**Seven active users cannot sign in, and this is correct.** `tbluser` holds users under
+`sub_institute_id` 1–11, but `institute_detail` — the register of organizations, and the
+seeder's source of tenants — has rows for only 1, 2, 3, 4, 6, 7. Tenants 5, 8, 9, 10 and
+11 are therefore unmapped, and the resolver fails closed rather than guessing their
+tables:
+
+| Tenant | Accounts |
+|---|---|
+| 5 | `it@gmail.com`, `employee@it.com` |
+| 8 | `npst@gmail.com`, `npst_teacher@gmail.com` |
+| 9 | `altiusfortius@gmail.com` |
+| 10 | `ipeglobal@gmail.com` |
+| 11 | `jainam@gmail.com` |
+
+The old tenant-blind login let them in by matching email alone, against an organization
+that does not exist. The data gap is pre-existing; fail-closed only made it visible.
+The fix is a row in `institute_detail` per real organization, then re-running
+`EntityMappingSeeder` — not a fallback in the resolver.
+
 ### Original note (superseded)
 
 Everything above is measured on the suite's in-memory SQLite. The `.env` points at a
