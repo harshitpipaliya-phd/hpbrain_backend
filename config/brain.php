@@ -43,6 +43,17 @@ return [
      | and must never be defaulted to zero — "a fact the system hasn't
      | verified is null, never defaulted to 0" (Product Bible, Principles).
      */
+    /*
+ | FALLBACK ONLY since Phase 4. The authoritative assessment model is
+ | hpbrain_industry_templates.assessment_model, resolved per tenant by
+ | AssessmentModelResolver. These five apply when a tenant's industry has
+ | not declared one, which keeps every existing tenant exactly where it was.
+ |
+ | KASBA models HUMAN capability. It is the right vocabulary for a nurse and
+ | the wrong one for a dialysis machine, whose dimensions are closer to
+ | Availability / Performance / Quality / Compliance. Scoring an asset's
+ | "attitude" produces a number that looks meaningful and is not.
+ */
     'kasba' => [
         'dimensions' => ['knowledge', 'ability', 'skill', 'behaviour', 'attitude'],
         'max_level'  => 5,

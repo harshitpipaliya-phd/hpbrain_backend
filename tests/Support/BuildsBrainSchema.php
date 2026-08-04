@@ -612,6 +612,9 @@ trait BuildsBrainSchema
             $t->text('dashboards')->nullable();
             $t->text('branding')->nullable();
             $t->text('workflows')->nullable();
+            // Per-industry assessment model (2026_08_03_000300). NULL means the
+            // industry has not declared one and config/brain.php applies.
+            $t->text('assessment_model')->nullable();
             $t->text('integrations')->nullable();
             $t->boolean('is_system')->default(false);
             $t->boolean('is_active')->default(true);

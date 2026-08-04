@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Capability\CapabilityState;
+use App\Domain\Kasba\AssessmentModelResolver;
 use App\Domain\Kasba\KasbaService;
 use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
@@ -19,8 +20,8 @@ final class KasbaController extends Controller
     public function __construct(
         private readonly KasbaService $kasba,
         private readonly EntityResolver $resolver,
-    )
-    {
+        private readonly AssessmentModelResolver $models,
+    ) {
     }
 
     public function assessment(Request $request, string $tenantId, string $assignmentId, string $capabilityId): JsonResponse
@@ -40,15 +41,17 @@ final class KasbaController extends Controller
 
         $latestArr = $latest ? (array) $latest : null;
 
+        $model = $this->models->forTenant($tenant);
+
         $targets = [];
-        foreach (config('brain.kasba.dimensions') as $d) {
+        foreach ($model->dimensions as $d) {
             $raw = $capability->{$d} ?? null;
             $targets[$d] = is_string($raw) ? json_decode($raw, true) : $raw;
         }
 
         return response()->json([
-            'scores'       => $this->kasba->computeScores($latestArr),
-            'gaps'         => $this->kasba->computeGaps($latestArr, $targets),
+            'scores'       => $this->kasba->forModel($model)->computeScores($latestArr),
+            'gaps'         => $this->kasba->forModel($model)->computeGaps($latestArr, $targets),
             'assessedDate' => $latestArr['assessed_date'] ?? null,
         ]);
     }
@@ -72,7 +75,8 @@ final class KasbaController extends Controller
             ->select('p.*')
             ->get();
 
-        $dims = config('brain.kasba.dimensions');
+        $model = $this->models->forTenant($tenant);
+        $dims = $model->dimensions;
         $summary = [];
 
         foreach ($dims as $d) {
@@ -88,6 +92,10 @@ final class KasbaController extends Controller
             'cells'       => $this->heatmapCells($tenant, $rows, $dims),
             'dimensions'  => $summary,
             'assignments' => $rows->count(),
+            // The model itself, so the SPA renders N axes and N columns
+            // from the response rather than from a constant of its own.
+            // A four-dimension tenant needs no frontend change.
+            'model'       => $this->models->forTenant($tenant)->toArray(),
         ]);
     }
 
@@ -275,7 +283,7 @@ final class KasbaController extends Controller
         }
 
         $avg = function ($row) {
-            $vals = collect(config('brain.kasba.dimensions'))
+            $vals = collect($this->models->forTenant($tenant)->dimensions)
                 ->map(fn ($d) => $row->{$d.'_level'})
                 ->filter(fn ($v) => $v !== null)->map(fn ($v) => (float) $v);
 
@@ -312,12 +320,13 @@ final class KasbaController extends Controller
      */
     public function recordProficiency(Request $request): JsonResponse
     {
-        $dimensions = config('brain.kasba.dimensions');
+        $dimensions = $this->models->forTenant($this->tenantId($request))->dimensions;
 
         $rules = ['assignmentId' => ['required', 'string']];
 
         foreach ($dimensions as $d) {
-            $rules[$d.'Level'] = ['nullable', 'numeric', 'between:0,'.config('brain.kasba.max_level')];
+            $rules[$d.'Level'] = ['nullable', 'numeric', 'between:0,'
+                .$this->models->forTenant($this->tenantId($request))->maxLevel];
         }
 
         $rules['evidenceConfidence'] = ['nullable', 'numeric', 'between:0,1'];

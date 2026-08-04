@@ -35,6 +35,18 @@ final class KasbaService
     }
 
     /**
+     * The same engine bound to a tenant's own dimensions.
+     *
+     * Returns a new instance rather than mutating: this service is a container
+     * singleton, and a setter would let one request's four-dimension model leak
+     * into the next request's five-dimension one.
+     */
+    public function forModel(AssessmentModel $model): self
+    {
+        return new self($model->dimensions);
+    }
+
+    /**
      * @param  array<string, float|null>|null  $latest
      * @return array<string, float|null>
      */
