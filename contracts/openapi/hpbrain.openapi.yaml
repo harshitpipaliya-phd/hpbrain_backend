@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: 'HP Enterprise Brain API'
   version: 1.0.0
-  description: "GENERATED FROM routes/api.php by `php artisan brain:openapi`. Do not edit by hand.\n\nOperations marked `x-unverified: true` have a shape this generator could not\nderive from source. They are gaps to close, not schemas to trust: no client\nshould generate a type from an unverified operation and believe it."
+  description: "GENERATED FROM routes/api.php by `php artisan brain:openapi`. Do not edit by hand.\r\n\r\nOperations marked `x-unverified: true` have a shape this generator could not\r\nderive from source. They are gaps to close, not schemas to trust: no client\r\nshould generate a type from an unverified operation and believe it."
 servers:
   -
     url: /api/v1
@@ -2253,6 +2253,56 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         403:
           $ref: '#/components/responses/Forbidden'
+  '/analytics/{tenantId}/trend':
+    get:
+      operationId: analyticsTrend_get_analytics_tenantId_trend
+      summary: 'AnalyticsController::trend'
+      tags:
+        - Analytics
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\AnalyticsController@trend
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        422:
+          description: 'Refused: metric_required'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - metric_required
+                required:
+                  - error
   /audit:
     get:
       operationId: auditIndex_get_audit
@@ -5813,7 +5863,7 @@ paths:
               required:
                 - name
       responses:
-        201:
+        200:
           description: Success.
           x-unverified: true
           content:
@@ -14180,7 +14230,7 @@ paths:
               required:
                 - name
       responses:
-        201:
+        200:
           description: Success.
           x-unverified: true
           content:

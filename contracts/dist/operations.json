@@ -471,6 +471,16 @@
     "unverifiedResponse": true
   },
   {
+    "name": "AnalyticsTrendGetAnalyticsTenantIdTrend",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/trend",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@trend",
+    "unverifiedResponse": true
+  },
+  {
     "name": "AuditIndexGetAudit",
     "method": "GET",
     "path": "/audit",
