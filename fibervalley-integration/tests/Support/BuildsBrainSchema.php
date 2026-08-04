@@ -111,10 +111,6 @@ trait BuildsBrainSchema
             $t->string('department_id', 36)->nullable();
             $t->text('source');
             $t->text('classification')->default('unclassified');
-            // Which rule raised the signal. Nullable: signals from reasoning
-            // rather than from a rule have none, and re-detection must never
-            // treat two of those as the same problem.
-            $t->string('rule_key', 100)->nullable();
             $t->text('priority')->default('normal');
             $t->text('severity')->default('low');
             $t->decimal('confidence', 6, 4)->nullable();
@@ -378,39 +374,6 @@ trait BuildsBrainSchema
             $t->text('created_by');
             $t->timestamp('created_date')->nullable();
             $t->timestamp('updated_date')->nullable();
-            // Mirrors 2026_08_03_000100_entity_mappings_field_unique_key. The
-            // original migration keyed on (tenant_id, source_system,
-            // source_entity), which allowed exactly one mapped field per entity
-            // and so made Person unmappable. This fixture declared no unique
-            // index at all, which is why the suite could not have caught it.
-            $t->unique(['tenant_id', 'universal_entity', 'universal_field'],
-                'entity_mappings_tenant_universal_field_unique');
-        });
-
-        Schema::create('hpbrain_signal_rules', function ($t) {
-            $t->string('id', 36)->primary();
-            $t->string('tenant_id', 36);
-            $t->string('industry_code')->default('*');
-            $t->string('rule_key');
-            $t->string('universal_entity');
-            $t->text('predicate');
-            $t->string('join_entity')->nullable();
-            $t->text('join_predicate')->nullable();
-            $t->string('classification');
-            $t->string('severity');
-            $t->string('priority');
-            // DECIMAL(6,4), never NUMERIC: MySQL would make an unqualified
-            // NUMERIC a DECIMAL(10,0) and round every confidence to an integer.
-            $t->decimal('confidence', 6, 4);
-            $t->text('evidence_fields');
-            $t->text('recommended_action');
-            $t->string('owner_role')->nullable();
-            $t->string('threshold_op')->nullable();
-            $t->decimal('threshold_value', 18, 4)->nullable();
-            $t->boolean('is_active')->default(true);
-            $t->text('created_by');
-            $t->timestamp('created_date')->nullable();
-            $t->unique(['tenant_id', 'rule_key'], 'signal_rules_tenant_rule_key_unique');
         });
 
         Schema::create('hpbrain_feature_flags', function ($t) {
@@ -616,9 +579,6 @@ trait BuildsBrainSchema
             $t->text('dashboards')->nullable();
             $t->text('branding')->nullable();
             $t->text('workflows')->nullable();
-            // Per-industry assessment model (2026_08_03_000300). NULL means the
-            // industry has not declared one and config/brain.php applies.
-            $t->text('assessment_model')->nullable();
             $t->text('integrations')->nullable();
             $t->boolean('is_system')->default(false);
             $t->boolean('is_active')->default(true);
@@ -866,6 +826,40 @@ trait BuildsBrainSchema
             $t->text('data')->nullable();
             $t->text('error_message')->nullable();
             $t->timestamp('created_date')->nullable();
+        });
+
+        // ---- Operational records (2026_08_04_000100_operational_records) -----
+        // Mirrors the migration column for column. The UNIQUE below is not
+        // decoration: idempotency of re-import is a behaviour the suite asserts,
+        // and without the constraint here the test would pass on SQLite while
+        // production relied on a constraint the test never exercised.
+        Schema::create('hpbrain_operational_records', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('dataset', 64);
+            $t->string('natural_key', 191);
+            $t->string('source_file')->nullable();
+            $t->integer('source_row')->nullable();
+            $t->dateTime('occurred_at')->nullable();
+            $t->dateTime('closed_at')->nullable();
+            $t->string('status', 64)->nullable();
+            $t->string('category', 191)->nullable();
+            $t->string('sub_category', 191)->nullable();
+            $t->string('owner_name', 191)->nullable();
+            $t->string('supervisor_name', 191)->nullable();
+            $t->string('zone', 128)->nullable();
+            $t->string('area', 128)->nullable();
+            $t->string('subject_ref', 191)->nullable();
+            $t->decimal('metric_value', 14, 4)->nullable();
+            $t->string('metric_unit', 20)->nullable();
+            $t->integer('quantity')->nullable();
+            $t->text('payload')->nullable();
+            $t->string('row_hash', 64);
+            $t->string('import_job_id', 36)->nullable();
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+            $t->unique(['tenant_id', 'dataset', 'natural_key'], 'operational_records_natural_key_unique');
         });
 
         Schema::create('hpbrain_readiness_checks', function ($t) {
@@ -1129,21 +1123,6 @@ trait BuildsBrainSchema
             $t->timestamp('created_date')->nullable();
         });
 
-        // ---- Metric snapshots (2026_08_03_000400) ---------------------------
-        Schema::create('hpbrain_metric_snapshots', function ($t) {
-            $t->string('id', 36)->primary();
-            $t->string('tenant_id', 36);
-            $t->date('snapshot_date');
-            $t->string('metric_key');
-            $t->string('dimension_key')->nullable();
-            // DECIMAL, never NUMERIC — see the migration. Nullable because an
-            // unmeasured metric is null, never zero.
-            $t->decimal('value', 18, 4)->nullable();
-            $t->decimal('confidence', 6, 4)->nullable();
-            $t->integer('sample_n')->nullable();
-            $t->timestamp('created_date')->nullable();
-        });
-
         // ---- Observability (2026_01_01_000600_observability) ----------------
         Schema::create('hpbrain_metrics', function ($t) {
             $t->string('id', 36)->primary();
@@ -1350,40 +1329,6 @@ trait BuildsBrainSchema
             $t->timestamp('expires_at');
             $t->timestamp('revoked_at')->nullable();
             $t->timestamp('created_at')->nullable();
-        });
-
-        // ---- Operational records (2026_08_04_000300_operational_records) -----
-        // Mirrors the migration column for column. The UNIQUE below is not
-        // decoration: idempotency of re-import is a behaviour the suite asserts,
-        // and without the constraint here the test would pass on SQLite while
-        // production relied on a constraint the test never exercised.
-        Schema::create('hpbrain_operational_records', function ($t) {
-            $t->string('id', 36)->primary();
-            $t->string('tenant_id', 36);
-            $t->string('org_id', 36)->nullable();
-            $t->string('dataset', 64);
-            $t->string('natural_key', 191);
-            $t->string('source_file')->nullable();
-            $t->integer('source_row')->nullable();
-            $t->dateTime('occurred_at')->nullable();
-            $t->dateTime('closed_at')->nullable();
-            $t->string('status', 64)->nullable();
-            $t->string('category', 191)->nullable();
-            $t->string('sub_category', 191)->nullable();
-            $t->string('owner_name', 191)->nullable();
-            $t->string('supervisor_name', 191)->nullable();
-            $t->string('zone', 128)->nullable();
-            $t->string('area', 128)->nullable();
-            $t->string('subject_ref', 191)->nullable();
-            $t->decimal('metric_value', 14, 4)->nullable();
-            $t->string('metric_unit', 20)->nullable();
-            $t->integer('quantity')->nullable();
-            $t->text('payload')->nullable();
-            $t->string('row_hash', 64);
-            $t->string('import_job_id', 36)->nullable();
-            $t->timestamp('created_date')->nullable();
-            $t->timestamp('updated_date')->nullable();
-            $t->unique(['tenant_id', 'dataset', 'natural_key'], 'operational_records_natural_key_unique');
         });
     }
 }
