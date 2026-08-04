@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\Industry\Vocabulary;
 use App\Domain\Universal\EntityResolver;
 use Illuminate\Support\ServiceProvider;
 
@@ -26,5 +27,10 @@ final class UniversalServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(EntityResolver::class);
+
+        // Vocabulary caches per tenant for exactly the same reason and with
+        // exactly the same lifetime: labels are configuration, and a request
+        // composes several sentences from them.
+        $this->app->scoped(Vocabulary::class);
     }
 }

@@ -43,6 +43,13 @@ final class IndustryPack
      * most visible profession. A hospital employs porters, accountants and
      * cleaners; calling them all "Clinician" would be both wrong and, on a
      * headcount screen, misleading.
+     *
+     * EVERY LABEL IS A SINGLE NOUN OR A NOUN PHRASE THAT PLURALISES BY ADDING
+     * -S. These words are composed into sentences server-side — "18 wards
+     * without a manager" — so a label like "Ward or Unit" produces "18 ward or
+     * units", which reads as a bug and undermines the number next to it. Where
+     * an industry genuinely uses two words for the same level, the broader one
+     * is chosen: a hospital's pharmacy is a unit but not a ward, so "Unit".
      */
     private const GENERIC_TERMS = [
         'Person'           => 'Employee',
@@ -69,7 +76,7 @@ final class IndustryPack
         /* ───────────────────────────── HEALTHCARE ───────────────────────────── */
         'healthcare' => [
             'label'       => 'Healthcare',
-            'terminology' => ['OrganizationUnit' => 'Ward or Unit', 'Person' => 'Staff member', 'Position' => 'Post'],
+            'terminology' => ['OrganizationUnit' => 'Unit', 'Person' => 'Staff member', 'Position' => 'Post'],
             'capabilities' => [
                 ['code' => 'HC_CLINICAL_ASSESSMENT', 'name' => 'Clinical assessment', 'category' => 'Clinical practice',
                  'type' => 'skill', 'difficulty' => 'advanced', 'criticality' => 'critical',
@@ -157,7 +164,7 @@ final class IndustryPack
         /* ─────────────────────────────── BFSI ─────────────────────────────── */
         'bfsi' => [
             'label'       => 'Banking, Financial Services and Insurance',
-            'terminology' => ['OrganizationUnit' => 'Branch or Division', 'Person' => 'Employee', 'Position' => 'Designation'],
+            'terminology' => ['OrganizationUnit' => 'Division', 'Person' => 'Employee', 'Position' => 'Designation'],
             'capabilities' => [
                 ['code' => 'FS_CREDIT_ASSESSMENT', 'name' => 'Credit assessment', 'category' => 'Risk',
                  'type' => 'skill', 'difficulty' => 'advanced', 'criticality' => 'critical',
@@ -333,7 +340,7 @@ final class IndustryPack
         /* ───────────────────────────── TELECOM ───────────────────────────── */
         'telecom' => [
             'label'       => 'Telecommunications',
-            'terminology' => ['OrganizationUnit' => 'Region or Function', 'Person' => 'Employee', 'Position' => 'Role'],
+            'terminology' => ['OrganizationUnit' => 'Business Unit', 'Person' => 'Employee', 'Position' => 'Role'],
             'capabilities' => [
                 ['code' => 'TE_NETWORK_OPERATIONS', 'name' => 'Network operations', 'category' => 'Network',
                  'type' => 'skill', 'difficulty' => 'advanced', 'criticality' => 'critical',
@@ -421,7 +428,7 @@ final class IndustryPack
         /* ───────────────────────────── MANUFACTURING ───────────────────────────── */
         'manufacturing' => [
             'label'       => 'Manufacturing',
-            'terminology' => ['OrganizationUnit' => 'Plant or Line', 'Person' => 'Employee', 'Position' => 'Role'],
+            'terminology' => ['OrganizationUnit' => 'Plant', 'Person' => 'Employee', 'Position' => 'Role'],
             'capabilities' => [
                 ['code' => 'MF_MACHINE_OPERATION', 'name' => 'Machine operation', 'category' => 'Production',
                  'type' => 'skill', 'difficulty' => 'intermediate', 'criticality' => 'high',
@@ -509,7 +516,7 @@ final class IndustryPack
         /* ───────────────────────────── RETAIL ───────────────────────────── */
         'retail' => [
             'label'       => 'Retail',
-            'terminology' => ['OrganizationUnit' => 'Store or Function', 'Person' => 'Colleague', 'Position' => 'Role'],
+            'terminology' => ['OrganizationUnit' => 'Store', 'Person' => 'Colleague', 'Position' => 'Role'],
             'capabilities' => [
                 ['code' => 'RT_CUSTOMER_SERVICE', 'name' => 'Customer service', 'category' => 'Customer',
                  'type' => 'behavioural', 'difficulty' => 'basic', 'criticality' => 'high',
@@ -597,7 +604,7 @@ final class IndustryPack
         /* ───────────────────────────── GOVERNMENT ───────────────────────────── */
         'government' => [
             'label'       => 'Government and Public Sector',
-            'terminology' => ['OrganizationUnit' => 'Department or Directorate', 'Person' => 'Officer', 'Position' => 'Post'],
+            'terminology' => ['OrganizationUnit' => 'Directorate', 'Person' => 'Officer', 'Position' => 'Post'],
             'capabilities' => [
                 ['code' => 'GV_CASEWORK', 'name' => 'Casework and determination', 'category' => 'Service delivery',
                  'type' => 'skill', 'difficulty' => 'intermediate', 'criticality' => 'critical',
@@ -773,7 +780,7 @@ final class IndustryPack
         /* ───────────────────────────── NGO ───────────────────────────── */
         'ngo' => [
             'label'       => 'Non-Governmental and Non-Profit',
-            'terminology' => ['OrganizationUnit' => 'Programme or Function', 'Person' => 'Team member', 'Position' => 'Role'],
+            'terminology' => ['OrganizationUnit' => 'Programme', 'Person' => 'Team member', 'Position' => 'Role'],
             'capabilities' => [
                 ['code' => 'NG_PROGRAMME_DESIGN', 'name' => 'Programme design', 'category' => 'Programmes',
                  'type' => 'skill', 'difficulty' => 'advanced', 'criticality' => 'critical',
@@ -949,7 +956,7 @@ final class IndustryPack
         /* ───────────────────────────── HIGHER EDUCATION ───────────────────────────── */
         'higher_education' => [
             'label'       => 'Higher Education',
-            'terminology' => ['OrganizationUnit' => 'Faculty or School', 'Person' => 'Staff member', 'Position' => 'Post'],
+            'terminology' => ['OrganizationUnit' => 'Faculty', 'Person' => 'Staff member', 'Position' => 'Post'],
             'capabilities' => [
                 ['code' => 'HE_CURRICULUM_DESIGN', 'name' => 'Curriculum design', 'category' => 'Academic',
                  'type' => 'skill', 'difficulty' => 'advanced', 'criticality' => 'high',

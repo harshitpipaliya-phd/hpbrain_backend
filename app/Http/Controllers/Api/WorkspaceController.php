@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Industry\Vocabulary;
 use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use App\Repositories\DecisionRepository;
@@ -192,11 +193,21 @@ final class WorkspaceController extends Controller
 
         $attention = [];
 
+        // The tenant's own words. A hospital calls them wards and a bank calls
+        // them branches; a dashboard that says "department" to both reads as a
+        // report about somebody else's organization.
+        $vocab = app(Vocabulary::class);
+        $person = $vocab->word($tenantId, 'Person');
+        $people = $vocab->words($tenantId, 'Person');
+        $unit = $vocab->word($tenantId, 'OrganizationUnit');
+        $units = $vocab->words($tenantId, 'OrganizationUnit');
+
         if ($peopleWithoutDepartment > 0) {
             $attention[] = [
                 'id' => 'people-without-dept',
-                'title' => "{$peopleWithoutDepartment} employee(s) without a department",
-                'description' => 'Employees without a department assignment may indicate incomplete onboarding or reorganization gaps.',
+                'title' => $vocab->countOf($tenantId, 'Person', $peopleWithoutDepartment)." without a {$unit}",
+                'description' => ucfirst($people)." with no {$unit} sit outside every rollup this system produces — "
+                    ."headcount, coverage and capability all under-report until it clears.",
                 'severity' => 'medium',
                 'link' => 'people',
                 'metric' => $peopleWithoutDepartment,
@@ -207,8 +218,9 @@ final class WorkspaceController extends Controller
         if ($departmentsWithoutManager > 0) {
             $attention[] = [
                 'id' => 'depts-without-manager',
-                'title' => "{$departmentsWithoutManager} department(s) without a manager",
-                'description' => 'Departments without assigned leadership may lack decision-making coverage.',
+                'title' => $vocab->countOf($tenantId, 'OrganizationUnit', $departmentsWithoutManager).' without a manager',
+                'description' => ucfirst($units).' with no assigned leadership have nobody accountable for the '
+                    .'decisions this system will recommend.',
                 'severity' => 'medium',
                 'link' => 'departments',
                 'metric' => $departmentsWithoutManager,
@@ -219,8 +231,9 @@ final class WorkspaceController extends Controller
         if ($peopleWithoutProfile > 0) {
             $attention[] = [
                 'id' => 'people-without-profile',
-                'title' => "{$peopleWithoutProfile} employee(s) without a role profile",
-                'description' => 'Users without a profile cannot be assigned correct permissions or roles.',
+                'title' => $vocab->countOf($tenantId, 'Person', $peopleWithoutProfile).' without a role profile',
+                'description' => "A {$person} with no profile cannot be assigned permissions, and cannot be "
+                    .'measured against what their role requires.',
                 'severity' => 'low',
                 'link' => 'people',
                 'metric' => $peopleWithoutProfile,
