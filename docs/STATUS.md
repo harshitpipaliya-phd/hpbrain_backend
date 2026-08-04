@@ -9,13 +9,13 @@
 
 | Field | Value |
 |---|---|
-| Commit | `214a18b9d217166f39f7f2b81f853b2285b17806` |
-| Generated | 2026-08-04 08:29:51 UTC |
+| Commit | `0902ffa7a3b8bfdaeb029e5fb8b8d3f0294b83d6` |
+| Generated | 2026-08-04 08:43:20 UTC |
 | Golden intelligence flow | unknown — the golden test was not run for this report |
 | Tests | unknown |
 | Assertions | unknown |
 | Failures | unknown |
-| Routes declared | 364 |
+| Routes declared | 365 |
 | Routes that do not resolve | 0 |
 | SPA calls to non-existent endpoints | unknown |
 | Operations with an underived schema | unknown |

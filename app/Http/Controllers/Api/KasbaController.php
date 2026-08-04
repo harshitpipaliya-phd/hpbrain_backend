@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Capability\CapabilityState;
+use App\Domain\Capability\DemandService;
 use App\Domain\Kasba\AssessmentModelResolver;
 use App\Domain\Kasba\KasbaService;
 use App\Domain\Universal\EntityResolver;
@@ -21,6 +22,7 @@ final class KasbaController extends Controller
         private readonly KasbaService $kasba,
         private readonly EntityResolver $resolver,
         private readonly AssessmentModelResolver $models,
+        private readonly DemandService $demand,
     ) {
     }
 
@@ -96,6 +98,12 @@ final class KasbaController extends Controller
             // from the response rather than from a constant of its own.
             // A four-dimension tenant needs no frontend change.
             'model'       => $this->models->forTenant($tenant)->toArray(),
+            // Demand and deficit per capability (Phase 5a). The heatmap could
+            // say what people HAVE and never what the organization NEEDS, so
+            // every cell was half an answer — a level with nothing to be short
+            // of. deficit is NULL wherever either side is unknown, and stays
+            // null all the way to the renderer.
+            'deficit'     => $this->demand->perCapability($tenant),
         ]);
     }
 

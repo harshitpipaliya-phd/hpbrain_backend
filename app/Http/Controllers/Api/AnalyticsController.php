@@ -212,6 +212,66 @@ final class AnalyticsController extends Controller
         ]);
     }
 
+    /**
+     * A metric over time, from hpbrain_metric_snapshots.
+     *
+     * GET /analytics/{tenantId}/trend?metric=score.evidenceQuality&days=90
+     *
+     * NULLS ARE RETURNED AS NULL. A day whose metric had no denominator is a
+     * gap in the series, not a zero, and the chart must be able to break the
+     * line rather than draw it along the bottom. Coalescing here would destroy
+     * the distinction before any renderer could see it.
+     */
+    public function trend(Request $request): JsonResponse
+    {
+        $t = $this->tenantId($request);
+        $metric = trim((string) $request->query('metric', ''));
+
+        if ($metric === '') {
+            return response()->json([
+                'error' => 'metric_required',
+                'available' => DB::table('hpbrain_metric_snapshots')->where('tenant_id', $t)
+                    ->distinct()->orderBy('metric_key')->pluck('metric_key'),
+            ], 422);
+        }
+
+        $days = max(1, min(730, (int) $request->query('days', 90)));
+        $from = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))
+            ->modify('-'.$days.' days')->format('Y-m-d');
+
+        $rows = DB::table('hpbrain_metric_snapshots')
+            ->where('tenant_id', $t)
+            ->where('metric_key', $metric)
+            ->where('snapshot_date', '>=', $from)
+            ->when(
+                $request->query('dimension') !== null,
+                fn ($q) => $q->where('dimension_key', (string) $request->query('dimension')),
+            )
+            ->orderBy('snapshot_date')
+            ->get();
+
+        $series = [];
+
+        foreach ($rows as $row) {
+            $key = $row->dimension_key ?? '__all__';
+            $series[$key][] = [
+                'date' => (string) $row->snapshot_date,
+                // null stays null: an unmeasured day is a gap, not a zero.
+                'value' => $row->value === null ? null : (float) $row->value,
+                'sampleN' => $row->sample_n === null ? null : (int) $row->sample_n,
+            ];
+        }
+
+        return response()->json([
+            'metric' => $metric,
+            'days' => $days,
+            'series' => (object) $series,
+            // An empty series is a real answer — nothing has been snapshotted
+            // yet — and is reported as such rather than as a flat zero line.
+            'points' => $rows->count(),
+        ]);
+    }
+
     public function decisionIntelligence(Request $request): JsonResponse
     {
         $t = $this->tenantId($request);

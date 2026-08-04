@@ -31,3 +31,14 @@ Schedule::command('brain:process-events --once')
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Daily metric snapshot. Idempotent within a day, so a retried run overwrites
+// rather than double-counting — see SnapshotWriter for why that cannot be left
+// to the unique index when dimension_key is nullable.
+//
+// Early morning UTC: it reads yesterday's settled state rather than racing the
+// working day it is meant to describe.
+Schedule::command('brain:snapshot')
+    ->dailyAt('02:00')
+    ->withoutOverlapping()
+    ->runInBackground();

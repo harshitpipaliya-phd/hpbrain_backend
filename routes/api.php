@@ -227,6 +227,7 @@ Route::prefix('v1')->group(function () {
         Route::get('analytics/{tenantId}', [AnalyticsController::class, 'index']);
         Route::get('analytics/{tenantId}/executive-summary', [AnalyticsController::class, 'executiveSummary']);
         Route::get('analytics/{tenantId}/decision-intelligence', [AnalyticsController::class, 'decisionIntelligence']);
+        Route::get('analytics/{tenantId}/trend', [AnalyticsController::class, 'trend']);
         // The Export CSV button on the Decision Intelligence screen has always
         // pointed here; the route did not exist, so it downloaded a 404.
         Route::get('analytics/{tenantId}/decisions/export.csv', [AnalyticsController::class, 'decisionsCsv']);

@@ -1125,6 +1125,21 @@ trait BuildsBrainSchema
             $t->timestamp('created_date')->nullable();
         });
 
+        // ---- Metric snapshots (2026_08_03_000400) ---------------------------
+        Schema::create('hpbrain_metric_snapshots', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->date('snapshot_date');
+            $t->string('metric_key');
+            $t->string('dimension_key')->nullable();
+            // DECIMAL, never NUMERIC — see the migration. Nullable because an
+            // unmeasured metric is null, never zero.
+            $t->decimal('value', 18, 4)->nullable();
+            $t->decimal('confidence', 6, 4)->nullable();
+            $t->integer('sample_n')->nullable();
+            $t->timestamp('created_date')->nullable();
+        });
+
         // ---- Observability (2026_01_01_000600_observability) ----------------
         Schema::create('hpbrain_metrics', function ($t) {
             $t->string('id', 36)->primary();
