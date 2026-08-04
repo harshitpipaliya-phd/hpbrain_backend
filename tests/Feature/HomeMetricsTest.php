@@ -187,6 +187,7 @@ final class HomeMetricsTest extends TestCase
         // Home metrics resolve their source instead of naming it, so the
         // fixture has to say where this tenant keeps its people.
         $this->installEntityMappings([self::TENANT]);
+        $this->installSignalRules();
     }
 
     public function test_home_metrics_returns_erp_and_intelligence_counts(): void

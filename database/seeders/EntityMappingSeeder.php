@@ -51,6 +51,7 @@ final class EntityMappingSeeder extends Seeder
         'name'      => 'organization_name',
         'code'      => 'organization_code',
         'industry'  => 'industry_type',
+        'deletedAt' => 'deleted_at',
     ]];
 
     private const ORG_UNIT = ['hrms_departments', [
@@ -60,6 +61,7 @@ final class EntityMappingSeeder extends Seeder
         'description' => 'roles_responsibility',
         'parent'      => 'parent_id',
         'status'      => 'status',
+        'deletedAt'   => 'deleted_at',
         // 'head' is deliberately absent. hrms_departments has no manager column
         // (verified against the live schema). The existing "Departments Without
         // Manager" rule tests parent_id IS NULL OR = 0, which detects ROOT
@@ -83,6 +85,7 @@ final class EntityMappingSeeder extends Seeder
         'profile'     => 'user_profile_id',
         'status'      => 'status',
         'joinedDate'  => 'joined_date',
+        'deletedAt'   => 'deleted_at',
     ]];
 
     private const POSITION = ['hrms_job_titles', [

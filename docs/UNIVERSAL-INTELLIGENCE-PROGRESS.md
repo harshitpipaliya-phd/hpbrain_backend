@@ -200,9 +200,99 @@ data change with its own gate.
 
 ---
 
+## Phase 2 — 168 hardcoded references replaced
+
+Five commits, verified after each. `grep -rn "tbluser|hrms_departments|institute_detail|org_details" app/`
+returns **nothing**. `GoldenIntelligenceFlowTest` still reports the loop turns.
+
+| # | Files | Commit |
+|---|---|---|
+| 1 | OrganizationRepository, OrganizationController, ConfigurationEngine | `3c01052` |
+| 2 | DepartmentController | `83c868b` |
+| 3 | PersonController, AuthController | `92b245e` |
+| 4 | WorkspaceController, AnalyticsController, KasbaController | `9ff934c` |
+| 5 | SignalGenerator, EventConsumer, Controller, DbDiagnostics, EnsureTenantScope | `214a18b` |
+
+### Deviation from the plan, and why
+
+The gate says test counts stay at the Phase 0 figure. **17 tests were added** (8 in commit 1,
+9 in commit 2). The organization and department endpoints — 48 of the 168 references, the two
+largest files in the change set — had **no test at all**. "Behaviour-identical" would have been
+an unverifiable claim: those files could have been rewritten into anything and the suite would
+still have gone green. `OrganizationResolverParityTest` and `DepartmentResolverParityTest` pin
+the responses to the values the pre-Phase-2 code produced.
+
+Existing test count and failures are unchanged throughout. Commits 3, 4 and 5 added no tests.
+
+### Signature changes that are consequences, not tidying
+
+- `OrganizationRepository::list()` takes a required `tenantId`. It was nullable, where null meant
+  "every organization in the ERP" — a question with no answer once mappings are per tenant. No
+  caller passed null.
+- `create()` takes the mapping tenant as its own parameter, not a key in `$input`, because
+  `$input` is echoed back in the response.
+- `resolveRole()` takes a string tenant id rather than an int.
+- `verifyErpPassword()` takes the resolved source.
+
+### Login: the one operation with no tenant to resolve against
+
+A caller offers an email and nothing else; the tenant is what the lookup is trying to establish.
+`findPersonByEmail` searches every tenant that maps Person, **grouped by source shape**, so an
+installation on one ERP issues a single query with the tenant keys as an `IN` list — exactly what
+the hardcoded version cost. A second source system adds one query.
+
+Ordering is tenant order, first match wins. Only observable if one address exists in two tenants;
+**verified against the live database that zero addresses do**, and the previous implementation had
+no defined ordering for that case either.
+
+A designated "identity tenant" was rejected: it reintroduces the hardcoded source and silently
+locks out any tenant not on it.
+
+### Three pre-existing defects found
+
+| What | Where | Action |
+|---|---|---|
+| `inactive` count's unparenthesised `orWhereNull` binds across the tenant filter, counting **every tenant's** status-null rows | `AnalyticsController::peopleReport` | Carried forward unchanged, marked in code. A cross-tenant count must not move silently inside a commit that promises no behaviour change. Logged for Phase 3. |
+| "Departments Without Manager" detects **root** departments — the source has no manager column | `SignalGenerator`, `INTELLIGENCE-CATALOG.md` | Annotated at the rule. Unchanged in Phase 2. |
+| `config('brain.erp_tables')` — hardcoded map of five ERP tables, **zero readers** | `config/brain.php` | Removed. A second, now-stale answer to a question `EntityResolver` owns. |
+
+### One defect introduced and caught
+
+A missing `use` in `EnsureTenantScope` made `app(EntityResolver::class)` resolve to the middleware
+namespace, and the deliberately broad `catch (\Throwable)` reported the binding error as
+"organization does not exist" — a 403. Fail-closed behaved exactly as designed and turned a
+programming error into an authorization answer. Import fixed; the catch is left as-is, because
+failing closed on any throwable is the correct choice. Worth remembering as the cost of that choice.
+
+### Still not universal
+
+`deleted_at`, `created_at`, `updated_at`, `created_by`, `password` and `plain_password` are still
+written literally. They are soft-delete, audit and credential conventions rather than entity
+fields, so they sit outside the universal field set. A source system spelling them differently
+would still need code. Recorded rather than papered over with a fallback — a fallback is the one
+thing the resolver must never do.
+
+### Fixtures that now declare their source
+
+`ErpLoginTest`, `OutboxProducerTest`, `HomeMetricsTest`, `ApiAuthorizationTest` and
+`TenantIsolationMatrixTest` install entity mappings via `tests/Support/SeedsEntityMappings`.
+A test without mappings is a tenant without mappings, and the resolver fails closed for both.
+`OutboxProducerTest` needed two tenants: its Brain tables are keyed `tenant-alpha` while its ERP
+row carries `sub_institute_id` 1 — a mismatch the old tenant-blind login never surfaced.
+
+---
+
 ## Phase log
 
 | Phase | Tests | Assertions | Fails | standalone | security | Routes | Unresolved | Commit |
 |---|---|---|---|---|---|---|---|---|
 | 0 baseline | 309 | 1131 | 0 | 42/2 | 25/0 | 364 | 0 | `94fc8a5` |
 | 1 EntityResolver | 335 | 1201 | 0 | 42/2 | 25/0 | 364 | 0 | `a6b6a4a` |
+| 2.1 organizations | 343 | 1242 | 0 | 42/2 | 25/0 | 364 | 0 | `3c01052` |
+| 2.2 departments | 352 | 1273 | 0 | 42/2 | 25/0 | 364 | 0 | `83c868b` |
+| 2.3 people + auth | 352 | 1273 | 0 | 42/2 | 25/0 | 364 | 0 | `92b245e` |
+| 2.4 workspace/analytics/kasba | 352 | 1273 | 0 | 42/2 | 25/0 | 364 | 0 | `9ff934c` |
+| 2.5 signals/events/tenancy | 352 | 1273 | 0 | 42/2 | 25/0 | 364 | 0 | `214a18b` |
+
+A commit cannot record its own hash, so each phase's hash is written into the next
+phase's commit. The row above is filled in once the commit exists.

@@ -47,4 +47,42 @@ trait SeedsEntityMappings
         // register, because these fixtures do not all build one.
         (new EntityMappingSeeder($tenantIds))->run();
     }
+
+    /**
+     * The five shipped signal rules, as rows.
+     *
+     * Since Phase 3 the rules ARE data, so a fixture that expects signals has
+     * to seed them. A fixture without rule rows generates nothing — correctly,
+     * and for the same reason a tenant without them would.
+     */
+    protected function installSignalRules(): void
+    {
+        if (! Schema::hasTable('hpbrain_signal_rules')) {
+            Schema::create('hpbrain_signal_rules', function ($t) {
+                $t->string('id', 36)->primary();
+                $t->string('tenant_id', 36);
+                $t->string('industry_code')->default('*');
+                $t->string('rule_key');
+                $t->string('universal_entity');
+                $t->text('predicate');
+                $t->string('join_entity')->nullable();
+                $t->text('join_predicate')->nullable();
+                $t->string('classification');
+                $t->string('severity');
+                $t->string('priority');
+                $t->decimal('confidence', 6, 4);
+                $t->text('evidence_fields');
+                $t->text('recommended_action');
+                $t->string('owner_role')->nullable();
+                $t->string('threshold_op')->nullable();
+                $t->decimal('threshold_value', 18, 4)->nullable();
+                $t->boolean('is_active')->default(true);
+                $t->text('created_by');
+                $t->timestamp('created_date')->nullable();
+                $t->unique(['tenant_id', 'rule_key'], 'signal_rules_tenant_rule_key_unique');
+            });
+        }
+
+        (new \Database\Seeders\SignalRuleSeeder())->run();
+    }
 }

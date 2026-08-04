@@ -383,6 +383,32 @@ trait BuildsBrainSchema
                 'entity_mappings_tenant_universal_field_unique');
         });
 
+        Schema::create('hpbrain_signal_rules', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('industry_code')->default('*');
+            $t->string('rule_key');
+            $t->string('universal_entity');
+            $t->text('predicate');
+            $t->string('join_entity')->nullable();
+            $t->text('join_predicate')->nullable();
+            $t->string('classification');
+            $t->string('severity');
+            $t->string('priority');
+            // DECIMAL(6,4), never NUMERIC: MySQL would make an unqualified
+            // NUMERIC a DECIMAL(10,0) and round every confidence to an integer.
+            $t->decimal('confidence', 6, 4);
+            $t->text('evidence_fields');
+            $t->text('recommended_action');
+            $t->string('owner_role')->nullable();
+            $t->string('threshold_op')->nullable();
+            $t->decimal('threshold_value', 18, 4)->nullable();
+            $t->boolean('is_active')->default(true);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->unique(['tenant_id', 'rule_key'], 'signal_rules_tenant_rule_key_unique');
+        });
+
         Schema::create('hpbrain_feature_flags', function ($t) {
             $t->string('id', 36)->primary();
             $t->string('tenant_id', 36);

@@ -8,6 +8,100 @@ Rules are evaluated against real ERP and Brain data. No rule produces a signal w
 
 ---
 
+## Rules are rows, not code
+
+Since Phase 3 a rule is a row in `hpbrain_signal_rules`. `RuleEvaluator` loads the
+active rules for a tenant, resolves the entities they name through `EntityResolver`,
+builds the query from the predicate, and writes evidence from `evidence_fields`.
+**Adding a rule is an INSERT.** No class, no deploy.
+
+### Which rules a tenant gets
+
+| Column | Meaning |
+|---|---|
+| `tenant_id` | `platform` for shipped rules; a tenant id for one that tenant added |
+| `industry_code` | `*` for every industry, or an industry code from `hpbrain_industries` |
+
+A tenant runs every active rule whose `industry_code` is `*` or matches its own
+industry, from `platform` or from itself. **A `rule_key` defined by both resolves to
+the tenant's own** — that is how an installation overrides a shipped rule without
+editing it. Evaluation order is `rule_key` order, so it does not depend on insertion
+order.
+
+A tenant whose organization row has no industry gets shared rules only. A missing
+industry is a configuration gap, and the safe reading of a gap is the smaller rule
+set, never a guessed industry.
+
+### The predicate grammar
+
+Predicates are JSON, never SQL. A rule row is data an administrator writes through
+the API; if any part of it reached the database as text, that administrator would own
+the database and every tenant in it. So the operator set is **closed**, fields name
+*universal* fields that `EntityResolver` maps to columns, and every value is bound.
+
+**There is no `raw` operator and no escape hatch.** `PredicateTest` asserts their
+absence, so adding one means deleting a test that says why it must not exist.
+
+| Operator | Value | Notes |
+|---|---|---|
+| `is_null`, `is_not_null` | — | |
+| `eq`, `neq` | scalar | |
+| `in`, `not_in` | non-empty list | |
+| `lt`, `lte`, `gt`, `gte` | scalar | |
+| `before_days`, `after_days` | non-negative number | Both measure N days **back** from now and differ only in which side they take: `before_days 90` is "more than 90 days ago", `after_days 90` is "within the last 90 days". A negative count is refused — the direction belongs to the operator, and a negative would make a rule do the opposite of what it reads as. |
+
+Compose with `all` and `any`, which nest:
+
+```json
+{"all": [
+  {"field": "deletedAt", "op": "is_null"},
+  {"field": "status", "op": "eq", "value": 1},
+  {"any": [
+    {"field": "unit", "op": "is_null"},
+    {"field": "unit", "op": "eq", "value": 0}
+  ]}
+]}
+```
+
+An empty `any` is refused rather than silently never firing.
+
+**Soft-delete is not assumed.** `deletedAt` is a mapped universal field and every rule
+states its own position on deleted rows — four of the five shipped rules exclude them
+and the fifth requires them. Hardcoding the exclusion would have made that fifth rule
+inexpressible.
+
+### evidence_fields
+
+An object mapping **output key → source**, so a rule controls both what appears in the
+evidence and what it is called:
+
+```json
+{
+  "employeeNo": "externalRef",
+  "name":       {"concat": ["firstName", "lastName"], "separator": " "},
+  "department": {"join": "name"}
+}
+```
+
+An output key whose source the tenant has not mapped is **omitted**, not emitted as
+null: the source has no such column, and a key that is always null is noise in every
+downstream reader.
+
+### Thresholds
+
+`threshold_op` + `threshold_value` suppress a rule below a count. All five shipped
+rules leave both null, meaning any match fires.
+
+### Known discrepancy, carried deliberately
+
+`departments_without_manager` is named for a condition its predicate does not test.
+The source unit table has **no manager column**, so `parent IS NULL OR parent = 0`
+finds *root* units. Phase 3's gate was byte-identical signals, so the rule was
+transcribed verbatim. Now that it is a row, correcting it is an `UPDATE` with its own
+gate rather than a deploy — which is the point of this phase.
+
+---
+
 ## Rule: People Without Department
 
 | Field | Value |
