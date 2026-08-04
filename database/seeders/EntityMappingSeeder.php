@@ -77,6 +77,7 @@ final class EntityMappingSeeder extends Seeder
         'lastName'    => 'last_name',
         'email'       => 'email',
         'phone'       => 'mobile',
+        'gender'      => 'gender',
         'unit'        => 'department_id',
         'position'    => 'jobtitle_id',
         'profile'     => 'user_profile_id',
@@ -115,6 +116,16 @@ final class EntityMappingSeeder extends Seeder
         'name'      => 'name',
         'status'    => 'status',
     ]];
+
+    /**
+     * @param  array<int, string>|null  $tenantIds  explicit tenants to map, or
+     *         null to read them from the ERP's own organization register.
+     *         Phase 8 onboards a new tenant by naming it here, before it has any
+     *         row in that register.
+     */
+    public function __construct(private readonly ?array $tenantIds = null)
+    {
+    }
 
     public function run(): void
     {
@@ -160,6 +171,10 @@ final class EntityMappingSeeder extends Seeder
      */
     private function tenants(): array
     {
+        if ($this->tenantIds !== null) {
+            return array_values(array_map('strval', $this->tenantIds));
+        }
+
         return DB::table('institute_detail')
             ->whereNull('deleted_at')
             ->distinct()

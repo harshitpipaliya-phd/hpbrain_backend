@@ -6,6 +6,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\Events\EventPublisher;
 use App\Domain\Events\LoopEvent;
+use App\Domain\Universal\EntityResolver;
+use App\Domain\Universal\ResolvedSource;
 use App\Http\Controllers\Controller;
 use App\Support\Jwt;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +19,29 @@ use Illuminate\Validation\Rule;
 use Ramsey\Uuid\Uuid;
 
 /**
- * Authentication. Unified against the institute ERP table tbluser.
+ * Authentication. Unified against the tenant's own employee record.
+ *
+ * LOGIN IS THE ONE OPERATION WITH NO TENANT TO RESOLVE AGAINST, and that is
+ * worth stating because it is the awkward case in an otherwise per-tenant
+ * design. Everywhere else the tenant arrives in a verified JWT claim and the
+ * source tables follow from it. Here the caller offers an email address and
+ * nothing else — the tenant is precisely what the lookup is trying to
+ * establish, so it cannot also be its input.
+ *
+ * The answer is to search every tenant that maps Person and let the matching
+ * row name the tenant. Tenants sharing one source table are searched in a
+ * single query (see findPersonByEmail), so the common case where an
+ * installation runs one ERP costs one query, exactly as before. A second
+ * industry on its own tables adds one more query rather than changing code.
+ *
+ * The alternative — a designated "identity tenant" whose tables are searched
+ * for everyone — was rejected: it reintroduces exactly the hardcoded source
+ * this work removes, and silently locks out any tenant not on it.
+ *
+ * NOT YET UNIVERSAL: password, plain_password, deleted_at and updated_at are
+ * still named literally. They are credential and audit conventions rather
+ * than entity fields, so they sit outside the universal field set. Recorded
+ * rather than papered over with a fallback.
  *
  * Identity lives in the ERP, not in hpbrain_auth_users. An earlier build
  * maintained a parallel auth_users table and three separate login endpoints
@@ -36,10 +60,13 @@ use Ramsey\Uuid\Uuid;
  */
 final class AuthController extends Controller
 {
-    public function __construct(private readonly EventPublisher $events) {}
+    public function __construct(
+        private readonly EventPublisher $events,
+        private readonly EntityResolver $resolver,
+    ) {}
 
     /**
-     * Unified login. Reads email + password from the ERP tbluser table.
+     * Unified login. Reads email + password from the tenant's employee record.
      *
      * Request:
      *   { "email": "...", "password": "..." }
@@ -54,22 +81,24 @@ final class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = DB::table('tbluser')
-            ->where('email', $data['email'])
-            ->where('status', 1)
-            ->whereNull('deleted_at')
-            ->first();
+        [$user, $person] = $this->findPersonByEmail($data['email']);
 
-        if (! $user || ! $this->verifyErpPassword($data['password'], $user->password, $user->plain_password, (int) $user->id)) {
+        if (! $user || ! $this->verifyErpPassword(
+            $data['password'],
+            $user->password,
+            $user->plain_password,
+            (int) $user->{$person->primaryKey},
+            $person,
+        )) {
             return response()->json([
                 'error' => 'invalid_credentials',
                 'message' => 'Incorrect email or password.',
             ], 401);
         }
 
-        $subInstituteId = (string) $user->sub_institute_id;
-        $role = $this->resolveRole((int) $user->user_profile_id, (int) $user->sub_institute_id);
-        $userId = (string) $user->id;
+        $subInstituteId = (string) $user->{$person->tenantKey};
+        $role = $this->resolveRole((int) $user->{$person->field('profile')}, $subInstituteId);
+        $userId = (string) $user->{$person->primaryKey};
 
         $claims = [
             'id' => $userId,
@@ -96,15 +125,81 @@ final class AuthController extends Controller
             'refreshToken' => $refreshToken,
             'user' => [
                 'id' => $userId,
-                'email' => $user->email,
-                'firstName' => $user->first_name,
-                'lastName' => $user->last_name,
-                'employeeNo' => $user->employee_no,
-                'profileId' => (string) $user->user_profile_id,
+                'email' => $user->{$person->field('email')},
+                'firstName' => $user->{$person->field('firstName')},
+                'lastName' => $user->{$person->field('lastName')},
+                'employeeNo' => $user->{$person->field('externalRef')},
+                'profileId' => (string) $user->{$person->field('profile')},
                 'role' => $role,
             ],
             'organization' => $organization,
         ]);
+    }
+
+    /**
+     * Find the employee record for an email across every tenant mapping Person.
+     *
+     * Tenants are grouped by the SHAPE of their source — table plus the columns
+     * this lookup touches — so an installation where every tenant shares one
+     * ERP issues a single query with the tenant keys as an IN list, which is
+     * what the hardcoded version did. Two source systems cost two queries.
+     *
+     * Groups are searched in tenant order and the first match wins. That
+     * ordering only becomes observable if one address exists in two tenants at
+     * once; it does not today (verified against the live database: zero
+     * addresses span more than one tenant), and the previous implementation had
+     * no defined ordering for that case either.
+     *
+     * @return array{0: ?object, 1: ?ResolvedSource}
+     */
+    private function findPersonByEmail(string $email): array
+    {
+        $sources = $this->resolver->everyTenantWith('Person');
+
+        if ($sources === []) {
+            throw new \RuntimeException(
+                'No tenant maps the Person entity, so no one can sign in. '
+                .'Seed hpbrain_entity_mappings (see EntityMappingSeeder).'
+            );
+        }
+
+        /** @var array<string, array{source: ResolvedSource, tenants: array<int, string>}> $groups */
+        $groups = [];
+
+        foreach ($sources as $tenantId => $source) {
+            $shape = implode('|', [
+                $source->table,
+                $source->tenantKey,
+                $source->primaryKey,
+                $source->field('email'),
+                $source->field('status'),
+            ]);
+
+            $groups[$shape]['source'] = $source;
+            $groups[$shape]['tenants'][] = $tenantId;
+        }
+
+        $firstSource = null;
+
+        foreach ($groups as $group) {
+            $source = $group['source'];
+            $firstSource ??= $source;
+
+            $row = DB::table($source->table)
+                ->where($source->field('email'), $email)
+                ->where($source->field('status'), 1)
+                ->whereIn($source->tenantKey, $group['tenants'])
+                ->whereNull('deleted_at')
+                ->first();
+
+            if ($row) {
+                return [$row, $source];
+            }
+        }
+
+        // No match. A source is still returned so the caller's failure path has
+        // something to reference; $row being null is what denies the login.
+        return [null, $firstSource];
     }
 
     /**
@@ -206,8 +301,17 @@ final class AuthController extends Controller
         $actor = (string) $this->actorId($request);
         $isNumeric = is_numeric($actor);
 
+        // Unlike login, this runs behind the tenant middleware, so the tenant
+        // is already verified and the source resolves directly.
+        $person = $isNumeric
+            ? $this->resolver->resolve($this->tenantId($request), 'Person')
+            : null;
+
         if ($isNumeric) {
-            $user = DB::table('tbluser')->where('id', (int) $actor)->whereNull('deleted_at')->first();
+            $user = DB::table($person->table)
+                ->where($person->primaryKey, (int) $actor)
+                ->whereNull('deleted_at')
+                ->first();
         } else {
             $user = DB::table('hpbrain_auth_users')->where('id', $actor)->first();
         }
@@ -217,11 +321,17 @@ final class AuthController extends Controller
         }
 
         if ($isNumeric) {
-            if (! $this->verifyErpPassword($data['currentPassword'], $user->password, $user->plain_password, (int) $user->id)) {
+            if (! $this->verifyErpPassword(
+                $data['currentPassword'],
+                $user->password,
+                $user->plain_password,
+                (int) $user->{$person->primaryKey},
+                $person,
+            )) {
                 return response()->json(['error' => 'invalid_credentials'], 401);
             }
 
-            DB::table('tbluser')->where('id', (int) $actor)->update([
+            DB::table($person->table)->where($person->primaryKey, (int) $actor)->update([
                 'password' => Hash::make($data['newPassword']),
                 'plain_password' => null,
                 'updated_at' => now()->format('Y-m-d H:i:s'),
@@ -249,7 +359,7 @@ final class AuthController extends Controller
      *   3. Direct string comparison against plain_password (legacy plaintext).
      *
      * THE REHASH ONLY RUNS WHEN THERE IS SOMETHING TO MIGRATE. This used to call
-     * Hash::make() and UPDATE tbluser on EVERY successful login, including the
+     * Hash::make() and UPDATE the user row on EVERY successful login, including the
      * overwhelming majority where the stored value was already a correct bcrypt
      * hash and the write changed nothing but the salt.
      *
@@ -260,7 +370,7 @@ final class AuthController extends Controller
      *     Hash::make   ~336 ms   (pure waste on an already-hashed password)
      *
      * So roughly half the CPU cost of every login bought nothing, and each login
-     * also took a row-level write lock on tbluser — the ERP's user table, shared
+     * also took a row-level write lock on the ERP's user table, which is shared
      * with the institute system — turning a read-only operation into a write and
      * serialising concurrent logins by the same user.
      *
@@ -272,8 +382,13 @@ final class AuthController extends Controller
      *
      * The raw password is never logged or returned.
      */
-    private function verifyErpPassword(string $raw, ?string $passwordColumn, ?string $plainPasswordColumn, int $userId): bool
-    {
+    private function verifyErpPassword(
+        string $raw,
+        ?string $passwordColumn,
+        ?string $plainPasswordColumn,
+        int $userId,
+        ResolvedSource $person,
+    ): bool {
         $verified = false;
         $needsMigration = false;
 
@@ -290,7 +405,7 @@ final class AuthController extends Controller
         }
 
         if ($verified && $needsMigration) {
-            DB::table('tbluser')->where('id', $userId)->update([
+            DB::table($person->table)->where($person->primaryKey, $userId)->update([
                 'password' => Hash::make($raw),
                 'plain_password' => null,
                 'updated_at' => now()->format('Y-m-d H:i:s'),
@@ -308,17 +423,19 @@ final class AuthController extends Controller
      * tenant_admin, 'manager' becomes manager, 'analyst' becomes analyst,
      * 'viewer' becomes viewer, everything else becomes member.
      */
-    private function resolveRole(int $profileId, int $subInstituteId): string
+    private function resolveRole(int $profileId, string $tenantId): string
     {
         if ($profileId <= 0) {
             return 'member';
         }
 
-        $name = DB::table('tbluserprofilemaster')
-            ->where('id', $profileId)
-            ->where('sub_institute_id', $subInstituteId)
-            ->where('status', 1)
-            ->value('name');
+        $profile = $this->resolver->resolve($tenantId, 'PersonProfile');
+
+        $name = DB::table($profile->table)
+            ->where($profile->primaryKey, $profileId)
+            ->where($profile->tenantKey, $tenantId)
+            ->where($profile->field('status'), 1)
+            ->value($profile->field('name'));
 
         if ($name === null) {
             return 'member';
@@ -351,16 +468,19 @@ final class AuthController extends Controller
     private function loadOrganization(string $subInstituteId): array
     {
         try {
-            $row = DB::table('institute_detail as d')
-                ->leftJoin('org_details as o', function ($j) use ($subInstituteId) {
-                    $j->on('o.sub_institute_id', '=', 'd.sub_institute_id');
+            $org = $this->resolver->resolve($subInstituteId, 'Organization');
+            $profile = $this->resolver->resolve($subInstituteId, 'OrganizationProfile');
+
+            $row = DB::table($org->table.' as d')
+                ->leftJoin($profile->table.' as o', function ($j) use ($org, $profile) {
+                    $j->on('o.'.$profile->tenantKey, '=', 'd.'.$org->tenantKey);
                 })
-                ->where('d.sub_institute_id', $subInstituteId)
+                ->where('d.'.$org->tenantKey, $subInstituteId)
                 ->whereNull('d.deleted_at')
                 ->select(
-                    'd.sub_institute_id as id',
-                    'd.organization_name as name',
-                    'o.logo as logo'
+                    'd.'.$org->field('id').' as id',
+                    'd.'.$org->field('name').' as name',
+                    'o.'.$profile->field('logo').' as logo'
                 )
                 ->first();
 

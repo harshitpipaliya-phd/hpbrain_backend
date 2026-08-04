@@ -4,43 +4,68 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Universal\EntityResolver;
+use App\Domain\Universal\ResolvedSource;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-/** People are read from the ERP tables tbluser / tbluserprofilemaster. */
+/** People — Person in the Brain's vocabulary — come from the tenant's own source. */
 final class PersonController extends Controller
 {
     /**
-     * Exactly the columns map() reads.
+     * The universal fields map() reads. Resolved to source columns per tenant.
      *
-     * These reads used to be SELECT * against tbluser — the ERP's widest table.
-     * That pulled every column of every employee into PHP so that map() could
-     * throw all but eleven of them away, and among the discarded ones were
-     * `password` and `plain_password`: credential material crossing the wire
-     * and sitting in process memory for a screen that only ever renders a name
-     * and a department.
+     * These reads used to be SELECT * against the ERP's widest table. That
+     * pulled every column of every employee into PHP so that map() could throw
+     * all but eleven of them away, and among the discarded ones were `password`
+     * and `plain_password`: credential material crossing the wire and sitting in
+     * process memory for a screen that only ever renders a name and a
+     * department. Naming the fields keeps that closed.
      *
      * @var array<int, string>
      */
-    private const LIST_COLUMNS = [
-        'id', 'employee_no', 'first_name', 'last_name', 'email', 'mobile',
-        'gender', 'department_id', 'sub_institute_id', 'created_at', 'updated_at',
+    private const LIST_FIELDS = [
+        'id', 'externalRef', 'firstName', 'lastName', 'email', 'phone',
+        'gender', 'unit',
     ];
+
+    public function __construct(private readonly EntityResolver $resolver)
+    {
+    }
+
+    /**
+     * Source columns for the listing, plus the tenant key and audit columns
+     * map() also reads.
+     *
+     * columns() skips universal fields the tenant has not mapped, so a source
+     * without a gender column simply selects one column fewer rather than
+     * failing — the field is absent, and map() renders it null.
+     *
+     * @return array<int, string>
+     */
+    private function listColumns(ResolvedSource $person): array
+    {
+        return array_values(array_unique(array_merge(
+            array_values($person->columns(self::LIST_FIELDS)),
+            [$person->tenantKey, 'created_at', 'updated_at'],
+        )));
+    }
 
     public function index(Request $request): JsonResponse
     {
         $t = $this->tenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
 
         return response()->json(
-            DB::table('tbluser')
-                ->select(self::LIST_COLUMNS)
-                ->where('sub_institute_id', $t)
+            DB::table($person->table)
+                ->select($this->listColumns($person))
+                ->where($person->tenantKey, $t)
                 ->whereNull('deleted_at')
-                ->where('status', 1)
+                ->where($person->field('status'), 1)
                 ->get()
-                ->map(fn ($r) => $this->map((array) $r))
+                ->map(fn ($r) => $this->map((array) $r, $person))
                 ->all()
         );
     }
@@ -49,36 +74,39 @@ final class PersonController extends Controller
     {
         $q = trim((string) $request->query('q', ''));
         $t = $this->tenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
 
-        $rows = DB::table('tbluser')
-            ->select(self::LIST_COLUMNS)
-            ->where('sub_institute_id', $t)
+        $searchable = $person->columns(['firstName', 'lastName', 'email', 'externalRef']);
+
+        $rows = DB::table($person->table)
+            ->select($this->listColumns($person))
+            ->where($person->tenantKey, $t)
             ->whereNull('deleted_at')
-            ->where('status', 1)
-            ->where(function ($w) use ($q) {
-                $w->where('first_name', 'like', "%{$q}%")
-                  ->orWhere('last_name', 'like', "%{$q}%")
-                  ->orWhere('email', 'like', "%{$q}%")
-                  ->orWhere('employee_no', 'like', "%{$q}%");
+            ->where($person->field('status'), 1)
+            ->where(function ($w) use ($q, $searchable) {
+                foreach ($searchable as $column) {
+                    $w->orWhere($column, 'like', "%{$q}%");
+                }
             })->limit(50)->get();
 
-        return response()->json($rows->map(fn ($r) => $this->map((array) $r))->all());
+        return response()->json($rows->map(fn ($r) => $this->map((array) $r, $person))->all());
     }
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse
     {
         $t = $this->tenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
 
-        $row = DB::table('tbluser')
-            ->select(self::LIST_COLUMNS)
-            ->where('id', $id)
-            ->where('sub_institute_id', $t)
+        $row = DB::table($person->table)
+            ->select($this->listColumns($person))
+            ->where($person->primaryKey, $id)
+            ->where($person->tenantKey, $t)
             ->whereNull('deleted_at')
-            ->where('status', 1)
+            ->where($person->field('status'), 1)
             ->first();
 
         return $row
-            ? response()->json($this->map((array) $row))
+            ? response()->json($this->map((array) $row, $person))
             : response()->json(['error' => 'person_not_found'], 404);
     }
 
@@ -94,10 +122,14 @@ final class PersonController extends Controller
         ]);
 
         $t = $this->tenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
+        $profile = $this->resolver->resolve($t, 'PersonProfile');
 
-        $profileId = DB::table('tbluserprofilemaster')
-            ->where('sub_institute_id', $t)
-            ->where('name', 'Employee')->where('status', 1)->value('id');
+        $profileId = DB::table($profile->table)
+            ->where($profile->tenantKey, $t)
+            ->where($profile->field('name'), 'Employee')
+            ->where($profile->field('status'), 1)
+            ->value($profile->primaryKey);
 
         if (! $profileId) {
             return response()->json(['error' => "no_employee_profile_for_org_{$t}"], 422);
@@ -106,41 +138,61 @@ final class PersonController extends Controller
         $now = now()->format('Y-m-d H:i:s');
         $temp = substr(bin2hex(random_bytes(8)), 0, 12);
 
-        $id = DB::table('tbluser')->insertGetId([
-            'employee_no'      => $data['employeeId'],
-            'password'         => $temp,
-            'plain_password'   => $temp,
-            'first_name'       => $data['firstName'],
-            'last_name'        => $data['lastName'],
-            'email'            => $data['email'],
-            'mobile'           => $data['phone'] ?? null,
-            'gender'           => $data['gender'] ?? null,
-            'sub_institute_id' => $t,
-            'user_profile_id'  => $profileId,
-            'status'           => 1,
-            'created_by'       => $this->actorErpId($request),
-            'created_at'       => $now,
-            'updated_at'       => $now,
+        $id = DB::table($person->table)->insertGetId([
+            $person->field('externalRef') => $data['employeeId'],
+            'password'                    => $temp,
+            'plain_password'              => $temp,
+            $person->field('firstName')   => $data['firstName'],
+            $person->field('lastName')    => $data['lastName'],
+            $person->field('email')       => $data['email'],
+            $person->field('phone')       => $data['phone'] ?? null,
+            $person->field('gender')      => $data['gender'] ?? null,
+            $person->tenantKey            => $t,
+            $person->field('profile')     => $profileId,
+            $person->field('status')      => 1,
+            'created_by'                  => $this->actorErpId($request),
+            'created_at'                  => $now,
+            'updated_at'                  => $now,
         ]);
 
+        $created = DB::table($person->table)
+            ->select($this->listColumns($person))
+            ->where($person->primaryKey, $id)
+            ->first();
+
         return response()->json(
-            $this->map((array) DB::table('tbluser')->find($id)) + ['tempPassword' => $temp],
+            $this->map((array) $created, $person) + ['tempPassword' => $temp],
             201
         );
     }
 
-    private function map(array $r): array
+    private function map(array $r, ResolvedSource $person): array
     {
+        // An unmapped field reads as null rather than throwing: this is a
+        // rendering path, and a source without a gender column has no gender to
+        // report. That is different from a source that has one and left it empty
+        // only in that the ERP could never fill it — a distinction the UI layers
+        // in Phase 6 are built to show.
+        $value = function (string $field) use ($r, $person) {
+            if (! $person->has($field)) {
+                return null;
+            }
+
+            return $r[$person->field($field)] ?? null;
+        };
+
+        $unit = $value('unit');
+
         return [
-            'id'           => (string) $r['id'],
-            'employeeId'   => $r['employee_no'] ?? null,
-            'firstName'    => $r['first_name'] ?? null,
-            'lastName'     => $r['last_name'] ?? null,
-            'email'        => $r['email'] ?? null,
-            'phone'        => $r['mobile'] ?? null,
-            'gender'       => $r['gender'] ?? null,
-            'departmentId' => isset($r['department_id']) ? (string) $r['department_id'] : null,
-            'orgId'        => (string) ($r['sub_institute_id'] ?? ''),
+            'id'           => (string) $r[$person->primaryKey],
+            'employeeId'   => $value('externalRef'),
+            'firstName'    => $value('firstName'),
+            'lastName'     => $value('lastName'),
+            'email'        => $value('email'),
+            'phone'        => $value('phone'),
+            'gender'       => $value('gender'),
+            'departmentId' => $unit !== null ? (string) $unit : null,
+            'orgId'        => (string) ($r[$person->tenantKey] ?? ''),
             'status'       => 'active',
             'createdDate'  => $r['created_at'] ?? null,
             'updatedDate'  => $r['updated_at'] ?? null,
@@ -167,8 +219,14 @@ final class PersonController extends Controller
         ]);
 
         $t = $this->tenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
 
-        $map = ['firstName' => 'first_name', 'lastName' => 'last_name', 'email' => 'email', 'phone' => 'mobile'];
+        $map = [
+            'firstName' => $person->field('firstName'),
+            'lastName'  => $person->field('lastName'),
+            'email'     => $person->field('email'),
+            'phone'     => $person->field('phone'),
+        ];
         $fields = [];
         foreach ($data as $k => $v) { $fields[$map[$k]] = $v; }
 
@@ -177,9 +235,9 @@ final class PersonController extends Controller
         }
 
         $fields['updated_at'] = now()->format('Y-m-d H:i:s');
-        $n = DB::table('tbluser')
-            ->where('id', $id)
-            ->where('sub_institute_id', $t)
+        $n = DB::table($person->table)
+            ->where($person->primaryKey, $id)
+            ->where($person->tenantKey, $t)
             ->whereNull('deleted_at')
             ->update($fields);
 
@@ -189,12 +247,16 @@ final class PersonController extends Controller
     public function archive(Request $request, string $tenantId, string $id): JsonResponse
     {
         $t = $this->tenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
 
-        $n = DB::table('tbluser')
-            ->where('id', $id)
-            ->where('sub_institute_id', $t)
+        $n = DB::table($person->table)
+            ->where($person->primaryKey, $id)
+            ->where($person->tenantKey, $t)
             ->whereNull('deleted_at')
-            ->update(['deleted_at' => now()->format('Y-m-d H:i:s'), 'status' => 0]);
+            ->update([
+                'deleted_at'             => now()->format('Y-m-d H:i:s'),
+                $person->field('status') => 0,
+            ]);
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'person_not_found'], 404);
     }
@@ -205,12 +267,13 @@ final class PersonController extends Controller
     public function twin(Request $request, string $tenantId, string $id): JsonResponse
     {
         $t = $this->tenantId($request);
+        $source = $this->resolver->resolve($t, 'Person');
 
-        $row = DB::table('tbluser')
-            ->where('id', $id)
-            ->where('sub_institute_id', $t)
+        $row = DB::table($source->table)
+            ->where($source->primaryKey, $id)
+            ->where($source->tenantKey, $t)
             ->whereNull('deleted_at')
-            ->where('status', 1)
+            ->where($source->field('status'), 1)
             ->first();
 
         if (! $row) {
@@ -240,8 +303,13 @@ final class PersonController extends Controller
             ->whereIn('id', $assignments->pluck('capability_id')->all())
             ->pluck('name', 'id');
 
-        $jobRoleId = isset($person['jobtitle_id']) && $person['jobtitle_id'] !== null
-            ? (string) $person['jobtitle_id']
+        // Person.position is the job role this person holds. A source that does
+        // not map it has no job role to compare against, so there are no
+        // requirements and therefore no gaps — null, not an empty target.
+        $positionColumn = $source->has('position') ? $source->field('position') : null;
+
+        $jobRoleId = $positionColumn !== null && ($person[$positionColumn] ?? null) !== null
+            ? (string) $person[$positionColumn]
             : null;
 
         $requirements = $jobRoleId === null ? collect() : DB::table('hpbrain_job_role_capability_requirements')

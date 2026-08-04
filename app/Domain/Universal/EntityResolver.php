@@ -107,6 +107,45 @@ final class EntityResolver
     }
 
     /**
+     * Every tenant that maps a given entity, resolved.
+     *
+     * For the one operation that has no tenant to scope by: LOGIN. A person
+     * offers an email address and nothing else, so there is no tenant context to
+     * resolve against — the tenant is what the lookup is trying to establish.
+     *
+     * The honest answer is to search every tenant that has the entity mapped and
+     * let the matching row identify the tenant, which is what this supports.
+     * Callers should group the results by source table so tenants sharing one
+     * ERP cost a single query rather than one apiece.
+     *
+     * @return array<string, ResolvedSource> tenantId => source
+     */
+    public function everyTenantWith(string $entity): array
+    {
+        $tenantIds = DB::table('hpbrain_entity_mappings')
+            ->where('universal_entity', $entity)
+            ->where('is_active', 1)
+            ->distinct()
+            ->orderBy('tenant_id')
+            ->pluck('tenant_id')
+            ->all();
+
+        $out = [];
+
+        foreach ($tenantIds as $tenantId) {
+            $tenantId = (string) $tenantId;
+
+            // A tenant listed here always resolves, unless its mapping is
+            // incomplete — in which case resolve() throws, which is correct:
+            // a half-configured tenant must not silently drop out of a login
+            // search and leave its people unable to sign in with no explanation.
+            $out[$tenantId] = $this->resolve($tenantId, $entity);
+        }
+
+        return $out;
+    }
+
+    /**
      * Drop cached mappings. Called after a mapping is written, so the change is
      * visible within the same request that made it.
      */
