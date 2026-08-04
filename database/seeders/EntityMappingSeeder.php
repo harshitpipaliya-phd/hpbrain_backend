@@ -92,13 +92,39 @@ final class EntityMappingSeeder extends Seeder
         // 'unit', 'reportsTo' and 'isVacant' have no columns in this table.
     ]];
 
+    /**
+     * The two satellite tables the ERP hangs off the main ones.
+     *
+     * They are separate universal entities rather than lookup-typed fields on
+     * Organization and Person because each is a row in its own right with its
+     * own key and lifecycle — OrganizationRepository::create() inserts into both
+     * org_details and tbluserprofilemaster directly. Folding them in as lookups
+     * would describe a read path the code does not take and leave the writes
+     * with nothing to resolve against.
+     */
+    private const ORGANIZATION_PROFILE = ['org_details', [
+        'id'        => 'id',
+        'tenantKey' => 'sub_institute_id',
+        'legalName' => 'legal_name',
+        'logo'      => 'logo',
+    ]];
+
+    private const PERSON_PROFILE = ['tbluserprofilemaster', [
+        'id'        => 'id',
+        'tenantKey' => 'sub_institute_id',
+        'name'      => 'name',
+        'status'    => 'status',
+    ]];
+
     public function run(): void
     {
         $entities = [
-            'Organization'     => self::ORGANIZATION,
-            'OrganizationUnit' => self::ORG_UNIT,
-            'Person'           => self::PERSON,
-            'Position'         => self::POSITION,
+            'Organization'        => self::ORGANIZATION,
+            'OrganizationUnit'    => self::ORG_UNIT,
+            'Person'              => self::PERSON,
+            'Position'            => self::POSITION,
+            'OrganizationProfile' => self::ORGANIZATION_PROFILE,
+            'PersonProfile'       => self::PERSON_PROFILE,
         ];
 
         $now = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');

@@ -43,8 +43,22 @@ final class EntityResolver
 
     public const FIELD_TENANT_KEY = 'tenantKey';
 
-    /** The vocabulary the Brain reasons in. Nothing outside this list resolves. */
-    public const ENTITIES = ['Organization', 'OrganizationUnit', 'Person', 'Position'];
+    /**
+     * The vocabulary the Brain reasons in.
+     *
+     * The first four are the entities intelligence is produced about. The last
+     * two are satellite records the ERP keeps alongside them — an organization's
+     * legal details, a person's role profile — which need resolving because the
+     * code reads and writes them, but which nothing reasons over directly.
+     */
+    public const ENTITIES = [
+        'Organization',
+        'OrganizationUnit',
+        'Person',
+        'Position',
+        'OrganizationProfile',
+        'PersonProfile',
+    ];
 
     /** @var array<string, array<string, ResolvedSource>> tenantId => entity => source */
     private array $cache = [];

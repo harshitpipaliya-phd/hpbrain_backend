@@ -139,7 +139,10 @@ final class EntityMappingSeederTest extends TestCase
         // the rest resolving nothing, and the resolver fails closed.
         foreach (['4', '6'] as $tenantId) {
             $this->assertSame(
-                ['Organization', 'OrganizationUnit', 'Person', 'Position'],
+                [
+                    'Organization', 'OrganizationProfile', 'OrganizationUnit',
+                    'Person', 'PersonProfile', 'Position',
+                ],
                 $this->resolver()->mappedEntities($tenantId),
                 "Tenant {$tenantId} should have the full entity set.",
             );
