@@ -11,15 +11,15 @@ use Illuminate\Support\Facades\DB;
  *
  * The Brain's own vocabulary is fixed — Organization, OrganizationUnit, Person,
  * Position — while the tables underneath vary per customer. A school keeps
- * people in tbluser; a hospital will keep them somewhere else entirely. Every
- * query in the application used to name the school's tables directly, which is
+ * people in one ERP table; a hospital will keep them somewhere else entirely.
+ * Every query in the application used to name the school's tables directly, which is
  * why onboarding a second industry meant editing code. This class is the seam
  * that makes it configuration instead.
  *
  * IT FAILS CLOSED, AND THAT IS THE MOST IMPORTANT THING ABOUT IT.
  *
- * There is no default, no fallback, no "if unmapped, assume tbluser". A tenant
- * with no mapping for an entity gets an exception. The tempting alternative —
+ * There is no default, no fallback, no "if unmapped, assume the school table".
+ * A tenant with no mapping for an entity gets an exception. The tempting alternative —
  * defaulting to the school's tables so nothing breaks during migration — would
  * mean a hospital tenant silently reading a school's employee rows and
  * presenting them as its own. That is a cross-tenant leak, and it would arrive

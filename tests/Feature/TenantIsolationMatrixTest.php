@@ -32,6 +32,8 @@ use Tests\Support\BuildsBrainSchema;
  */
 final class TenantIsolationMatrixTest extends TestCase
 {
+    use \Tests\Support\SeedsEntityMappings;
+
     use BuildsBrainSchema;
 
     private const HOME    = 'tenant-alpha';
@@ -66,6 +68,10 @@ final class TenantIsolationMatrixTest extends TestCase
         DB::table('institute_detail')->insert([
             'sub_institute_id' => $subInstituteId, 'deleted_at' => $deletedAt,
         ]);
+
+        // The tenant check resolves its source and fails closed without one, so
+        // a seeded organization needs mappings to be addressable at all.
+        $this->installEntityMappings([$subInstituteId]);
     }
 
     /**

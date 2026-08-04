@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Universal\EntityResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -25,10 +26,10 @@ abstract class Controller
     }
 
     /**
-     * The actor as the ERP knows it: a numeric tbluser.id, or null.
+     * The actor as the source system knows it: a numeric person id, or null.
      *
-     * The ERP tables (institute_detail, org_details, hrms_departments, tbluser)
-     * all type created_by as BIGINT, while Brain identities are strings. Writing
+     * The ERP's own tables type created_by as BIGINT, while Brain identities
+     * are strings. Writing
      * actorId() into them raised
      *
      *     SQLSTATE[22007]: Incorrect integer value: 'dev-user-1' for column created_by
@@ -38,7 +39,8 @@ abstract class Controller
      * UUIDs too.
      *
      * Resolution order: a numeric id is used as-is; otherwise the Brain user's
-     * email is matched against tbluser to find their real ERP row. If neither
+     * email is matched against the resolved Person source to find their real
+     * ERP row. If neither
      * resolves, the column is left NULL — it is nullable on all four tables, and
      * an honest NULL beats attributing the write to whichever employee happens
      * to hold id 1.
@@ -54,7 +56,13 @@ abstract class Controller
         $email = DB::table('hpbrain_auth_users')->where('id', $actor)->value('email');
 
         if (is_string($email) && $email !== '') {
-            $id = DB::table('tbluser')->where('email', $email)->whereNull('deleted_at')->value('id');
+            $person = app(EntityResolver::class)->resolve($this->tenantId($request), 'Person');
+
+            $id = DB::table($person->table)
+                ->where($person->field('email'), $email)
+                ->where($person->tenantKey, $this->tenantId($request))
+                ->whereNull('deleted_at')
+                ->value($person->primaryKey);
             if ($id !== null) {
                 return (int) $id;
             }

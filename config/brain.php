@@ -109,17 +109,21 @@ return [
     ],
 
     /*
-     | The institute's existing ERP tables. The Brain reads Organization,
-     | Department and Person from these — it does not own them. Everything
-     | the Brain reasons WITH lives in hpbrain_* tables.
+     | WHERE THE SOURCE TABLES ARE DECLARED — hpbrain_entity_mappings, not here.
+     |
+     | This key used to hold a fixed map of the institute ERP's tables. It had no
+     | readers, and since Phase 2 it would have been a second and stale answer to
+     | a question the vocabulary layer now owns: every table and column the Brain
+     | reads is resolved per tenant through EntityResolver. Two descriptions of
+     | where Person lives is one too many, and the wrong one is the one someone
+     | eventually edits.
+     |
+     | To point a tenant at different tables, write mapping rows — see
+     | database/seeders/EntityMappingSeeder.php for the institute ERP's set.
+     |
+     | The Brain still does not OWN any of it. Everything it reasons WITH lives
+     | in hpbrain_* tables; everything it reasons ABOUT is read from the source.
      */
-    'erp_tables' => [
-        'organization'   => 'institute_detail',
-        'organization_x' => 'org_details',
-        'department'     => 'hrms_departments',
-        'person'         => 'tbluser',
-        'person_profile' => 'tbluserprofilemaster',
-    ],
 
     /*
     |--------------------------------------------------------------------------

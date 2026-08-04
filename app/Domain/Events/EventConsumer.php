@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Events;
 
+use App\Domain\Universal\EntityResolver;
 use Illuminate\Support\Facades\DB;
 use Ramsey\Uuid\Uuid;
 use RuntimeException;
@@ -193,11 +194,13 @@ final class EventConsumer
 
     private function createNotification(string $tenantId, string $entityId, string $eventType, array $data): void
     {
-        $users = DB::table('tbluser')
-            ->where('sub_institute_id', $tenantId)
-            ->where('status', 1)
+        $person = app(EntityResolver::class)->resolve($tenantId, 'Person');
+
+        $users = DB::table($person->table)
+            ->where($person->tenantKey, $tenantId)
+            ->where($person->field('status'), 1)
             ->whereNull('deleted_at')
-            ->pluck('id')
+            ->pluck($person->primaryKey)
             ->all();
 
         foreach ($users as $userId) {

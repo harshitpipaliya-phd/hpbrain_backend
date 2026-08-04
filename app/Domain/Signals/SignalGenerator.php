@@ -6,6 +6,7 @@ namespace App\Domain\Signals;
 
 use App\Domain\Events\EventPublisher;
 use App\Domain\Events\LoopEvent;
+use App\Domain\Universal\EntityResolver;
 use App\Support\Jwt;
 use Illuminate\Support\Facades\DB;
 use Ramsey\Uuid\Uuid;
@@ -23,8 +24,10 @@ final class SignalGenerator
 {
     private const ACTOR = 'system';
 
-    public function __construct(private readonly EventPublisher $events)
-    {
+    public function __construct(
+        private readonly EventPublisher $events,
+        private readonly EntityResolver $resolver,
+    ) {
     }
 
     /**
@@ -66,14 +69,14 @@ final class SignalGenerator
      */
     private function peopleWithoutDepartment(string $tenantId): array
     {
-        $affected = DB::table('tbluser')
-            ->where('sub_institute_id', $tenantId)
-            ->where('status', 1)
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->whereNull('department_id')->orWhere('department_id', 0);
+        $person = $this->resolver->resolve($tenantId, 'Person');
+        $unitColumn = $person->field('unit');
+
+        $affected = $this->activePeople($tenantId)
+            ->where(function ($q) use ($unitColumn) {
+                $q->whereNull($unitColumn)->orWhere($unitColumn, 0);
             })
-            ->select('id', 'employee_no', 'first_name', 'last_name', 'email')
+            ->select($person->columns(['id', 'externalRef', 'firstName', 'lastName', 'email']))
             ->limit(50)
             ->get();
 
@@ -81,17 +84,11 @@ final class SignalGenerator
             return ['created' => false, 'reason' => 'no_affected'];
         }
 
-        $evidenceIds = [];
-        foreach ($affected->take(5) as $person) {
-            $evidenceIds[] = $this->createEvidence($tenantId, [
-                'source' => 'erp.tbluser',
-                'recordId' => (string) $person->id,
-                'employeeNo' => (string) $person->employee_no,
-                'name' => trim(($person->first_name ?? '').' '.($person->last_name ?? '')),
-                'email' => (string) $person->email,
-                'issue' => 'department_id is null or zero',
-            ], $tenantId);
-        }
+        $evidenceIds = $this->peopleEvidence(
+            $tenantId,
+            $affected,
+            $unitColumn.' is null or zero',
+        );
 
         $signalId = $this->createSignal($tenantId, [
             'source' => 'erp.data_quality',
@@ -102,7 +99,7 @@ final class SignalGenerator
             'metadata' => [
                 'rule' => 'people_without_department',
                 'affectedCount' => $affected->count(),
-                'sampleIds' => $affected->take(5)->pluck('id')->all(),
+                'sampleIds' => $affected->take(5)->pluck($person->primaryKey)->all(),
             ],
         ], $evidenceIds, $tenantId);
 
@@ -110,18 +107,28 @@ final class SignalGenerator
     }
 
     /**
-     * Rule: departments without a manager (parent_id is null or 0 for root depts).
+     * Rule: departments whose parent is null or 0.
+     *
+     * NAMED "departments without manager" throughout the catalog, which this
+     * predicate does not actually detect: the source table has no manager
+     * column at all, so what it finds is ROOT departments. The predicate,
+     * severity and confidence are carried forward unchanged here because this
+     * phase promises no behaviour change. Phase 3 makes rules data, which is
+     * where the naming and the predicate can be reconciled against a gate.
      */
     private function departmentsWithoutManager(string $tenantId): array
     {
-        $affected = DB::table('hrms_departments')
-            ->where('sub_institute_id', $tenantId)
-            ->where('status', 1)
+        $unit = $this->resolver->resolve($tenantId, 'OrganizationUnit');
+        $parentColumn = $unit->field('parent');
+
+        $affected = DB::table($unit->table)
+            ->where($unit->tenantKey, $tenantId)
+            ->where($unit->field('status'), 1)
             ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->whereNull('parent_id')->orWhere('parent_id', 0);
+            ->where(function ($q) use ($parentColumn) {
+                $q->whereNull($parentColumn)->orWhere($parentColumn, 0);
             })
-            ->select('id', 'department', 'roles_responsibility')
+            ->select($unit->columns(['id', 'name', 'description']))
             ->limit(50)
             ->get();
 
@@ -130,12 +137,15 @@ final class SignalGenerator
         }
 
         $evidenceIds = [];
+        $unitId = $unit->primaryKey;
+        $unitName = $unit->field('name');
+
         foreach ($affected->take(5) as $dept) {
             $evidenceIds[] = $this->createEvidence($tenantId, [
-                'source' => 'erp.hrms_departments',
-                'recordId' => (string) $dept->id,
-                'name' => (string) $dept->department,
-                'issue' => 'parent_id is null or zero — no manager assigned',
+                'source' => 'erp.'.$unit->table,
+                'recordId' => (string) $dept->{$unitId},
+                'name' => (string) $dept->{$unitName},
+                'issue' => $parentColumn.' is null or zero — no manager assigned',
             ], $tenantId);
         }
 
@@ -148,7 +158,7 @@ final class SignalGenerator
             'metadata' => [
                 'rule' => 'departments_without_manager',
                 'affectedCount' => $affected->count(),
-                'sampleIds' => $affected->take(5)->pluck('id')->all(),
+                'sampleIds' => $affected->take(5)->pluck($unitId)->all(),
             ],
         ], $evidenceIds, $tenantId);
 
@@ -160,14 +170,14 @@ final class SignalGenerator
      */
     private function peopleWithoutProfile(string $tenantId): array
     {
-        $affected = DB::table('tbluser')
-            ->where('sub_institute_id', $tenantId)
-            ->where('status', 1)
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->whereNull('user_profile_id')->orWhere('user_profile_id', 0);
+        $person = $this->resolver->resolve($tenantId, 'Person');
+        $profileColumn = $person->field('profile');
+
+        $affected = $this->activePeople($tenantId)
+            ->where(function ($q) use ($profileColumn) {
+                $q->whereNull($profileColumn)->orWhere($profileColumn, 0);
             })
-            ->select('id', 'employee_no', 'first_name', 'last_name', 'email')
+            ->select($person->columns(['id', 'externalRef', 'firstName', 'lastName', 'email']))
             ->limit(50)
             ->get();
 
@@ -175,17 +185,11 @@ final class SignalGenerator
             return ['created' => false, 'reason' => 'no_affected'];
         }
 
-        $evidenceIds = [];
-        foreach ($affected->take(5) as $person) {
-            $evidenceIds[] = $this->createEvidence($tenantId, [
-                'source' => 'erp.tbluser',
-                'recordId' => (string) $person->id,
-                'employeeNo' => (string) $person->employee_no,
-                'name' => trim(($person->first_name ?? '').' '.($person->last_name ?? '')),
-                'email' => (string) $person->email,
-                'issue' => 'user_profile_id is null or zero',
-            ], $tenantId);
-        }
+        $evidenceIds = $this->peopleEvidence(
+            $tenantId,
+            $affected,
+            $profileColumn.' is null or zero',
+        );
 
         $signalId = $this->createSignal($tenantId, [
             'source' => 'erp.data_quality',
@@ -196,7 +200,7 @@ final class SignalGenerator
             'metadata' => [
                 'rule' => 'people_without_profile',
                 'affectedCount' => $affected->count(),
-                'sampleIds' => $affected->take(5)->pluck('id')->all(),
+                'sampleIds' => $affected->take(5)->pluck($person->primaryKey)->all(),
             ],
         ], $evidenceIds, $tenantId);
 
@@ -208,14 +212,14 @@ final class SignalGenerator
      */
     private function peopleWithoutEmail(string $tenantId): array
     {
-        $affected = DB::table('tbluser')
-            ->where('sub_institute_id', $tenantId)
-            ->where('status', 1)
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->whereNull('email')->orWhere('email', '');
+        $person = $this->resolver->resolve($tenantId, 'Person');
+        $emailColumn = $person->field('email');
+
+        $affected = $this->activePeople($tenantId)
+            ->where(function ($q) use ($emailColumn) {
+                $q->whereNull($emailColumn)->orWhere($emailColumn, '');
             })
-            ->select('id', 'employee_no', 'first_name', 'last_name')
+            ->select($person->columns(['id', 'externalRef', 'firstName', 'lastName']))
             ->limit(50)
             ->get();
 
@@ -223,16 +227,12 @@ final class SignalGenerator
             return ['created' => false, 'reason' => 'no_affected'];
         }
 
-        $evidenceIds = [];
-        foreach ($affected->take(5) as $person) {
-            $evidenceIds[] = $this->createEvidence($tenantId, [
-                'source' => 'erp.tbluser',
-                'recordId' => (string) $person->id,
-                'employeeNo' => (string) $person->employee_no,
-                'name' => trim(($person->first_name ?? '').' '.($person->last_name ?? '')),
-                'issue' => 'email is null or empty',
-            ], $tenantId);
-        }
+        $evidenceIds = $this->peopleEvidence(
+            $tenantId,
+            $affected,
+            $emailColumn.' is null or empty',
+            includeEmail: false,
+        );
 
         $signalId = $this->createSignal($tenantId, [
             'source' => 'erp.data_quality',
@@ -243,7 +243,7 @@ final class SignalGenerator
             'metadata' => [
                 'rule' => 'people_without_email',
                 'affectedCount' => $affected->count(),
-                'sampleIds' => $affected->take(5)->pluck('id')->all(),
+                'sampleIds' => $affected->take(5)->pluck($person->primaryKey)->all(),
             ],
         ], $evidenceIds, $tenantId);
 
@@ -255,17 +255,29 @@ final class SignalGenerator
      */
     private function inactiveUsersInActiveDepartments(string $tenantId): array
     {
-        $affected = DB::table('tbluser as u')
-            ->join('hrms_departments as d', function ($j) use ($tenantId) {
-                $j->on('d.id', '=', 'u.department_id')
-                    ->where('d.sub_institute_id', '=', $tenantId)
-                    ->where('d.status', '=', 1)
+        $person = $this->resolver->resolve($tenantId, 'Person');
+        $unit = $this->resolver->resolve($tenantId, 'OrganizationUnit');
+
+        $personStatus = $person->field('status');
+        $unitName = $unit->field('name');
+
+        $affected = DB::table($person->table.' as u')
+            ->join($unit->table.' as d', function ($j) use ($tenantId, $person, $unit) {
+                $j->on('d.'.$unit->primaryKey, '=', 'u.'.$person->field('unit'))
+                    ->where('d.'.$unit->tenantKey, '=', $tenantId)
+                    ->where('d.'.$unit->field('status'), '=', 1)
                     ->whereNull('d.deleted_at');
             })
-            ->where('u.sub_institute_id', $tenantId)
-            ->where('u.status', '!=', 1)
+            ->where('u.'.$person->tenantKey, $tenantId)
+            ->where('u.'.$personStatus, '!=', 1)
             ->whereNotNull('u.deleted_at')
-            ->select('u.id', 'u.employee_no', 'u.first_name', 'u.last_name', 'u.email', 'd.department')
+            ->select(array_merge(
+                array_map(
+                    fn ($c) => 'u.'.$c,
+                    array_values($person->columns(['id', 'externalRef', 'firstName', 'lastName', 'email'])),
+                ),
+                ['d.'.$unitName],
+            ))
             ->limit(50)
             ->get();
 
@@ -273,17 +285,12 @@ final class SignalGenerator
             return ['created' => false, 'reason' => 'no_affected'];
         }
 
-        $evidenceIds = [];
-        foreach ($affected->take(5) as $person) {
-            $evidenceIds[] = $this->createEvidence($tenantId, [
-                'source' => 'erp.tbluser',
-                'recordId' => (string) $person->id,
-                'employeeNo' => (string) $person->employee_no,
-                'name' => trim(($person->first_name ?? '').' '.($person->last_name ?? '')),
-                'department' => (string) $person->department,
-                'issue' => 'user is inactive/deleted but assigned to active department',
-            ], $tenantId);
-        }
+        $evidenceIds = $this->peopleEvidence(
+            $tenantId,
+            $affected,
+            'user is inactive/deleted but assigned to active department',
+            unitNameColumn: $unitName,
+        );
 
         $signalId = $this->createSignal($tenantId, [
             'source' => 'erp.data_quality',
@@ -294,11 +301,77 @@ final class SignalGenerator
             'metadata' => [
                 'rule' => 'inactive_users_in_active_departments',
                 'affectedCount' => $affected->count(),
-                'sampleIds' => $affected->take(5)->pluck('id')->all(),
+                'sampleIds' => $affected->take(5)->pluck($person->primaryKey)->all(),
             ],
         ], $evidenceIds, $tenantId);
 
         return ['created' => true, 'signalId' => $signalId];
+    }
+
+    /**
+     * Active, non-deleted people for a tenant — the opening clause of four of
+     * the five rules.
+     */
+    private function activePeople(string $tenantId): \Illuminate\Database\Query\Builder
+    {
+        $person = $this->resolver->resolve($tenantId, 'Person');
+
+        return DB::table($person->table)
+            ->where($person->tenantKey, $tenantId)
+            ->where($person->field('status'), 1)
+            ->whereNull('deleted_at');
+    }
+
+    /**
+     * Evidence rows for up to five affected people.
+     *
+     * The four person rules built identical evidence payloads with one line
+     * differing. The shape is preserved exactly, including the omission of
+     * 'email' from the without-email rule — where the column is empty by
+     * definition and reporting it would add a field that says nothing.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $affected
+     * @return array<int, string>
+     */
+    private function peopleEvidence(
+        string $tenantId,
+        \Illuminate\Support\Collection $affected,
+        string $issue,
+        bool $includeEmail = true,
+        ?string $unitNameColumn = null,
+    ): array {
+        $person = $this->resolver->resolve($tenantId, 'Person');
+
+        $id = $person->primaryKey;
+        $ref = $person->field('externalRef');
+        $first = $person->field('firstName');
+        $last = $person->field('lastName');
+        $email = $person->field('email');
+
+        $evidenceIds = [];
+
+        foreach ($affected->take(5) as $row) {
+            $content = [
+                'source' => 'erp.'.$person->table,
+                'recordId' => (string) $row->{$id},
+                'employeeNo' => (string) $row->{$ref},
+                'name' => trim(($row->{$first} ?? '').' '.($row->{$last} ?? '')),
+            ];
+
+            if ($includeEmail) {
+                $content['email'] = (string) $row->{$email};
+            }
+
+            if ($unitNameColumn !== null) {
+                $content['department'] = (string) $row->{$unitNameColumn};
+            }
+
+            $content['issue'] = $issue;
+
+            $evidenceIds[] = $this->createEvidence($tenantId, $content, $tenantId);
+        }
+
+        return $evidenceIds;
     }
 
     /**

@@ -12,8 +12,8 @@ use RuntimeException;
  *
  * This exception is the whole point of the resolver. The alternative — falling
  * back to the school's tables when a mapping is missing — would make a hospital
- * tenant read tbluser and return a school's employees as its own. That is a
- * cross-tenant data leak, and it would present as a puzzling bug rather than as
+ * tenant read the school's employee table and return its people as its own.
+ * That is a cross-tenant data leak, and it would present as a puzzling bug rather than as
  * a security incident, which is exactly what makes it dangerous. Throwing is the
  * safe failure: loud, immediate, and impossible to mistake for data.
  */

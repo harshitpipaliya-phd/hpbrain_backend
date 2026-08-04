@@ -9,8 +9,8 @@
 
 | Field | Value |
 |---|---|
-| Commit | `e04893e31ec970a5304d82fc773af7cafbc27d21` |
-| Generated | 2026-08-04 07:07:13 UTC |
+| Commit | `9ff934c0d208ae6d9a24e33fcb89da5da8721463` |
+| Generated | 2026-08-04 08:13:34 UTC |
 | Golden intelligence flow | unknown — the golden test was not run for this report |
 | Tests | unknown |
 | Assertions | unknown |

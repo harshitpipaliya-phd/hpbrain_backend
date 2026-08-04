@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Domain\Universal\EntityResolver;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * The Brain addresses tenants by the institute's sub_institute_id — signals and
  * cases are stored under tenant_id '6', which is Scholar Clone in
- * institute_detail. But a token carries exactly ONE tenant claim, and the
+ * the organization register. But a token carries exactly ONE tenant claim, and the
  * dev-bypass token carries 'demo-tenant'. Requiring route tenant === token
  * tenant therefore made every organization except the token's own unreadable:
  * /signals/6 answered 403, and since no row anywhere is stored under
@@ -81,17 +82,24 @@ final class EnsureTenantScope
      * runs on the cross-tenant path anyway (route tenant ≠ token tenant), and it
      * is a single indexed EXISTS.
      *
-     * Fails CLOSED. If institute_detail is unreachable — not migrated, wrong
-     * connection, ERP down — the honest answer is "cannot confirm", and the only
-     * safe reading of that is no. Letting the exception escape turned a
-     * would-be 403 into a 500: a tenant check that crashes must never be
-     * mistaken for a tenant check that passed.
+     * Fails CLOSED. If the organization register is unreachable — not
+     * migrated, wrong connection, ERP down — the honest answer is "cannot
+     * confirm", and the only safe reading of that is no. Letting the
+     * exception escape turned a would-be 403 into a 500: a tenant check that
+     * crashes must never be mistaken for a tenant check that passed.
+     *
+     * An UNMAPPED tenant now takes the same path. resolve() throws, the catch
+     * returns false, and the answer is 403. That is the correct reading: a
+     * tenant the vocabulary layer cannot describe is not a tenant this
+     * request may address.
      */
     private function organizationExists(string $tenantId): bool
     {
         try {
-            return DB::table('institute_detail')
-                ->where('sub_institute_id', $tenantId)
+            $org = app(EntityResolver::class)->resolve($tenantId, 'Organization');
+
+            return DB::table($org->table)
+                ->where($org->tenantKey, $tenantId)
                 ->whereNull('deleted_at')
                 ->exists();
         } catch (\Throwable) {

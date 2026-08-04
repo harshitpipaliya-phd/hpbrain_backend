@@ -7,10 +7,9 @@ namespace App\Domain\Universal;
 /**
  * Where one universal entity actually lives for one tenant.
  *
- * A resolved binding of a universal entity name ('Person') to the physical
- * table behind it ('tbluser'), the column that scopes rows to a tenant
- * ('sub_institute_id'), its primary key, and the source column for each
- * universal field the tenant has mapped.
+ * A resolved binding of a universal entity name ('Person') to the physical table
+ * behind it, the column that scopes rows to a tenant, its primary key, and the
+ * source column for each universal field the tenant has mapped.
  *
  * Immutable and query-free by design: it describes a source, it does not read
  * from one. Callers build their own Query Builder statements from it, which
@@ -66,7 +65,7 @@ final class ResolvedSource
         return isset($this->fields[$universalField]);
     }
 
-    /** `tbluser.first_name` — for joins and selects that need disambiguation. */
+    /** `table.column` — for joins and selects that need disambiguation. */
     public function qualified(string $universalField): string
     {
         return $this->table.'.'.$this->field($universalField);
