@@ -382,7 +382,43 @@ not yet use it consistently.
 - **The 35 SPA calls to non-existent endpoints** from the Phase 0 baseline are untouched.
 - **Nothing has been verified against a live database.** See the note below.
 
-### Live-database verification: not performed
+### Live-database verification: PERFORMED (scratch database, 2026-08-04)
+
+Run against a scratch **MariaDB 10.11.9** database `hp_brain_verify` on the same server
+as the live ERP. **`hp_erp` was not touched**: table structures were cloned with
+`CREATE TABLE ... LIKE` and populated with synthetic rows only. Every command carried
+`DB_DATABASE=hp_brain_verify`, verified to redirect the connection before anything ran.
+
+**It found two bugs that exist only on MySQL/MariaDB, one of them severe.**
+
+| Bug | Effect | Fix |
+|---|---|---|
+| `row_number` unquoted in `hpbrain_import_logs` — reserved since MariaDB 10.2 / MySQL 8.0 | Migration fails, taking the **15 migrations after it** down with it, including every Phase 3–5 table | Backticked |
+| `hpbrain_evidence.signal_id` held the **tenant id**, against a FOREIGN KEY to `hpbrain_signals.id` | Every rule that fired was rejected — **zero signals, zero evidence** on the production engine | Signal written first, evidence second, one transaction |
+
+The second was carried forward in Phase 3 as a documented wart, on the grounds that the
+gate was byte-identical stored rows. **That judgement was wrong.** It was not cosmetic;
+it broke the feature outright on the only database that matters. SQLite does not enforce
+foreign keys unless `PRAGMA foreign_keys` is on, and it is not, so all 427 tests passed
+either way. `evidence_points_at_the_signal_it_belongs_to` now asserts the invariant
+directly, and was confirmed to fail when the old behaviour is restored.
+
+Verified after the fixes:
+
+- all 93 migrations run clean
+- `DECIMAL(6,4)` survives — the join rule stores `0.8000`, not `1`
+- MariaDB aliases `JSON` to `longtext`; the decode path already handles it
+- both seeders idempotent (78 mappings, 5 rules, unchanged on re-run)
+- rules fire: 4 signals, correct severities, correct evidence payloads
+- `brain:snapshot` idempotent within a day: **22 rows, then 22 rows**
+- 14 of 22 snapshot values stored as **NULL**, not 0
+- **CONFIRMED EMPIRICALLY**, having previously only been reasoned about: the UNIQUE
+  index does **not** dedupe rows with a NULL `dimension_key`, while it does reject
+  non-null duplicates. `SnapshotWriter`'s lookup-then-update is necessary.
+
+Still unexercised: real data volumes, and the six live tenants.
+
+### Original note (superseded)
 
 Everything above is measured on the suite's in-memory SQLite. The `.env` points at a
 **shared production MySQL** (`hp_erp`, 311 tables, 59 `hpbrain_*`) that is also the
