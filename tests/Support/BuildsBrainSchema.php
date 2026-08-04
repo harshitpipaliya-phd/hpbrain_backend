@@ -111,6 +111,10 @@ trait BuildsBrainSchema
             $t->string('department_id', 36)->nullable();
             $t->text('source');
             $t->text('classification')->default('unclassified');
+            // Which rule raised the signal. Nullable: signals from reasoning
+            // rather than from a rule have none, and re-detection must never
+            // treat two of those as the same problem.
+            $t->string('rule_key', 100)->nullable();
             $t->text('priority')->default('normal');
             $t->text('severity')->default('low');
             $t->decimal('confidence', 6, 4)->nullable();

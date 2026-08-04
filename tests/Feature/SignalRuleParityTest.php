@@ -407,4 +407,88 @@ final class SignalRuleParityTest extends TestCase
         $this->assertSame(0, $result['created']);
         $this->assertSame(0, DB::table('hpbrain_signals')->where('tenant_id', '6')->count());
     }
+
+    /**
+     * A condition that is still true is not a new observation.
+     *
+     * Detection runs hourly. Without this, one unfixed "43 people have no
+     * department" would produce twenty-four identical signals a day, and an
+     * attention queue ordered by severity and count would fill with a single
+     * finding repeated until nothing else could be seen.
+     *
+     * @test
+     */
+    public function re_detecting_an_unchanged_condition_refreshes_rather_than_duplicates(): void
+    {
+        $first = $this->evaluate();
+        $this->assertGreaterThan(0, $first['created'], 'Fixture should raise at least one signal.');
+
+        $countAfterFirst = DB::table('hpbrain_signals')->where('tenant_id', self::TENANT)->count();
+        $idsAfterFirst = DB::table('hpbrain_signals')->where('tenant_id', self::TENANT)->pluck('id')->all();
+
+        $second = $this->evaluate();
+
+        $this->assertSame(0, $second['created'], 'A still-true condition must not raise a second signal.');
+        $this->assertSame($first['created'], $second['refreshed'], 'Every signal from the first run should refresh.');
+        $this->assertSame(
+            $countAfterFirst,
+            DB::table('hpbrain_signals')->where('tenant_id', self::TENANT)->count(),
+            'Signal count changed on re-detection.',
+        );
+        $this->assertEqualsCanonicalizing(
+            $idsAfterFirst,
+            DB::table('hpbrain_signals')->where('tenant_id', self::TENANT)->pluck('id')->all(),
+            'The same signal rows must survive, not be replaced.',
+        );
+    }
+
+    /**
+     * Every rule-raised signal carries its rule in a column, not only in JSON.
+     *
+     * The dedupe above depends on it, and reading it back out of metadata needs
+     * JSON_UNQUOTE — which does not exist on SQLite, so the query threw, the
+     * per-rule catch swallowed it, and every rule reported as skipped while
+     * quietly duplicating.
+     *
+     * @test
+     */
+    public function a_rule_raised_signal_records_which_rule_raised_it(): void
+    {
+        $this->evaluate();
+
+        $rows = DB::table('hpbrain_signals')->where('tenant_id', self::TENANT)->get();
+        $this->assertNotEmpty($rows);
+
+        foreach ($rows as $row) {
+            $this->assertNotNull($row->rule_key, 'rule_key is null on a rule-raised signal.');
+            $this->assertSame(
+                json_decode((string) $row->metadata, true)['rule'],
+                $row->rule_key,
+                'The column and the metadata copy disagree about which rule raised this.',
+            );
+        }
+    }
+
+    /**
+     * A resolved problem that comes back is genuinely new.
+     *
+     * Recurrence after resolution is one of the more valuable things this
+     * system can report — it means the root cause was misdiagnosed — so it must
+     * not be suppressed by the same guard that stops hourly duplication.
+     *
+     * @test
+     */
+    public function a_condition_that_returns_after_resolution_raises_a_new_signal(): void
+    {
+        $this->evaluate();
+
+        DB::table('hpbrain_signals')
+            ->where('tenant_id', self::TENANT)
+            ->update(['status' => 'resolved']);
+
+        $again = $this->evaluate();
+
+        $this->assertGreaterThan(0, $again['created'], 'A recurrence after resolution must raise a new signal.');
+        $this->assertSame(0, $again['refreshed']);
+    }
 }

@@ -23,22 +23,33 @@ use Ramsey\Uuid\Uuid;
  * itself. A rule_key defined by both resolves to the tenant's own — that is how
  * an installation overrides a shipped rule without editing it.
  *
- * IDEMPOTENCY IS PRESERVED EXACTLY, INCLUDING ITS FLAW. EventPublisher derives
- * the key as md5("{type}:{tenant}:{entityType}:{entityId}") where entityId is
- * the signal's own freshly-generated UUID. Since that UUID is new on every call,
- * the key is new on every call, and re-evaluating an unchanged condition creates
- * a SECOND signal. SignalGenerator's docblock claimed the opposite — "the
- * idempotency key is derived from the triggering entity, not from the signal
- * UUID" — and that claim was simply not true of the code beneath it.
+ * RE-DETECTION REFRESHES, IT DOES NOT DUPLICATE. EventPublisher derives its
+ * idempotency key from the signal's own freshly-generated UUID, so the key is
+ * new on every call and cannot deduplicate anything. SignalGenerator's docblock
+ * claimed the key came "from the triggering entity, not from the signal UUID",
+ * and that was simply not true of the code beneath it.
  *
- * It is carried forward unchanged because Phase 3's gate is that signals are
- * byte-identical before and after the refactor, and deduplicating them here
- * would make that comparison meaningless. Keying on the triggering entity would
- * be the real fix and is a behaviour change that deserves its own phase and its
- * own gate. Recorded in docs/UNIVERSAL-INTELLIGENCE-PROGRESS.md.
+ * That flaw was carried through the Phase 3 refactor on the grounds that its
+ * gate was byte-identical signals. It stopped being survivable when detection
+ * became scheduled: at hourly cadence one unfixed "43 people have no
+ * department" would produce twenty-four identical signals a day, and an
+ * attention queue ordered by severity and count would fill with a single
+ * finding repeated until nothing else was visible.
+ *
+ * So an unresolved signal from the same rule is now UPDATED with the current
+ * affected count rather than joined by a twin — see openSignalFor(). Resolved
+ * and dismissed signals are not matched, because a problem that was closed and
+ * came back is a real new observation.
  */
 final class RuleEvaluator
 {
+    /** Outcomes of evaluating one rule. */
+    private const CREATED = 'created';
+
+    private const REFRESHED = 'refreshed';
+
+    private const NOTHING = 'nothing';
+
     private const ACTOR = 'system';
 
     /** Rules shipped with the product live under this tenant id. */
@@ -53,16 +64,21 @@ final class RuleEvaluator
     /**
      * Evaluate every applicable rule and create signals for the ones that fire.
      *
-     * @return array{created: int, skipped: int}
+     * @return array{created: int, refreshed: int, skipped: int}
      */
     public function evaluate(string $tenantId): array
     {
         $created = 0;
+        $refreshed = 0;
         $skipped = 0;
 
         foreach ($this->rulesFor($tenantId) as $rule) {
             try {
-                $this->evaluateRule($tenantId, $rule) ? $created++ : $skipped++;
+                match ($this->evaluateRule($tenantId, $rule)) {
+                    self::CREATED   => $created++,
+                    self::REFRESHED => $refreshed++,
+                    default         => $skipped++,
+                };
             } catch (\Throwable) {
                 // One malformed rule must not stop the rest. The previous
                 // implementation swallowed per-rule failures the same way.
@@ -70,7 +86,7 @@ final class RuleEvaluator
             }
         }
 
-        return ['created' => $created, 'skipped' => $skipped];
+        return ['created' => $created, 'refreshed' => $refreshed, 'skipped' => $skipped];
     }
 
     /**
@@ -138,8 +154,10 @@ final class RuleEvaluator
         }
     }
 
-    /** @return bool whether a signal was created */
-    private function evaluateRule(string $tenantId, object $rule): bool
+    /**
+     * @return self::CREATED|self::REFRESHED|self::NOTHING
+     */
+    private function evaluateRule(string $tenantId, object $rule): string
     {
         $source = $this->resolver->resolve($tenantId, (string) $rule->universal_entity);
         $predicate = $this->decode($rule->predicate, 'predicate');
@@ -152,12 +170,27 @@ final class RuleEvaluator
         $affected = $this->matchingRows($tenantId, $rule, $source, $joinSource, $predicate, $evidenceFields);
 
         if ($affected->isEmpty() || ! $this->thresholdMet($rule, $affected->count())) {
-            return false;
+            return self::NOTHING;
+        }
+
+        $primaryKey = $joinSource === null ? $source->primaryKey : 'u_'.$source->primaryKey;
+
+        $metadata = [
+            'rule'          => (string) $rule->rule_key,
+            'affectedCount' => $affected->count(),
+            'sampleIds'     => $affected->take(5)->pluck($primaryKey)->all(),
+        ];
+
+        // A condition that is still true is not a new observation.
+        $open = $this->openSignalFor($tenantId, (string) $rule->rule_key);
+
+        if ($open !== null) {
+            $this->refreshSignal($tenantId, $open, $metadata);
+
+            return self::REFRESHED;
         }
 
         $evidenceRows = $this->buildEvidence($affected, $source, $joinSource, $evidenceFields, $rule);
-
-        $primaryKey = $joinSource === null ? $source->primaryKey : 'u_'.$source->primaryKey;
 
         $this->createSignal($tenantId, [
             'source'         => 'erp.data_quality',
@@ -165,14 +198,77 @@ final class RuleEvaluator
             'priority'       => (string) $rule->priority,
             'severity'       => (string) $rule->severity,
             'confidence'     => (float) $rule->confidence,
-            'metadata'       => [
-                'rule'          => (string) $rule->rule_key,
-                'affectedCount' => $affected->count(),
-                'sampleIds'     => $affected->take(5)->pluck($primaryKey)->all(),
-            ],
+            'ruleKey'        => (string) $rule->rule_key,
+            'metadata'       => $metadata,
         ], $evidenceRows);
 
-        return true;
+        return self::CREATED;
+    }
+
+    /**
+     * The unresolved signal this rule already raised, if there is one.
+     *
+     * WHY THIS EXISTS. EventPublisher derives its idempotency key from the
+     * signal's own freshly-generated UUID, so the key is new on every call and
+     * re-evaluating an unchanged condition produced a SECOND identical signal.
+     * That was tolerable while rules only ran when somebody pressed a button.
+     * It stopped being tolerable when detection became scheduled: at hourly
+     * cadence an unfixed "43 people have no department" would have produced
+     * twenty-four identical signals a day, and the attention queue — which
+     * orders by severity and count — would have filled with the same finding
+     * repeated until nothing else was visible.
+     *
+     * Matching is on the rule that raised it. Two signals from the same rule for
+     * the same tenant are the same ongoing problem, whatever the affected set
+     * happens to be this hour.
+     *
+     * Resolved and dismissed signals are deliberately NOT matched: a problem
+     * that was closed and has come back is a genuinely new observation, and
+     * recurrence after resolution is one of the more valuable things this system
+     * can tell an organization.
+     */
+    private function openSignalFor(string $tenantId, string $ruleKey): ?object
+    {
+        return DB::table('hpbrain_signals')
+            ->where('tenant_id', $tenantId)
+            ->whereNotIn('status', ['resolved', 'dismissed'])
+            // A real column, not a JSON path. Reading the key out of metadata
+            // needs JSON_UNQUOTE, which MySQL and MariaDB have and SQLite does
+            // not — so on the test database the query threw, the per-rule catch
+            // swallowed it, and every rule silently reported as skipped.
+            ->where('rule_key', $ruleKey)
+            ->orderByDesc('created_date')
+            ->first();
+    }
+
+    /**
+     * Bring an open signal up to date without raising a new one.
+     *
+     * The affected COUNT is real news even when the signal is not — "43 people
+     * have no department" becoming 51 is a deterioration somebody should see,
+     * and overwriting it keeps the queue honest without adding a row. The
+     * original created_date is left alone, because how long a problem has been
+     * open is the single most useful fact about it.
+     *
+     * @param  array<string, mixed>  $metadata
+     */
+    private function refreshSignal(string $tenantId, object $signal, array $metadata): void
+    {
+        $previous = json_decode((string) $signal->metadata, true);
+        $previous = is_array($previous) ? $previous : [];
+
+        DB::table('hpbrain_signals')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $signal->id)
+            ->update([
+                'metadata'     => json_encode(array_merge($previous, $metadata, [
+                    // What the count was when the signal was first raised, so a
+                    // screen can say whether it is getting better or worse.
+                    'firstCount'  => $previous['firstCount'] ?? ($previous['affectedCount'] ?? null),
+                    'lastSeenAt'  => now()->format('Y-m-d H:i:s'),
+                ])),
+                'updated_date' => now()->format('Y-m-d H:i:s'),
+            ]);
     }
 
     /**
@@ -467,6 +563,10 @@ final class RuleEvaluator
                     'tenant_id'      => $tenantId,
                     'source'         => $data['source'],
                     'classification' => $data['classification'],
+                    // Which rule raised this, in a column the detector can index
+                    // and query on any engine. Null for signals that do not come
+                    // from a rule at all.
+                    'rule_key'       => $data['ruleKey'] ?? null,
                     'priority'       => $data['priority'],
                     'severity'       => $data['severity'],
                     'confidence'     => $data['confidence'],
