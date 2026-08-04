@@ -208,6 +208,47 @@ final class SignalRuleParityTest extends TestCase
         );
     }
 
+    /**
+     * @test
+     *
+     * REGRESSION GUARD for a bug the suite could not see.
+     *
+     * hpbrain_evidence.signal_id carries a FOREIGN KEY to hpbrain_signals.id.
+     * The old code stored the TENANT id there, so on MySQL and MariaDB every
+     * rule that actually fired was rejected with SQLSTATE 23000 and signal
+     * generation produced NOTHING. On SQLite it looked fine, because SQLite
+     * does not enforce foreign keys unless PRAGMA foreign_keys is on — and it
+     * is not.
+     *
+     * Found by running the seeders and the evaluator against a real MariaDB
+     * instance, not by any test. This assertion is what makes the invariant
+     * visible to the suite: it fails on the old behaviour without needing the
+     * database to enforce anything.
+     */
+    public function evidence_points_at_the_signal_it_belongs_to(): void
+    {
+        $this->evaluate();
+
+        $signalIds = DB::table('hpbrain_signals')->where('tenant_id', self::TENANT)->pluck('id')->all();
+        $evidence = DB::table('hpbrain_evidence')->where('tenant_id', self::TENANT)->get();
+
+        $this->assertNotEmpty($evidence);
+
+        foreach ($evidence as $row) {
+            $this->assertContains(
+                $row->signal_id,
+                $signalIds,
+                'evidence.signal_id must reference a real signal — the foreign key on that '
+                .'column rejects anything else on MySQL/MariaDB.',
+            );
+            $this->assertNotSame(
+                self::TENANT,
+                $row->signal_id,
+                'signal_id must not be the tenant id.',
+            );
+        }
+    }
+
     /** @test */
     public function every_signal_publishes_an_observation_event(): void
     {

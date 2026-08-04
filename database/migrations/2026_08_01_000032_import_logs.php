@@ -6,6 +6,22 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * `row_number` IS BACKTICKED BECAUSE IT IS A RESERVED WORD.
+ *
+ * MariaDB 10.2 and MySQL 8.0 both introduced the ROW_NUMBER() window function
+ * and reserved the identifier. Unquoted, this CREATE TABLE fails with
+ *
+ *     SQLSTATE[42000]: 1064 ... near 'row_number INT, action VARCHAR(50) ...'
+ *
+ * and because migrations stop at the first failure, it took the FIFTEEN
+ * migrations after it down with it — including every table added in Phases 3
+ * to 5. The suite never caught it: it builds its schema by hand on SQLite,
+ * where row_number is an ordinary word.
+ *
+ * Found by running the migrations against a real MariaDB 10.11 instance, which
+ * is the only place this bug exists.
+ */
 return new class extends Migration
 {
     public function up(): void
@@ -14,7 +30,7 @@ return new class extends Migration
   id              VARCHAR(36) PRIMARY KEY,
   tenant_id       VARCHAR(36) NOT NULL,
   import_job_id   VARCHAR(36) NOT NULL,
-  row_number      INT,
+  `row_number`    INT,
   action          VARCHAR(50) NOT NULL,
   entity_type     VARCHAR(100),
   entity_id       VARCHAR(36),

@@ -155,7 +155,7 @@ final class RuleEvaluator
             return false;
         }
 
-        $evidenceIds = $this->writeEvidence($tenantId, $affected, $source, $joinSource, $evidenceFields, $rule);
+        $evidenceRows = $this->buildEvidence($affected, $source, $joinSource, $evidenceFields, $rule);
 
         $primaryKey = $joinSource === null ? $source->primaryKey : 'u_'.$source->primaryKey;
 
@@ -170,7 +170,7 @@ final class RuleEvaluator
                 'affectedCount' => $affected->count(),
                 'sampleIds'     => $affected->take(5)->pluck($primaryKey)->all(),
             ],
-        ], $evidenceIds);
+        ], $evidenceRows);
 
         return true;
     }
@@ -293,7 +293,13 @@ final class RuleEvaluator
     }
 
     /**
-     * Evidence rows for up to five affected records.
+     * Evidence CONTENT for up to five affected records — built, not written.
+     *
+     * Insertion is deferred to createSignal so the signal row exists first.
+     * hpbrain_evidence.signal_id carries a FOREIGN KEY to hpbrain_signals.id,
+     * so evidence written before its signal is rejected outright by MySQL and
+     * MariaDB. Ids are generated here because the signal's event payload has
+     * to name them before either row is written.
      *
      * evidence_fields maps OUTPUT KEY => source, so a rule controls both what
      * appears in the evidence and what it is called:
@@ -313,8 +319,7 @@ final class RuleEvaluator
      * @param  array<string, mixed>  $evidenceFields
      * @return array<int, string>
      */
-    private function writeEvidence(
-        string $tenantId,
+    private function buildEvidence(
         \Illuminate\Support\Collection $affected,
         ResolvedSource $source,
         ?ResolvedSource $joinSource,
@@ -322,7 +327,7 @@ final class RuleEvaluator
         object $rule,
     ): array {
         $prefix = $joinSource === null ? '' : 'u_';
-        $ids = [];
+        $rows = [];
 
         foreach ($affected->take(5) as $row) {
             $content = [
@@ -340,10 +345,10 @@ final class RuleEvaluator
 
             $content['issue'] = (string) $rule->recommended_action;
 
-            $ids[] = $this->createEvidence($tenantId, $content);
+            $rows[] = ['id' => Uuid::uuid4()->toString(), 'content' => $content];
         }
 
-        return $ids;
+        return $rows;
     }
 
     /** Distinguishes "the source has no such column" from a genuine null. */
@@ -423,12 +428,25 @@ final class RuleEvaluator
     }
 
     /**
+     * Write the signal and its evidence in one transaction, signal first.
+     *
+     * ORDER IS LOAD-BEARING. hpbrain_evidence.signal_id is a FOREIGN KEY to
+     * hpbrain_signals.id, so evidence written first is rejected with SQLSTATE
+     * 23000 on MySQL and MariaDB. The previous implementation sidestepped that
+     * by storing the TENANT id in signal_id — which satisfied nothing, pointed
+     * evidence at a signal that did not exist, and failed the moment foreign
+     * keys were actually enforced.
+     *
+     * The test suite could not catch it: SQLite does not enforce foreign keys
+     * unless PRAGMA foreign_keys is turned on, and it is not.
+     *
      * @param  array<string, mixed>  $data
-     * @param  array<int, string>  $evidenceIds
+     * @param  array<int, array{id: string, content: array<string, mixed>}>  $evidenceRows
      */
-    private function createSignal(string $tenantId, array $data, array $evidenceIds): string
+    private function createSignal(string $tenantId, array $data, array $evidenceRows): string
     {
         $signalId = Uuid::uuid4()->toString();
+        $evidenceIds = array_column($evidenceRows, 'id');
 
         $this->events->publishInTransaction(
             LoopEvent::OBSERVATION_MADE,
@@ -443,7 +461,7 @@ final class RuleEvaluator
                 'severity'       => $data['severity'],
                 'evidenceIds'    => $evidenceIds,
             ],
-            function () use ($signalId, $tenantId, $data) {
+            function () use ($signalId, $tenantId, $data, $evidenceRows) {
                 DB::table('hpbrain_signals')->insert([
                     'id'             => $signalId,
                     'tenant_id'      => $tenantId,
@@ -458,6 +476,11 @@ final class RuleEvaluator
                     'created_date'   => now()->format('Y-m-d H:i:s'),
                 ]);
 
+                // Now that the signal exists, its evidence can point at it.
+                foreach ($evidenceRows as $row) {
+                    $this->createEvidence($tenantId, $signalId, $row['id'], $row['content']);
+                }
+
                 return ['entityId' => $signalId, 'result' => true];
             },
             correlationId: $signalId,
@@ -467,9 +490,12 @@ final class RuleEvaluator
     }
 
     /** @param array<string, mixed> $content */
-    private function createEvidence(string $tenantId, array $content): string
-    {
-        $evidenceId = Uuid::uuid4()->toString();
+    private function createEvidence(
+        string $tenantId,
+        string $signalId,
+        string $evidenceId,
+        array $content,
+    ): string {
         $contentJson = json_encode($content);
         $provenanceJson = json_encode([
             'source'     => $content['source'],
@@ -480,11 +506,9 @@ final class RuleEvaluator
         DB::table('hpbrain_evidence')->insert([
             'id'            => $evidenceId,
             'tenant_id'     => $tenantId,
-            // Preserved from SignalGenerator, including this: signal_id is set
-            // to the TENANT id, not to a signal. It is wrong, it predates this
-            // refactor, and correcting it here would change stored rows inside a
-            // commit whose gate is that stored rows do not change.
-            'signal_id'     => $tenantId,
+            // The signal this evidence is FOR. It used to be the tenant id,
+            // which the foreign key on this column rejects outright.
+            'signal_id'     => $signalId,
             'source'        => $content['source'],
             'evidence_type' => 'observation',
             'content'       => $contentJson,
