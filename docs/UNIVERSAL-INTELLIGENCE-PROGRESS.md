@@ -113,8 +113,96 @@ No code changed. Baseline is the commit under test. Gate is definitional — pas
 
 ---
 
+## Phase 1 — EntityResolver
+
+Adds the vocabulary layer and connects nothing to it yet. **Zero behaviour change**
+is the whole claim, and `EntityMappingSeederTest` is what makes it checkable: it
+asserts the resolved strings against literals read off the code being replaced, not
+off the seeder.
+
+### What was built
+
+| File | Role |
+|---|---|
+| `app/Domain/Universal/EntityResolver.php` | Loads mappings, one query per tenant per request |
+| `app/Domain/Universal/ResolvedSource.php` | Immutable binding: table, tenantKey, primaryKey, `field()`, `has()` |
+| `app/Domain/Universal/UnsupportedEntityException.php` | Named failures: entity, field, ambiguous, incomplete |
+| `app/Providers/UniversalServiceProvider.php` | `scoped()` binding — per request, never per process |
+| `database/seeders/EntityMappingSeeder.php` | ERP mappings for every existing tenant |
+| `tests/Unit/Universal/EntityResolverTest.php` | 18 tests, weighted toward failure paths |
+| `tests/Feature/EntityMappingSeederTest.php` | 8 tests pinning resolved strings to today's literals |
+
+### Schema bug found and fixed
+
+`2026_08_01_000004_entity_mappings` declared `UNIQUE (tenant_id, source_system,
+source_entity)` while the table stores **one row per field** — `create()` writes a row
+per field and `list()` orders by `source_field`. The constraint therefore permitted
+exactly **one mapped field per entity**, making Person's eleven fields impossible to
+express. Never hit, because the table had zero consumers.
+
+Fixed by `2026_08_03_000100_entity_mappings_field_unique_key`, which replaces it with
+`UNIQUE (tenant_id, universal_entity, universal_field)`. Not simply the old key plus a
+column: keying on `source_system` would let two systems both claim `Person.email` and
+force the resolver to pick one silently. The resolver's contract is one source column
+per universal field, and the database is the right place to enforce it.
+
+The in-memory test schema declared **no unique index at all**, which is why the suite
+could not have caught this. `BuildsBrainSchema` now mirrors the corrected key.
+
+### Fields with no column behind them
+
+Four universal fields in the plan's minimum set have no source column in this ERP,
+verified against the live schema. They are left unmapped — `has()` returns false —
+rather than pointed at a lookalike:
+
+| Entity.field | Why |
+|---|---|
+| `OrganizationUnit.head` | `hrms_departments` has no manager column of any kind |
+| `Position.unit` | `hrms_job_titles` has no unit reference |
+| `Position.reportsTo` | no reporting line in the table |
+| `Position.isVacant` | no vacancy flag |
+
+**Related finding, not fixed here.** The existing rule "Departments Without Manager"
+tests `parent_id IS NULL OR parent_id = 0`. Since `hrms_departments` has no manager
+column, that predicate detects **root departments**, not headless ones. The rule, its
+catalog entry and its severity are unchanged in Phase 1 — this is a behaviour-identical
+phase — but mapping `head => parent_id` would have laundered the conflation into the
+vocabulary layer and made it look deliberate, so the mapping was omitted instead.
+Flagged for Phase 3, where rules become data and the predicate can be corrected as a
+data change with its own gate.
+
+### Design decisions worth stating
+
+- **Two reserved bindings.** Every entity must map `id` and `tenantKey`. Without a
+  tenant key the resolver would hand back a table with no way to scope reads, and the
+  first query built from it would cross tenants. Missing either throws.
+- **Seeds every tenant, not one.** All six live tenants run on the same ERP tables
+  today. Seeding a single "school" tenant would leave five resolving nothing, and since
+  the resolver fails closed, Phase 2 would break them the moment it stopped naming
+  tables directly.
+- **`transform_expression` is decoded as JSON, never as SQL.** The column is TEXT and
+  tenant-supplied; treating it as an expression to interpolate would hand the query
+  planner to whoever configures a tenant. Same reasoning the plan applies to predicates
+  in Phase 3. Text that does not parse is returned verbatim rather than nulled.
+- **`scoped()` not `singleton()`.** Mappings are configuration that changes at runtime;
+  a process-lifetime cache would serve a stale table name until the worker recycled.
+
+### Phase 1 gate
+
+| Gate | Required | Measured | |
+|---|---|---|---|
+| New tests pass | — | 26 passed, 70 assertions | ok |
+| Existing test count unchanged | 309 | 309 (335 − 26 new) | ok |
+| Existing failures unchanged | 0 | 0 | ok |
+| standalone unchanged | 42/2 | 42/2 | ok |
+| security unchanged | 25/0 | 25/0 | ok |
+| Routes unresolved | 0 | 0 | ok |
+
+---
+
 ## Phase log
 
 | Phase | Tests | Assertions | Fails | standalone | security | Routes | Unresolved | Commit |
 |---|---|---|---|---|---|---|---|---|
 | 0 baseline | 309 | 1131 | 0 | 42/2 | 25/0 | 364 | 0 | `94fc8a5` |
+| 1 EntityResolver | 335 | 1201 | 0 | 42/2 | 25/0 | 364 | 0 | `1512d48` |

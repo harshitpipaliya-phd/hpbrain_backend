@@ -9,16 +9,16 @@
 
 | Field | Value |
 |---|---|
-| Commit | `0432c490c96203b66ab866039b74d777a71d5174` |
-| Generated | 2026-07-30 05:30:32 UTC |
-| Golden intelligence flow | THE LOOP TURNS |
-| Tests | 168 |
-| Assertions | 749 |
-| Failures | 0 |
-| Routes declared | 155 |
+| Commit | `e04893e31ec970a5304d82fc773af7cafbc27d21` |
+| Generated | 2026-08-04 07:07:13 UTC |
+| Golden intelligence flow | unknown — the golden test was not run for this report |
+| Tests | unknown |
+| Assertions | unknown |
+| Failures | unknown |
+| Routes declared | 364 |
 | Routes that do not resolve | 0 |
-| SPA calls to non-existent endpoints | 0 |
-| Operations with an underived schema | 155 |
+| SPA calls to non-existent endpoints | unknown |
+| Operations with an underived schema | unknown |
 
 ## What these mean
 

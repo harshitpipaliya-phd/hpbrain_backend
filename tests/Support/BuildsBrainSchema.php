@@ -374,6 +374,13 @@ trait BuildsBrainSchema
             $t->text('created_by');
             $t->timestamp('created_date')->nullable();
             $t->timestamp('updated_date')->nullable();
+            // Mirrors 2026_08_03_000100_entity_mappings_field_unique_key. The
+            // original migration keyed on (tenant_id, source_system,
+            // source_entity), which allowed exactly one mapped field per entity
+            // and so made Person unmappable. This fixture declared no unique
+            // index at all, which is why the suite could not have caught it.
+            $t->unique(['tenant_id', 'universal_entity', 'universal_field'],
+                'entity_mappings_tenant_universal_field_unique');
         });
 
         Schema::create('hpbrain_feature_flags', function ($t) {
