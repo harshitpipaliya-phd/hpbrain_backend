@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Universal;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -35,6 +36,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class EntityResolver
 {
+    /** The one table this class reads. Every mapping in the installation lives here. */
+    private const TABLE = 'hpbrain_entity_mappings';
+
     /**
      * Universal fields that bind the source rather than describe it. Both are
      * mandatory on every mapped entity.
@@ -122,13 +126,15 @@ final class EntityResolver
      */
     public function everyTenantWith(string $entity): array
     {
-        $tenantIds = DB::table('hpbrain_entity_mappings')
-            ->where('universal_entity', $entity)
-            ->where('is_active', 1)
-            ->distinct()
-            ->orderBy('tenant_id')
-            ->pluck('tenant_id')
-            ->all();
+        $tenantIds = $this->readMappings(
+            fn () => DB::table(self::TABLE)
+                ->where('universal_entity', $entity)
+                ->where('is_active', 1)
+                ->distinct()
+                ->orderBy('tenant_id')
+                ->pluck('tenant_id')
+                ->all()
+        );
 
         $out = [];
 
@@ -162,6 +168,45 @@ final class EntityResolver
     }
 
     /**
+     * Run a read against the mappings table, naming the deployment step if the
+     * table is not there at all.
+     *
+     * ONLY "table does not exist" is translated. Every other database error is
+     * rethrown untouched: a connection failure, a permissions problem or a
+     * malformed query must not be reported as a missing migration, because that
+     * would send whoever is reading the log to fix the wrong thing.
+     *
+     * MySQL and MariaDB report this as SQLSTATE 42S02. SQLite has no SQLSTATE for
+     * it and reports HY000 with 'no such table' in the message, so both are
+     * matched — the test suite runs on SQLite and this behaviour is worth being
+     * able to assert.
+     *
+     * @template TResult
+     *
+     * @param  \Closure(): TResult  $read
+     * @return TResult
+     */
+    private function readMappings(\Closure $read): mixed
+    {
+        try {
+            return $read();
+        } catch (QueryException $e) {
+            $missing = ($e->getCode() === '42S02')
+                || str_contains($e->getMessage(), 'no such table: '.self::TABLE);
+
+            if (! $missing) {
+                throw $e;
+            }
+
+            throw UnsupportedEntityException::notInstalled(
+                self::TABLE,
+                (string) DB::connection()->getDatabaseName(),
+                $e,
+            );
+        }
+    }
+
+    /**
      * One query per tenant per request, assembled into ResolvedSource objects.
      */
     private function load(string $tenantId): void
@@ -170,12 +215,14 @@ final class EntityResolver
             return;
         }
 
-        $rows = DB::table('hpbrain_entity_mappings')
-            ->where('tenant_id', $tenantId)
-            ->where('is_active', 1)
-            ->orderBy('universal_entity')
-            ->orderBy('universal_field')
-            ->get();
+        $rows = $this->readMappings(
+            fn () => DB::table(self::TABLE)
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', 1)
+                ->orderBy('universal_entity')
+                ->orderBy('universal_field')
+                ->get()
+        );
 
         /** @var array<string, array{system: string, tables: array<string, true>, fields: array<string, array>}> $byEntity */
         $byEntity = [];

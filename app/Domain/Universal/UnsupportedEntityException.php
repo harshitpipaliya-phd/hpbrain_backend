@@ -24,8 +24,9 @@ final class UnsupportedEntityException extends RuntimeException
         public readonly string $tenantId,
         public readonly string $entity,
         public readonly ?string $field = null,
+        ?\Throwable $previous = null,
     ) {
-        parent::__construct($message);
+        parent::__construct($message, 0, $previous);
     }
 
     public static function forEntity(string $tenantId, string $entity, array $known = []): self
@@ -87,6 +88,31 @@ final class UnsupportedEntityException extends RuntimeException
             $tenantId,
             $entity,
             $missing,
+        );
+    }
+
+    /**
+     * The mappings table itself is absent — the schema was never migrated here.
+     *
+     * Distinct from every other case above, which all mean "migrated but not
+     * configured". Raw, this surfaces as SQLSTATE 42S02 from whichever query
+     * happened to run first, which names the table but not the reason, and reads
+     * like a code bug rather than a deployment step that was skipped. Login is
+     * usually where it lands, because login is the first thing to resolve an
+     * entity, so the whole application appears broken at once.
+     */
+    public static function notInstalled(string $table, string $database, ?\Throwable $previous = null): self
+    {
+        return new self(
+            "The Brain vocabulary table '{$table}' does not exist in database '{$database}', so no entity "
+            .'can be resolved and nothing that reads tenant data will work, including login. '
+            .'This database has not had the Brain schema migrated onto it: run `php artisan migrate` '
+            .'followed by `php artisan db:seed --class=EntityMappingSeeder`. '
+            .'Check `php artisan migrate:status` first — pending migrations from other modules run too.',
+            '',
+            '',
+            null,
+            $previous,
         );
     }
 }

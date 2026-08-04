@@ -351,4 +351,57 @@ final class EntityResolverTest extends TestCase
             $this->resolver()->resolve(self::SCHOOL, 'Person')->mapping('oddity')['expression'],
         );
     }
+
+    /**
+     * A database with no mappings TABLE is a different failure from a tenant with
+     * no mapping ROWS, and has to read like one.
+     *
+     * This is not hypothetical. The live ERP database carries an older Brain
+     * schema and has never had these migrations applied, so the first real
+     * request against it failed with a bare 'Base table or view not found:
+     * hp_erp.hpbrain_entity_mappings' — accurate, and useless. It names a table
+     * but not the reason, and it arrives from login, which makes a skipped
+     * deployment step look like the application is broken.
+     *
+     * @test
+     */
+    public function a_missing_mappings_table_says_the_schema_was_never_migrated(): void
+    {
+        $this->mapSchoolPerson();
+        DB::statement('DROP TABLE hpbrain_entity_mappings');
+
+        foreach ([
+            'resolve'         => fn () => $this->resolver()->resolve(self::SCHOOL, 'Person'),
+            'everyTenantWith' => fn () => $this->resolver()->everyTenantWith('Person'),
+        ] as $entryPoint => $call) {
+            try {
+                $call();
+                $this->fail("{$entryPoint}() returned instead of throwing with the table absent.");
+            } catch (UnsupportedEntityException $e) {
+                $this->assertStringContainsString('does not exist', $e->getMessage(), $entryPoint);
+                $this->assertStringContainsString('php artisan migrate', $e->getMessage(), $entryPoint);
+
+                // The original driver error is kept, so the SQLSTATE is still in
+                // the log for anyone who needs to see it.
+                $this->assertNotNull($e->getPrevious(), $entryPoint);
+            }
+        }
+    }
+
+    /**
+     * Only a missing table is reinterpreted.
+     *
+     * A tenant that simply has no rows must still get the ordinary "not mapped"
+     * error, or a configuration mistake would be reported as a missing migration
+     * and send whoever reads it to run a deployment step that will not help.
+     *
+     * @test
+     */
+    public function an_empty_table_is_not_reported_as_a_missing_one(): void
+    {
+        $this->expectException(UnsupportedEntityException::class);
+        $this->expectExceptionMessage('No active entity mapping');
+
+        $this->resolver()->resolve(self::SCHOOL, 'Person');
+    }
 }
