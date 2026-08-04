@@ -98,8 +98,10 @@ final class SignalController extends Controller
     {
         $tenant = $this->tenantId($request);
 
-        $generator = new \App\Domain\Signals\SignalGenerator($this->events);
-        $result = $generator->evaluate($tenant);
+        // Resolved from the container: SignalGenerator needs the EntityResolver
+        // as well as the publisher, and constructing it by hand here meant every
+        // new dependency became a second edit in an unrelated file.
+        $result = app(\App\Domain\Signals\RuleEvaluator::class)->evaluate($tenant);
 
         return response()->json([
             'success' => true,

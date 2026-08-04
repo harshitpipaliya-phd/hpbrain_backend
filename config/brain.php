@@ -42,6 +42,16 @@ return [
      | KASBA. Five dimensions, assessed 0-5. An unassessed dimension is null
      | and must never be defaulted to zero — "a fact the system hasn't
      | verified is null, never defaulted to 0" (Product Bible, Principles).
+     |
+     | FALLBACK ONLY since Phase 4. The authoritative assessment model is
+     | hpbrain_industry_templates.assessment_model, resolved per tenant by
+     | AssessmentModelResolver. These five apply when a tenant's industry has
+     | not declared one, which keeps every existing tenant where it was.
+     |
+     | KASBA models HUMAN capability. It is the right vocabulary for a nurse
+     | and the wrong one for a dialysis machine, whose dimensions are closer
+     | to Availability / Performance / Quality / Compliance. Scoring an
+     | asset's "attitude" produces a number that looks meaningful and is not.
      */
     'kasba' => [
         'dimensions' => ['knowledge', 'ability', 'skill', 'behaviour', 'attitude'],
@@ -109,17 +119,21 @@ return [
     ],
 
     /*
-     | The institute's existing ERP tables. The Brain reads Organization,
-     | Department and Person from these — it does not own them. Everything
-     | the Brain reasons WITH lives in hpbrain_* tables.
+     | WHERE THE SOURCE TABLES ARE DECLARED — hpbrain_entity_mappings, not here.
+     |
+     | This key used to hold a fixed map of the institute ERP's tables. It had no
+     | readers, and since Phase 2 it would have been a second and stale answer to
+     | a question the vocabulary layer now owns: every table and column the Brain
+     | reads is resolved per tenant through EntityResolver. Two descriptions of
+     | where Person lives is one too many, and the wrong one is the one someone
+     | eventually edits.
+     |
+     | To point a tenant at different tables, write mapping rows — see
+     | database/seeders/EntityMappingSeeder.php for the institute ERP's set.
+     |
+     | The Brain still does not OWN any of it. Everything it reasons WITH lives
+     | in hpbrain_* tables; everything it reasons ABOUT is read from the source.
      */
-    'erp_tables' => [
-        'organization'   => 'institute_detail',
-        'organization_x' => 'org_details',
-        'department'     => 'hrms_departments',
-        'person'         => 'tbluser',
-        'person_profile' => 'tbluserprofilemaster',
-    ],
 
     /*
     |--------------------------------------------------------------------------

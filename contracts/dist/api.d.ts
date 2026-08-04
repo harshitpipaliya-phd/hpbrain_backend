@@ -229,6 +229,10 @@ export type AnalyticsOrganizationReportGetAnalyticsTenantIdReportsOrganizationRe
 /** UNVERIFIED: App\Http\Controllers\Api\AnalyticsController@peopleReport returns a raw database row. */
 export type AnalyticsPeopleReportGetAnalyticsTenantIdReportsPeopleResponse = unknown;
 
+/** UNVERIFIED: App\Http\Controllers\Api\AnalyticsController@trend returns a raw database row. */
+export type AnalyticsTrendGetAnalyticsTenantIdTrendResponse = unknown;
+export type AnalyticsTrendGetAnalyticsTenantIdTrendError = 'metric_required';
+
 /** UNVERIFIED: App\Http\Controllers\Api\AuditController@index returns a raw database row. */
 export type AuditIndexGetAuditResponse = unknown;
 
@@ -2722,6 +2726,16 @@ export const OPERATIONS = [
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@peopleReport",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AnalyticsTrendGetAnalyticsTenantIdTrend",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/trend",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@trend",
     "unverifiedResponse": true
   },
   {

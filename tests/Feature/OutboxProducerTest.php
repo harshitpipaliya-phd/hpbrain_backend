@@ -31,6 +31,8 @@ use Tests\TestCase;
  */
 final class OutboxProducerTest extends TestCase
 {
+    use \Tests\Support\SeedsEntityMappings;
+
     private const TENANT = 'tenant-alpha';
     private const ANALYST = 'user-analyst';
     private const MANAGER = 'user-manager';
@@ -268,6 +270,17 @@ final class OutboxProducerTest extends TestCase
             'sub_institute_id' => 1, 'user_profile_id' => 1, 'status' => 1,
             'created_by' => null, 'created_at' => null, 'updated_at' => null, 'deleted_at' => null,
         ]);
+
+        // Login resolves its source rather than naming one, so the fixture has
+        // to declare where its people live.
+        //
+        // Two tenants, because this fixture has always had two identities: the
+        // Brain tables are keyed 'tenant-alpha' while the ERP row it logs in
+        // with carries sub_institute_id 1. The old login ignored tenant
+        // entirely, so the mismatch never surfaced; a tenant-scoped lookup
+        // notices it. Both are mapped rather than reconciled, because changing
+        // the fixture's ids would alter what the rest of this test exercises.
+        $this->installEntityMappings([self::TENANT, '1']);
     }
 
     private function auth(string $role, string $id): array

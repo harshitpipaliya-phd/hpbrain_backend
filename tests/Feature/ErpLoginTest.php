@@ -19,6 +19,8 @@ use Tests\TestCase;
  */
 final class ErpLoginTest extends TestCase
 {
+    use \Tests\Support\SeedsEntityMappings;
+
     private const TENANT = '1';
     private const EMAIL = 'ada.analyst@example.com';
 
@@ -100,6 +102,11 @@ final class ErpLoginTest extends TestCase
         DB::table('tbluserprofilemaster')->insert([
             'id' => 1, 'sub_institute_id' => 1, 'name' => 'Employee', 'status' => 1,
         ]);
+
+        // Login no longer assumes a table. It searches every tenant that maps
+        // Person and lets the matching row name the tenant, so this fixture now
+        // has to say where its people live — which is the point.
+        $this->installEntityMappings([self::TENANT]);
     }
 
     public function test_an_active_user_with_bcrypt_password_can_log_in(): void

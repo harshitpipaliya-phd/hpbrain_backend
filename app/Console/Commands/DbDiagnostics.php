@@ -23,9 +23,9 @@ use Illuminate\Support\Facades\Schema;
  *     cause of a slow screen, not a symptom of one.
  *   - `hpbrain_*` rows missing an index point at the backfill migration
  *     (2026_08_02_000100) not having run yet.
- *   - `tbluser` / `hrms_departments` rows missing an index point at the ERP
- *     index migration (2026_08_02_000200) not having run, or having skipped
- *     because the leading column was already covered.
+ *   - A mapped SOURCE table missing an index points at the ERP index migration
+ *     (2026_08_02_000200) not having run, or having skipped because the leading
+ *     column was already covered.
  */
 final class DbDiagnostics extends Command
 {
@@ -39,12 +39,6 @@ final class DbDiagnostics extends Command
      * @var array<string, string>
      */
     private const HOT_PATHS = [
-        // ERP tables — read on login and on every people/dashboard screen.
-        'tbluser'              => 'sub_institute_id',
-        'hrms_departments'     => 'sub_institute_id',
-        'institute_detail'     => 'sub_institute_id',
-        'org_details'          => 'sub_institute_id',
-        'tbluserprofilemaster' => 'sub_institute_id',
         // Brain tables — every read is tenant-scoped.
         'hpbrain_signals'          => 'tenant_id',
         'hpbrain_evidence'         => 'tenant_id',
@@ -55,6 +49,47 @@ final class DbDiagnostics extends Command
         'hpbrain_audit_logs'       => 'tenant_id',
         'hpbrain_event_store'      => 'tenant_id',
     ];
+
+    /**
+     * The tables worth checking: every mapped source table, plus the Brain's own.
+     *
+     * The ERP side was a hardcoded list of five. It is now read from
+     * hpbrain_entity_mappings, so a tenant on a different source system gets its
+     * tables checked without this file being edited — and, more usefully, a
+     * source table that nobody has mapped stops being reported as a hot path
+     * when it is not one.
+     *
+     * Each mapped table is paired with the column that tenant filters on, which
+     * is the resolved tenantKey. Two tenants mapping one table with different
+     * tenant keys would be a configuration error rather than a diagnostic
+     * problem; the first is reported and the disagreement surfaces as a
+     * mismatched column name in the output.
+     *
+     * @return array<string, string> table => the column the application filters on
+     */
+    private function hotPaths(): array
+    {
+        $erp = [];
+
+        try {
+            $mappings = DB::table('hpbrain_entity_mappings')
+                ->where('is_active', 1)
+                ->where('universal_field', 'tenantKey')
+                ->orderBy('source_entity')
+                ->get(['source_entity', 'source_field']);
+
+            foreach ($mappings as $row) {
+                $erp[(string) $row->source_entity] ??= (string) $row->source_field;
+            }
+        } catch (\Throwable) {
+            // The mapping table not existing is itself worth knowing, but this
+            // command is read-only diagnostics and must still report on the
+            // Brain tables it can reach.
+            $this->warn('hpbrain_entity_mappings is unreadable — source tables omitted from this report.');
+        }
+
+        return $erp + self::HOT_PATHS;
+    }
 
     public function handle(): int
     {
@@ -71,7 +106,7 @@ final class DbDiagnostics extends Command
         $rows = [];
         $problems = 0;
 
-        foreach (self::HOT_PATHS as $table => $column) {
+        foreach ($this->hotPaths() as $table => $column) {
             if (! Schema::hasTable($table)) {
                 $rows[] = [$table, $column, '—', 'TABLE MISSING', ''];
                 $problems++;

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Industry\Vocabulary;
+use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use App\Repositories\DecisionRepository;
 use App\Repositories\LearningRepository;
@@ -34,6 +36,7 @@ final class WorkspaceController extends Controller
     private const RECENT = 10;
 
     public function __construct(
+        private readonly EntityResolver $resolver,
         private readonly SignalRepository $signals,
         private readonly RecommendationRepository $recommendations,
         private readonly LearningRepository $learnings,
@@ -126,7 +129,7 @@ final class WorkspaceController extends Controller
         // THREE COUNTS OVER ONE SET OF ROWS, NOT THREE PASSES OVER THE TABLE.
         //
         // These were five separate COUNT queries — three of them scanning
-        // exactly the same tbluser rows under exactly the same predicate, then
+        // exactly the same employee rows under exactly the same predicate, then
         // discarding all but one tally. On a tenant with a large workforce that
         // is the dominant cost of loading the home screen, and it is paid three
         // times over for no additional information.
@@ -134,25 +137,33 @@ final class WorkspaceController extends Controller
         // Conditional aggregation asks the same questions in one pass. SUM(CASE
         // ...) rather than COUNT(CASE ...) because it reads the same on MySQL
         // and SQLite, and the suite runs on the latter.
-        $people = DB::table('tbluser')
-            ->where('sub_institute_id', $tenantId)
-            ->where('status', 1)
+        $person = $this->resolver->resolve($tenantId, 'Person');
+        $unit = $this->resolver->resolve($tenantId, 'OrganizationUnit');
+
+        $personUnit = $person->field('unit');
+        $personProfile = $person->field('profile');
+
+        $people = DB::table($person->table)
+            ->where($person->tenantKey, $tenantId)
+            ->where($person->field('status'), 1)
             ->whereNull('deleted_at')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN department_id IS NULL OR department_id = 0 THEN 1 ELSE 0 END) as no_department')
-            ->selectRaw('SUM(CASE WHEN user_profile_id IS NULL OR user_profile_id = 0 THEN 1 ELSE 0 END) as no_profile')
+            ->selectRaw("SUM(CASE WHEN {$personUnit} IS NULL OR {$personUnit} = 0 THEN 1 ELSE 0 END) as no_department")
+            ->selectRaw("SUM(CASE WHEN {$personProfile} IS NULL OR {$personProfile} = 0 THEN 1 ELSE 0 END) as no_profile")
             ->first();
 
         $activePeople            = (int) ($people->total ?? 0);
         $peopleWithoutDepartment = (int) ($people->no_department ?? 0);
         $peopleWithoutProfile    = (int) ($people->no_profile ?? 0);
 
-        $departments = DB::table('hrms_departments')
-            ->where('sub_institute_id', $tenantId)
-            ->where('status', 1)
+        $unitParent = $unit->field('parent');
+
+        $departments = DB::table($unit->table)
+            ->where($unit->tenantKey, $tenantId)
+            ->where($unit->field('status'), 1)
             ->whereNull('deleted_at')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN parent_id IS NULL OR parent_id = 0 THEN 1 ELSE 0 END) as no_manager')
+            ->selectRaw("SUM(CASE WHEN {$unitParent} IS NULL OR {$unitParent} = 0 THEN 1 ELSE 0 END) as no_manager")
             ->first();
 
         $activeDepartments         = (int) ($departments->total ?? 0);
@@ -182,11 +193,21 @@ final class WorkspaceController extends Controller
 
         $attention = [];
 
+        // The tenant's own words. A hospital calls them wards and a bank calls
+        // them branches; a dashboard that says "department" to both reads as a
+        // report about somebody else's organization.
+        $vocab = app(Vocabulary::class);
+        $person = $vocab->word($tenantId, 'Person');
+        $people = $vocab->words($tenantId, 'Person');
+        $unit = $vocab->word($tenantId, 'OrganizationUnit');
+        $units = $vocab->words($tenantId, 'OrganizationUnit');
+
         if ($peopleWithoutDepartment > 0) {
             $attention[] = [
                 'id' => 'people-without-dept',
-                'title' => "{$peopleWithoutDepartment} employee(s) without a department",
-                'description' => 'Employees without a department assignment may indicate incomplete onboarding or reorganization gaps.',
+                'title' => $vocab->countOf($tenantId, 'Person', $peopleWithoutDepartment)." without a {$unit}",
+                'description' => ucfirst($people)." with no {$unit} sit outside every rollup this system produces — "
+                    ."headcount, coverage and capability all under-report until it clears.",
                 'severity' => 'medium',
                 'link' => 'people',
                 'metric' => $peopleWithoutDepartment,
@@ -197,8 +218,9 @@ final class WorkspaceController extends Controller
         if ($departmentsWithoutManager > 0) {
             $attention[] = [
                 'id' => 'depts-without-manager',
-                'title' => "{$departmentsWithoutManager} department(s) without a manager",
-                'description' => 'Departments without assigned leadership may lack decision-making coverage.',
+                'title' => $vocab->countOf($tenantId, 'OrganizationUnit', $departmentsWithoutManager).' without a manager',
+                'description' => ucfirst($units).' with no assigned leadership have nobody accountable for the '
+                    .'decisions this system will recommend.',
                 'severity' => 'medium',
                 'link' => 'departments',
                 'metric' => $departmentsWithoutManager,
@@ -209,8 +231,9 @@ final class WorkspaceController extends Controller
         if ($peopleWithoutProfile > 0) {
             $attention[] = [
                 'id' => 'people-without-profile',
-                'title' => "{$peopleWithoutProfile} employee(s) without a role profile",
-                'description' => 'Users without a profile cannot be assigned correct permissions or roles.',
+                'title' => $vocab->countOf($tenantId, 'Person', $peopleWithoutProfile).' without a role profile',
+                'description' => "A {$person} with no profile cannot be assigned permissions, and cannot be "
+                    .'measured against what their role requires.',
                 'severity' => 'low',
                 'link' => 'people',
                 'metric' => $peopleWithoutProfile,

@@ -15,6 +15,8 @@ use Tests\TestCase;
  */
 final class HomeMetricsTest extends TestCase
 {
+    use \Tests\Support\SeedsEntityMappings;
+
     private const TENANT = '1';
 
     protected function setUp(): void
@@ -73,9 +75,14 @@ final class HomeMetricsTest extends TestCase
             $t->string('tenant_id', 36);
             $t->string('source');
             $t->string('classification');
+            // Which rule raised the signal. Re-detection matches on it to
+            // refresh an open signal rather than raise a duplicate.
+            $t->string('rule_key', 100)->nullable();
             $t->string('priority');
             $t->string('severity');
-            $t->decimal('confidence', 4, 4)->default(0.5);
+            // (6,4) not (4,4): four digits with four after the point cannot
+            // represent 1.0000, and a rule may state full confidence.
+            $t->decimal('confidence', 6, 4)->default(0.5);
             $t->text('metadata')->nullable();
             $t->string('status')->default('new');
             $t->string('created_by')->nullable();
@@ -181,6 +188,11 @@ final class HomeMetricsTest extends TestCase
         DB::table('tbluserprofilemaster')->insert([
             'id' => 1, 'sub_institute_id' => 1, 'name' => 'Employee', 'status' => 1,
         ]);
+
+        // Home metrics resolve their source instead of naming it, so the
+        // fixture has to say where this tenant keeps its people.
+        $this->installEntityMappings([self::TENANT]);
+        $this->installSignalRules();
     }
 
     public function test_home_metrics_returns_erp_and_intelligence_counts(): void

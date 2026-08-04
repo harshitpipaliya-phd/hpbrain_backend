@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Domain\Universal\EntityResolver;
 use App\Repositories\IndustryRepository;
 use App\Repositories\BrandingRepository;
 use App\Repositories\ModuleRepository;
@@ -20,6 +21,7 @@ final class ConfigurationEngine
         private readonly ModuleRepository $moduleRepo,
         private readonly TerminologyRepository $terminologyRepo,
         private readonly TenantConfigCache $cache,
+        private readonly EntityResolver $resolver,
     ) {
     }
 
@@ -81,9 +83,12 @@ final class ConfigurationEngine
             return $branding;
         }
 
-        $org = DB::table('institute_detail')->where('sub_institute_id', $orgId)->first();
-        if ($org && $org->industry_type) {
-            $industry = $this->industryRepo->findByCode($tenantId, $org->industry_type);
+        $source = $this->resolver->resolve($tenantId, 'Organization');
+        $industryField = $source->field('industry');
+
+        $org = DB::table($source->table)->where($source->tenantKey, $orgId)->first();
+        if ($org && $org->{$industryField}) {
+            $industry = $this->industryRepo->findByCode($tenantId, $org->{$industryField});
             if ($industry && isset($industry['settings']['branding'])) {
                 return $industry['settings']['branding'];
             }

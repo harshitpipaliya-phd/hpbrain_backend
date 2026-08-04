@@ -4,39 +4,57 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Universal\EntityResolver;
+use App\Domain\Universal\ResolvedSource;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-/** Departments are read from the ERP table hrms_departments. */
+/**
+ * Departments — OrganizationUnit in the Brain's vocabulary — are read from
+ * whichever table the tenant maps that entity to.
+ *
+ * NOT YET UNIVERSAL, and worth naming: deleted_at, created_at, updated_at and
+ * created_by are still written literally below. They are soft-delete and audit
+ * conventions rather than entity fields, so they are not in the universal field
+ * set, and a source system that spells them differently would still need code.
+ * Recorded as remaining work rather than papered over with a fallback, because a
+ * fallback is the one thing the resolver must never do.
+ */
 final class DepartmentController extends Controller
 {
+    public function __construct(private readonly EntityResolver $resolver)
+    {
+    }
+
     public function index(Request $request): JsonResponse
     {
         $t = $this->tenantId($request);
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
-        $rows = DB::table('hrms_departments')
-            ->where('sub_institute_id', $t)
+        $rows = DB::table($unit->table)
+            ->where($unit->tenantKey, $t)
             ->whereNull('deleted_at')
-            ->orderBy('id')
+            ->orderBy($unit->primaryKey)
             ->get();
 
-        return response()->json($rows->map(fn ($r) => $this->map((array) $r))->all());
+        return response()->json($rows->map(fn ($r) => $this->map((array) $r, $unit))->all());
     }
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse
     {
         $t = $this->tenantId($request);
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
-        $row = DB::table('hrms_departments')
-            ->where('id', $id)
-            ->where('sub_institute_id', $t)
+        $row = DB::table($unit->table)
+            ->where($unit->primaryKey, $id)
+            ->where($unit->tenantKey, $t)
             ->whereNull('deleted_at')
             ->first();
 
         return $row
-            ? response()->json($this->map((array) $row))
+            ? response()->json($this->map((array) $row, $unit))
             : response()->json(['error' => 'department_not_found'], 404);
     }
 
@@ -49,38 +67,47 @@ final class DepartmentController extends Controller
         ]);
 
         $t = $this->tenantId($request);
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
         $now = now()->format('Y-m-d H:i:s');
 
-        $id = DB::table('hrms_departments')->insertGetId([
-            'department'           => $data['name'],
-            'roles_responsibility' => $data['description'] ?? null,
-            'parent_id'            => $data['parentId'] ?? 0,
-            'status'               => 1,
-            'is_calculated'        => 0,
-            'sub_institute_id'     => $t,
-            'created_by'           => $this->actorErpId($request),
-            'created_at'           => $now,
-            'updated_at'           => $now,
+        $id = DB::table($unit->table)->insertGetId([
+            $unit->field('name')        => $data['name'],
+            $unit->field('description') => $data['description'] ?? null,
+            $unit->field('parent')      => $data['parentId'] ?? 0,
+            $unit->field('status')      => 1,
+            'is_calculated'             => 0,
+            $unit->tenantKey            => $t,
+            'created_by'                => $this->actorErpId($request),
+            'created_at'                => $now,
+            'updated_at'                => $now,
         ]);
 
-        return response()->json($this->map((array) DB::table('hrms_departments')->find($id)), 201);
+        return response()->json(
+            $this->map((array) DB::table($unit->table)->where($unit->primaryKey, $id)->first(), $unit),
+            201,
+        );
     }
 
-    /** ERP row -> the shape web/src/api/department.ts expects. */
-    private function map(array $row): array
+    /** Source row -> the shape web/src/api/department.ts expects. */
+    private function map(array $row, ResolvedSource $unit): array
     {
-        $parent = ($row['parent_id'] ?? 0) ? (string) $row['parent_id'] : null;
+        $parentColumn = $unit->field('parent');
+        $parent = ($row[$parentColumn] ?? 0) ? (string) $row[$parentColumn] : null;
 
         return [
-            'id'                 => (string) $row['id'],
-            'name'               => (string) ($row['department'] ?? ''),
-            'description'        => $row['roles_responsibility'] ?? null,
+            'id'                 => (string) $row[$unit->primaryKey],
+            'name'               => (string) ($row[$unit->field('name')] ?? ''),
+            'description'        => $row[$unit->field('description')] ?? null,
             'departmentType'     => 'department',
             'parentDepartmentId' => $parent,
+            // Stays null. The universal field 'head' has no column behind it in
+            // this ERP, and has() would report false — see EntityMappingSeeder.
             'headId'             => null,
-            'orgId'              => (string) ($row['sub_institute_id'] ?? ''),
-            'status'             => $row['deleted_at'] ? 'archived' : (((int) ($row['status'] ?? 0)) === 1 ? 'active' : 'inactive'),
+            'orgId'              => (string) ($row[$unit->tenantKey] ?? ''),
+            'status'             => $row['deleted_at']
+                ? 'archived'
+                : (((int) ($row[$unit->field('status')] ?? 0)) === 1 ? 'active' : 'inactive'),
             'createdBy'          => (string) ($row['created_by'] ?? 'unknown'),
             'createdDate'        => $row['created_at'] ?? null,
             'updatedDate'        => $row['updated_at'] ?? null,
@@ -106,8 +133,13 @@ final class DepartmentController extends Controller
         ]);
 
         $t = $this->tenantId($request);
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
-        $map = ['name' => 'department', 'description' => 'roles_responsibility', 'parentId' => 'parent_id'];
+        $map = [
+            'name'        => $unit->field('name'),
+            'description' => $unit->field('description'),
+            'parentId'    => $unit->field('parent'),
+        ];
         $fields = [];
         foreach ($data as $k => $v) { $fields[$map[$k]] = $v; }
 
@@ -116,9 +148,9 @@ final class DepartmentController extends Controller
         }
 
         $fields['updated_at'] = now()->format('Y-m-d H:i:s');
-        $n = DB::table('hrms_departments')
-            ->where('id', $id)
-            ->where('sub_institute_id', $t)
+        $n = DB::table($unit->table)
+            ->where($unit->primaryKey, $id)
+            ->where($unit->tenantKey, $t)
             ->whereNull('deleted_at')
             ->update($fields);
 
@@ -128,10 +160,11 @@ final class DepartmentController extends Controller
     public function archive(Request $request, string $tenantId, string $id): JsonResponse
     {
         $t = $this->tenantId($request);
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
-        $n = DB::table('hrms_departments')
-            ->where('id', $id)
-            ->where('sub_institute_id', $t)
+        $n = DB::table($unit->table)
+            ->where($unit->primaryKey, $id)
+            ->where($unit->tenantKey, $t)
             ->whereNull('deleted_at')
             ->update(['deleted_at' => now()->format('Y-m-d H:i:s')]);
 
@@ -141,10 +174,12 @@ final class DepartmentController extends Controller
     public function twin(Request $request, string $tenantId, string $id): JsonResponse
     {
         $t = $this->tenantId($request);
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
+        $person = $this->resolver->resolve($t, 'Person');
 
-        $row = DB::table('hrms_departments')
-            ->where('id', $id)
-            ->where('sub_institute_id', $t)
+        $row = DB::table($unit->table)
+            ->where($unit->primaryKey, $id)
+            ->where($unit->tenantKey, $t)
             ->whereNull('deleted_at')
             ->first();
 
@@ -154,12 +189,12 @@ final class DepartmentController extends Controller
 
         $did = (string) $id;
 
-        $personIds = DB::table('tbluser')
-            ->where('sub_institute_id', $t)
-            ->where('department_id', $id)
+        $personIds = DB::table($person->table)
+            ->where($person->tenantKey, $t)
+            ->where($person->field('unit'), $id)
             ->whereNull('deleted_at')
-            ->where('status', 1)
-            ->pluck('id')->map(fn ($v) => (string) $v)->all();
+            ->where($person->field('status'), 1)
+            ->pluck($person->primaryKey)->map(fn ($v) => (string) $v)->all();
 
         $assignments = DB::table('hpbrain_capability_assignments')
             ->where('tenant_id', $t)
@@ -236,7 +271,7 @@ final class DepartmentController extends Controller
             ])->values();
 
         return response()->json([
-            'department'           => $this->map((array) $row),
+            'department'           => $this->map((array) $row, $unit),
             'personCount'          => count($personIds),
             'capabilityHeatmap'    => $capabilityHeatmap,
             'openRiskSignalCount'  => $openRiskSignals,

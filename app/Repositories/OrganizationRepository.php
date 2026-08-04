@@ -4,65 +4,110 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use App\Domain\Universal\EntityResolver;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Organizations are NOT owned by the Brain. They are read from the institute's
- * existing ERP tables — institute_detail joined to org_details — because the
- * Product Manifesto is explicit that the Brain is "an intelligence layer above
- * existing ERP/LMS/HRMS: we integrate, we do not replace."
+ * Organizations are NOT owned by the Brain. They are read from the tenant's
+ * existing system of record, because the Product Manifesto is explicit that the
+ * Brain is "an intelligence layer above existing ERP/LMS/HRMS: we integrate, we
+ * do not replace."
  *
- * Consequence that bit the previous implementation: organizations are ALWAYS
- * present on a real tenant, so they can never be used as a "has this been
- * seeded?" sentinel. Use Brain-owned data (signals) for that.
+ * WHICH tables those are is no longer written here. Every table and column below
+ * comes from EntityResolver, so the institute ERP's organization/profile table
+ * pair is one tenant's answer rather than the only answer. A hospital keeping
+ * organizations elsewhere needs mapping rows, not an edit to this file.
+ *
+ * WHY tenantId STOPPED BEING OPTIONAL. It was `?string $tenantId = null`, where
+ * null meant "every organization the ERP has". That question no longer has an
+ * answer: mappings are per tenant, so without one there is no table to select
+ * from. No caller passed null — OrganizationController is the only consumer and
+ * always passes the authenticated tenant — so the parameter is now required
+ * rather than kept alive with a union across tenants nothing asks for.
+ *
+ * Consequence that bit the previous implementation and still holds: organizations
+ * are ALWAYS present on a real tenant, so they can never be used as a "has this
+ * been seeded?" sentinel. Use Brain-owned data (signals) for that.
  */
 final class OrganizationRepository
 {
-    public function list(?string $tenantId = null): array
+    public function __construct(private readonly EntityResolver $resolver)
     {
-        $q = DB::table('institute_detail as d')
-            ->selectRaw('d.sub_institute_id as id')
-            ->selectRaw('MAX(d.organization_name) as name')
-            ->selectRaw('MAX(d.organization_code) as org_code')
-            ->selectRaw('MAX(d.industry_type) as industry')
-            ->selectRaw('MAX(d.created_at) as created_date')
-            ->selectRaw('MAX(d.updated_at) as updated_date')
-            ->selectRaw('(SELECT legal_name FROM org_details WHERE sub_institute_id = d.sub_institute_id LIMIT 1) as legal_name')
-            ->selectRaw('(SELECT logo FROM org_details WHERE sub_institute_id = d.sub_institute_id LIMIT 1) as logo')
-            ->whereNull('d.deleted_at')
-            ->groupBy('d.sub_institute_id')
-            ->orderByDesc('d.sub_institute_id');
-
-        if ($tenantId !== null && $tenantId !== '') {
-            $q->where('d.sub_institute_id', $tenantId);
-        }
-
-        return $q->get()->map(fn ($r) => (array) $r)->all();
     }
 
-    public function create(array $input): array
+    public function list(string $tenantId): array
     {
-        return DB::transaction(function () use ($input) {
-            $next = (int) (DB::table('institute_detail')->max('sub_institute_id') ?? 0) + 1;
+        $org = $this->resolver->resolve($tenantId, 'Organization');
+        $profile = $this->resolver->resolve($tenantId, 'OrganizationProfile');
+
+        $key = $org->tenantKey;
+
+        // Identifiers are interpolated because SQL has no placeholder for them;
+        // values stay bound. Every fragment here originates in a mapping row,
+        // and the mapping table is administrator-configured data — which is why
+        // the tenant filter below is a binding and not a concatenation.
+        return DB::table($org->table.' as d')
+            ->selectRaw('d.'.$org->field('id').' as id')
+            ->selectRaw('MAX(d.'.$org->field('name').') as name')
+            ->selectRaw('MAX(d.'.$org->field('code').') as org_code')
+            ->selectRaw('MAX(d.'.$org->field('industry').') as industry')
+            ->selectRaw('MAX(d.created_at) as created_date')
+            ->selectRaw('MAX(d.updated_at) as updated_date')
+            ->selectRaw(
+                '(SELECT '.$profile->field('legalName').' FROM '.$profile->table
+                .' WHERE '.$profile->tenantKey.' = d.'.$key.' LIMIT 1) as legal_name'
+            )
+            ->selectRaw(
+                '(SELECT '.$profile->field('logo').' FROM '.$profile->table
+                .' WHERE '.$profile->tenantKey.' = d.'.$key.' LIMIT 1) as logo'
+            )
+            ->whereNull('d.deleted_at')
+            ->where('d.'.$key, $tenantId)
+            ->groupBy('d.'.$key)
+            ->orderByDesc('d.'.$key)
+            ->get()
+            ->map(fn ($r) => (array) $r)
+            ->all();
+    }
+
+    /**
+     * Creating an organization creates a TENANT, which is the one operation here
+     * that cannot resolve against its own subject: the new tenant has no
+     * mappings yet. $mappingTenantId names the tenant whose mappings describe
+     * where organizations live — in practice the authenticated caller's.
+     *
+     * It is a separate parameter rather than a key inside $input because $input
+     * is echoed back in the response, and a plumbing detail has no business
+     * appearing in the API payload.
+     */
+    public function create(string $mappingTenantId, array $input): array
+    {
+        $org = $this->resolver->resolve($mappingTenantId, 'Organization');
+        $profile = $this->resolver->resolve($mappingTenantId, 'OrganizationProfile');
+        $personProfile = $this->resolver->resolve($mappingTenantId, 'PersonProfile');
+
+        return DB::transaction(function () use ($input, $org, $profile, $personProfile) {
+            $key = $org->tenantKey;
+            $next = (int) (DB::table($org->table)->max($key) ?? 0) + 1;
             $now = now()->format('Y-m-d H:i:s');
 
-            DB::table('institute_detail')->insert([
-                'sub_institute_id'  => $next,
-                'organization_name' => $input['name'],
-                'organization_code' => $input['orgCode'] ?? null,
-                'industry_type'     => $input['industry'] ?? null,
-                'created_by'        => $input['createdBy'],
-                'created_at'        => $now,
-                'updated_at'        => $now,
+            DB::table($org->table)->insert([
+                $key                    => $next,
+                $org->field('name')     => $input['name'],
+                $org->field('code')     => $input['orgCode'] ?? null,
+                $org->field('industry') => $input['industry'] ?? null,
+                'created_by'            => $input['createdBy'],
+                'created_at'            => $now,
+                'updated_at'            => $now,
             ]);
 
-            DB::table('org_details')->insert([
-                'sub_institute_id' => $next,
-                'legal_name'       => $input['legalName'] ?? null,
-                'logo'             => $input['logo'] ?? null,
-                'created_by'       => $input['createdBy'],
-                'created_at'       => $now,
-                'updated_at'       => $now,
+            DB::table($profile->table)->insert([
+                $profile->tenantKey          => $next,
+                $profile->field('legalName') => $input['legalName'] ?? null,
+                $profile->field('logo')      => $input['logo'] ?? null,
+                'created_by'                 => $input['createdBy'],
+                'created_at'                 => $now,
+                'updated_at'                 => $now,
             ]);
 
             // The ERP requires every institute to own an 'Employee' user
@@ -71,14 +116,17 @@ final class OrganizationRepository
             // creating one the ERP has never seen, so the Brain must provision
             // that row itself. Without this, every person created in a
             // Brain-created organization fails.
-            $hasProfile = DB::table('tbluserprofilemaster')
-                ->where('sub_institute_id', $next)->where('name', 'Employee')->where('status', 1)->exists();
+            $hasProfile = DB::table($personProfile->table)
+                ->where($personProfile->tenantKey, $next)
+                ->where($personProfile->field('name'), 'Employee')
+                ->where($personProfile->field('status'), 1)
+                ->exists();
 
             if (! $hasProfile) {
-                DB::table('tbluserprofilemaster')->insert([
-                    'sub_institute_id' => $next,
-                    'name'             => 'Employee',
-                    'status'           => 1,
+                DB::table($personProfile->table)->insert([
+                    $personProfile->tenantKey       => $next,
+                    $personProfile->field('name')   => 'Employee',
+                    $personProfile->field('status') => 1,
                 ]);
             }
 

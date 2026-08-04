@@ -31,3 +31,27 @@ Schedule::command('brain:process-events --once')
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Daily metric snapshot. Idempotent within a day, so a retried run overwrites
+// rather than double-counting — see SnapshotWriter for why that cannot be left
+// to the unique index when dimension_key is nullable.
+//
+// Early morning UTC: it reads yesterday's settled state rather than racing the
+// working day it is meant to describe.
+Schedule::command('brain:snapshot')
+    ->dailyAt('02:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Detection. Until this existed the rules had one caller — an HTTP endpoint —
+// so a signal was raised only when somebody happened to open a screen. A Brain
+// that notices problems only while being watched has no history, and every
+// trend derived from it is flat for want of data rather than for want of change.
+//
+// Hourly, not daily: detection is a handful of counting queries, and WHEN
+// problems arrive is itself a finding. Ten minutes past the hour keeps it clear
+// of the top-of-hour crowd.
+Schedule::command('brain:detect')
+    ->hourlyAt(10)
+    ->withoutOverlapping()
+    ->runInBackground();

@@ -22,6 +22,8 @@ use Tests\TestCase;
  */
 final class ApiAuthorizationTest extends TestCase
 {
+    use \Tests\Support\SeedsEntityMappings;
+
     private const TENANT = 'tenant-alpha';
 
     private function token(string $role, string $tenant = self::TENANT, string $type = 'access'): string
@@ -247,6 +249,12 @@ final class ApiAuthorizationTest extends TestCase
 
         \Illuminate\Support\Facades\DB::table('institute_detail')
             ->insert(['sub_institute_id' => $subInstituteId, 'deleted_at' => null]);
+
+        // An organization the vocabulary layer cannot describe is not one this
+        // request may address — the tenant check resolves its source now, and
+        // fails closed when there is none. Production maps every tenant; the
+        // fixture has to as well.
+        $this->installEntityMappings([$subInstituteId]);
     }
 
     public function test_an_admin_may_address_an_organization_that_exists(): void
