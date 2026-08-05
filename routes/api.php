@@ -66,6 +66,7 @@ use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\ReportingStructureController;
 use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\ImportController;
+use App\Http\Controllers\Api\IngestionController;
 use App\Http\Controllers\Api\ReadinessCheckController;
 use App\Http\Controllers\Api\TemplateOverrideController;
 use App\Http\Controllers\Api\AiProviderController;
@@ -598,6 +599,15 @@ Route::prefix('v1')->group(function () {
         Route::post('imports/{tenantId}/{id}/rollback', [ImportController::class, 'rollback'])->middleware('permission:settings.manage');
         Route::get('imports/{tenantId}/{id}/logs', [ImportController::class, 'logs'])->middleware('permission:settings.manage');
 
+        // ---- Ingestion (external upload + internal ERP read) ------------------
+        // Sits with the imports routes because it writes the same
+        // hpbrain_import_jobs / hpbrain_import_logs tables and is undone by the
+        // same POST /imports/{tenantId}/{id}/rollback.
+        Route::get('ingestion/sources/{tenantId}', [IngestionController::class, 'sources'])->middleware('permission:settings.manage');
+        Route::post('ingestion/upload', [IngestionController::class, 'upload'])->middleware('permission:settings.manage');
+        Route::post('ingestion/internal', [IngestionController::class, 'internal'])->middleware('permission:settings.manage');
+        Route::post('ingestion/{tenantId}/{jobId}/commit', [IngestionController::class, 'commit'])->middleware('permission:settings.manage');
+
         Route::get('readiness-checks/{tenantId}', [ReadinessCheckController::class, 'index'])->middleware('permission:settings.manage');
         Route::post('readiness-checks', [ReadinessCheckController::class, 'store'])->middleware('permission:settings.manage');
         Route::get('readiness-checks/{tenantId}/{id}', [ReadinessCheckController::class, 'show'])->middleware('permission:settings.manage');
@@ -668,8 +678,6 @@ Route::prefix('v1')->group(function () {
             Route::post('workspace/sessions/{sessionId}/messages/{messageId}/explain', [AiWorkspaceController::class, 'explain']);
             Route::get('workspace/sessions/{sessionId}/messages/{messageId}/follow-up', [AiWorkspaceController::class, 'followUp']);
             Route::get('workspace/sessions/{sessionId}/history', [AiWorkspaceController::class, 'history']);
-
-            Route::post('/ingestion/upload', [App\Http\Controllers\Api\IngestionUploadController::class, 'upload']);
         });
     });
 });

@@ -59,7 +59,7 @@ final class UniversalOrganizationEngineTest extends TestCase
     /** @test */
     public function organization_units_endpoints_are_accessible(): void
     {
-        $response = $this->withHeaders($this->auth())->getJson("/api/v1/organization-units/".self::TENANT);
+        $response = $this->withHeaders($this->auth())->getJson("/api/v1/organization-units/".self::TENANT.'?orgId='.self::TENANT);
         $response->assertStatus(200);
     }
 

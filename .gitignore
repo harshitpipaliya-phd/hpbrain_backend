@@ -78,3 +78,5 @@ desktop.ini
 !/storage/framework/testing/.gitkeep
 !/storage/framework/views/.gitkeep
 !/storage/logs/.gitkeep
+
+.ingestion-bundle/
