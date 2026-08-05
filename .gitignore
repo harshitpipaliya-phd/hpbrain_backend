@@ -83,3 +83,8 @@ desktop.ini
 
 .env.production-backup
 .env.bak-perf
+
+# Any local .env variant - backups, per-environment copies. The checked-in
+# template is the one deliberate exception.
+.env.*
+!.env.example
