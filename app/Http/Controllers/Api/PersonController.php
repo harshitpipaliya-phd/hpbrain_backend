@@ -415,7 +415,7 @@ final class PersonController extends Controller
         $present = array_values(array_filter($breakdown, fn ($v) => $v !== null));
 
         return response()->json([
-            'person' => array_merge($this->map($person), [
+            'person' => array_merge($this->map($person, $source), [
                 'firstName' => (string) ($person['first_name'] ?? ''),
                 'lastName'  => (string) ($person['last_name'] ?? ''),
                 'email'     => (string) ($person['email'] ?? ''),

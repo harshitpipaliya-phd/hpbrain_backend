@@ -19,6 +19,11 @@ final class OrganizationUnitController extends Controller
     {
         $tenantId = $this->tenantId($request);
         $orgId = $request->query('orgId');
+
+        if (!$orgId) {
+            return response()->json(['error' => 'orgId_required'], 422);
+        }
+
         $unitType = $request->query('unitType');
         $status = $request->query('status');
 
@@ -27,7 +32,13 @@ final class OrganizationUnitController extends Controller
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $row = $this->repository->find($this->tenantId($request), $id);
+        $orgId = $request->query('orgId');
+
+        if (!$orgId) {
+            return response()->json(['error' => 'orgId_required'], 422);
+        }
+
+        $row = $this->repository->find($this->tenantId($request), $orgId, $id);
 
         return $row ? response()->json($row) : response()->json(['error' => 'organization_unit_not_found'], 404);
     }
@@ -69,14 +80,26 @@ final class OrganizationUnitController extends Controller
             'metadata'      => ['sometimes', 'nullable', 'array'],
         ]);
 
-        $row = $this->repository->update($this->tenantId($request), $id, $data);
+        $orgId = $request->query('orgId');
+
+        if (!$orgId) {
+            return response()->json(['error' => 'orgId_required'], 422);
+        }
+
+        $row = $this->repository->update($this->tenantId($request), $orgId, $id, $data);
 
         return $row ? response()->json($row) : response()->json(['error' => 'organization_unit_not_found'], 404);
     }
 
     public function destroy(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $ok = $this->repository->delete($this->tenantId($request), $id);
+        $orgId = $request->query('orgId');
+
+        if (!$orgId) {
+            return response()->json(['error' => 'orgId_required'], 422);
+        }
+
+        $ok = $this->repository->delete($this->tenantId($request), $orgId, $id);
 
         return $ok ? response()->json(['ok' => true]) : response()->json(['error' => 'organization_unit_not_found'], 404);
     }
