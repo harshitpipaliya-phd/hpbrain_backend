@@ -80,3 +80,6 @@ desktop.ini
 !/storage/logs/.gitkeep
 
 .ingestion-bundle/
+
+.env.production-backup
+.env.bak-perf
