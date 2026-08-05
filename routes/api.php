@@ -668,6 +668,8 @@ Route::prefix('v1')->group(function () {
             Route::post('workspace/sessions/{sessionId}/messages/{messageId}/explain', [AiWorkspaceController::class, 'explain']);
             Route::get('workspace/sessions/{sessionId}/messages/{messageId}/follow-up', [AiWorkspaceController::class, 'followUp']);
             Route::get('workspace/sessions/{sessionId}/history', [AiWorkspaceController::class, 'history']);
+
+            Route::post('/ingestion/upload', [App\Http\Controllers\Api\IngestionUploadController::class, 'upload']);
         });
     });
 });
