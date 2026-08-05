@@ -366,3 +366,149 @@ NEW → TRIAGED → INVESTIGATING → RESOLVED
 | `investigating` | Active investigation in progress |
 | `resolved` | Issue resolved, signal closed |
 | `dismissed` | Signal deemed invalid or not actionable |
+---
+
+# Rules over imported operational data
+
+The rules below read `hpbrain_operational_records` rather than the ERP tables.
+They are attached to a tenant by **which datasets that tenant holds**, never by
+organization name (`App\Domain\Signals\SignalRuleRegistry`), so any organization
+importing a `complaint` dataset inherits the complaint rules with no code
+change. A tenant with no imported data evaluates exactly the five ERP rules
+above and nothing else.
+
+Thresholds live in `config('brain.operational_signals')`. Every default was set
+against the FiberValley FY2025-26 distribution so that each rule fires on a
+genuine outlier rather than on ordinary operation.
+
+---
+
+## Rule: Complaint SLA Breach
+
+| Field | Value |
+|---|---|
+| **Name** | Complaint SLA Breach |
+| **Purpose** | Detect complaints resolved outside the service target, indicating field capacity or escalation failure. |
+| **Source** | `hpbrain_operational_records` where `dataset = 'complaint'` |
+| **Organization filter** | `tenant_id = :tenantId` |
+| **Calculation** | Count records in the latest month where `metric_value > complaint_sla_hours`. NULL durations are excluded, never counted as zero. |
+| **Threshold** | `complaint_sla_hours` (24), minimum `complaint_sla_minimum` (25) breaches |
+| **Severity** | High at ≥15% of the month's tickets, medium at ≥8%, else low — share, not raw count, so a larger operation is not penalised for its size |
+| **Evidence** | Up to 5 tickets with ticket number, zone, engineer, TL and actual hours |
+| **Confidence** | 1.0 (direct field comparison) |
+| **Observed** | Mar-2026: 1,266 of 4,479 tickets breached (28.3%) |
+| **Recommended action** | Review field capacity and escalation path in the affected zones |
+| **Signal source** | `import.complaint` |
+| **Signal classification** | `service_quality` |
+| **Test** | `FiberValleyImportTest::test_imported_data_produces_signals_with_linked_evidence` |
+
+---
+
+## Rule: Complaint Root Cause Unrecorded
+
+| Field | Value |
+|---|---|
+| **Name** | Complaint Root Cause Unrecorded |
+| **Purpose** | Detect closed complaints with no root cause, which makes failure-mode analysis impossible and hides recurring physical faults. |
+| **Source** | `dataset = 'complaint'`, `status = 'closed'`, `sub_category IS NULL` |
+| **Calculation** | Share of closed tickets in the latest month with no Final Solution recorded |
+| **Threshold** | `root_cause_blank_share` (0.25) |
+| **Severity** | High at ≥50%, else medium |
+| **Evidence** | Up to 5 closed tickets showing the missing field |
+| **Confidence** | 1.0 (direct field check) |
+| **Observed** | FY2025-26: 44,500 of 65,268 tickets (68%) have no Final Solution |
+| **Recommended action** | Make root cause mandatory at ticket closure |
+| **Signal source** | `import.complaint` |
+| **Signal classification** | `data_quality` |
+
+---
+
+## Rule: Repeat Complaint Subscribers
+
+| Field | Value |
+|---|---|
+| **Name** | Repeat Complaint Subscribers |
+| **Purpose** | Distinguish "tickets closed quickly" from "problems actually fixed". A subscriber calling repeatedly in one month is one unresolved fault, not several incidents — and the two are indistinguishable in an SLA report. |
+| **Source** | `dataset = 'complaint'` grouped by `subject_ref` |
+| **Calculation** | Count of subscribers with ≥ `repeat_complaint_threshold` tickets in the latest month. Derived by counting rows, not by reading the workbook's own frozen "Complains more then 1 time" formula. |
+| **Threshold** | 4 complaints per subscriber; at least 5 such subscribers |
+| **Severity** | High when the worst case is ≥8, else medium |
+| **Evidence** | Up to 5 subscribers with their ticket counts and zone |
+| **Confidence** | 0.9 |
+| **Observed** | Mar-2026: 25 subscribers at ≥4 complaints; worst case 11 |
+| **Recommended action** | Physical inspection at the affected premises rather than another remote reset |
+| **Signal source** | `import.complaint` |
+| **Signal classification** | `recurring_fault` |
+
+---
+
+## Rule: Complaint Zone Concentration
+
+| Field | Value |
+|---|---|
+| **Name** | Complaint Zone Concentration |
+| **Purpose** | Surface a network hotspot: one zone carrying a disproportionate share of complaints. |
+| **Source** | `dataset = 'complaint'` grouped by `zone` |
+| **Calculation** | Top zone's share of the latest month against an even split across observed zones |
+| **Threshold** | `zone_concentration_multiple` (4×) the even share |
+| **Severity** | High at ≥8× expected, else medium |
+| **Evidence** | Up to 5 tickets from the over-represented zone |
+| **Confidence** | 0.75 — concentration is consistent with a network fault, but also with the zone simply having more subscribers. The Brain does not hold subscriber counts per zone, so it must not claim certainty. |
+| **Observed** | Mar-2026: Katargam 676 of 4,425 (15.3%) against a 2.0% even share |
+| **Recommended action** | Inspect fibre plant and OLT capacity in the named zone |
+| **Signal source** | `import.complaint` |
+| **Signal classification** | `network_hotspot` |
+
+---
+
+## Rule: Work Order Stalled
+
+| Field | Value |
+|---|---|
+| **Name** | Work Order Stalled |
+| **Purpose** | Detect provisioning job orders pending well past target — each one a customer who has signed and is not yet connected. |
+| **Source** | `dataset = 'work_order'`, `quantity` (pending days) |
+| **Threshold** | `work_order_pending_days` (15), minimum `work_order_minimum` (5) orders |
+| **Severity** | High at ≥5% of all orders, else medium |
+| **Evidence** | Up to 5 job orders with pending days, hold status, zone, technician and TL |
+| **Confidence** | 1.0 |
+| **Observed** | 64 orders pending beyond 15 days; 213 exceeded 15 days across the year |
+| **Recommended action** | Clear the hold reason blocking each order |
+| **Signal source** | `import.work_order` |
+| **Signal classification** | `provisioning_delay` |
+
+---
+
+## Rule: Work Order Cancellation Rate
+
+| Field | Value |
+|---|---|
+| **Name** | Work Order Cancellation Rate |
+| **Purpose** | Quantify revenue lost between signature and connection. |
+| **Source** | `dataset = 'work_order'`, `status = 'Cancel'` |
+| **Threshold** | `cancellation_share` (0.04) |
+| **Severity** | High at ≥8%, else medium |
+| **Evidence** | Up to 5 cancelled orders with cancellation reason and feasibility |
+| **Confidence** | 0.85 |
+| **Observed** | 353 of 5,790 orders cancelled (6.1%); leading reasons cable laying (116) and permission (49) — both operational rather than customer choice |
+| **Recommended action** | Address the dominant operational cancellation reason |
+| **Signal source** | `import.work_order` |
+| **Signal classification** | `revenue_leakage` |
+
+---
+
+## Rule: Help Desk Call Drop Rate
+
+| Field | Value |
+|---|---|
+| **Name** | Help Desk Call Drop Rate |
+| **Purpose** | Detect subscribers unable to reach support. This rule also explains why complaint volume understates the true fault load: a subscriber who cannot get through raises no ticket at all. |
+| **Source** | `dataset = 'helpdesk_month'` — `metric_value` (offered) against `payload['Total Drop']` |
+| **Threshold** | `call_drop_rate` (0.20) |
+| **Severity** | Critical at ≥40%, high at ≥25%, else medium |
+| **Evidence** | The month's offered, answered, dropped and agent-count figures |
+| **Confidence** | 1.0 |
+| **Observed** | Jun-2025: 30,538 of 50,359 offered calls dropped (61%). Mar-2026: 25%. |
+| **Recommended action** | Review help-desk staffing against offered-call volume |
+| **Signal source** | `import.helpdesk_month` |
+| **Signal classification** | `service_accessibility` |
