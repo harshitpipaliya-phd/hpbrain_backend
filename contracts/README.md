@@ -16,7 +16,10 @@ npm install
 npm run generate     # schemas -> dist/*.d.ts
 ```
 
-Never edit `dist/`. CI fails the build if generated types are stale.
+Never edit `dist/`. Nothing checks this for you any more — the CI job that
+failed the build on stale generated types was removed with the rest of the
+workflows, so run `npm run generate` yourself after changing a schema or a
+route in `routes/api.php`.
 
 ## Open decisions -- resolve before dropping DRAFT on the ESO schema
 
