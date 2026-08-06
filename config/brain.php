@@ -104,6 +104,14 @@ return [
             'api_key' => env('ANTHROPIC_API_KEY', ''),
             'timeout' => (int) env('AI_TIMEOUT_SECONDS', 30),
         ],
+        'gemini' => [
+            'api_key' => env('GEMINI_API_KEY', ''),
+            'timeout' => (int) env('GEMINI_TIMEOUT_SECONDS', 30),
+        ],
+        'deepseek' => [
+            'api_key' => env('DEEPSEEK_API_KEY', ''),
+            'timeout' => (int) env('DEEPSEEK_TIMEOUT_SECONDS', 30),
+        ],
 
         /*
          | USD per MILLION tokens. Used only to estimate
