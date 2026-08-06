@@ -66,6 +66,7 @@ use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\ReportingStructureController;
 use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\ImportController;
+use App\Http\Controllers\Api\IngestionUploadController;
 use App\Http\Controllers\Api\ReadinessCheckController;
 use App\Http\Controllers\Api\TemplateOverrideController;
 use App\Http\Controllers\Api\AiProviderController;
@@ -511,11 +512,23 @@ Route::prefix('v1')->group(function () {
 
         Route::get('organization-units/{tenantId}', [OrganizationUnitController::class, 'index'])->middleware('permission:settings.manage');
         Route::post('organization-units', [OrganizationUnitController::class, 'store'])->middleware('permission:settings.manage');
+
+        /*
+         | LITERAL SEGMENTS BEFORE {id}. Laravel matches first-registered-wins,
+         | so while these two sat below organization-units/{tenantId}/{id} they
+         | were unreachable: /organization-units/7/hierarchy resolved to show()
+         | with $id = 'hierarchy' and answered 404 organization_unit_not_found.
+         | hierarchy() and tree() had therefore never executed
+         | (docs/API-FUNCTIONAL-AUDIT.md F3).
+         |
+         | Keep any future literal route in this block, above the {id} lines.
+         */
+        Route::get('organization-units/{tenantId}/hierarchy', [OrganizationUnitController::class, 'hierarchy'])->middleware('permission:settings.manage');
+        Route::get('organization-units/{tenantId}/tree', [OrganizationUnitController::class, 'tree'])->middleware('permission:settings.manage');
+
         Route::get('organization-units/{tenantId}/{id}', [OrganizationUnitController::class, 'show'])->middleware('permission:settings.manage');
         Route::patch('organization-units/{tenantId}/{id}', [OrganizationUnitController::class, 'update'])->middleware('permission:settings.manage');
         Route::delete('organization-units/{tenantId}/{id}', [OrganizationUnitController::class, 'destroy'])->middleware('permission:settings.manage');
-        Route::get('organization-units/{tenantId}/hierarchy', [OrganizationUnitController::class, 'hierarchy'])->middleware('permission:settings.manage');
-        Route::get('organization-units/{tenantId}/tree', [OrganizationUnitController::class, 'tree'])->middleware('permission:settings.manage');
 
         Route::get('roles/{tenantId}', [RoleController::class, 'index'])->middleware('permission:settings.manage');
         Route::post('roles', [RoleController::class, 'store'])->middleware('permission:settings.manage');
@@ -598,6 +611,26 @@ Route::prefix('v1')->group(function () {
         Route::post('imports/{tenantId}/{id}/rollback', [ImportController::class, 'rollback'])->middleware('permission:settings.manage');
         Route::get('imports/{tenantId}/{id}/logs', [ImportController::class, 'logs'])->middleware('permission:settings.manage');
 
+        /*
+         | CSV ingestion. NOT under the 'ai' prefix.
+         |
+         | `ingestion/upload` was declared inside Route::prefix('ai') below, so
+         | it resolved to /v1/ai/ingestion/upload while the client called
+         | /v1/ingestion/upload — every upload 404'd (API-FUNCTIONAL-AUDIT F4).
+         | Nothing about a CSV upload is AI, and the other two calls the screen
+         | makes had no route at all.
+         |
+         | `sources` sits before the {tenantId}/{jobId} pattern deliberately:
+         | registered after it, the literal would be swallowed, which is the
+         | same shadowing defect the audit found on organization-units.
+         |
+         | Gated on `create`, not the group's `read`. Under the ai prefix this
+         | route carried no permission at all, so a Viewer could upload.
+         */
+        Route::get('ingestion/sources/{tenantId}', [IngestionUploadController::class, 'sources']);
+        Route::post('ingestion/upload', [IngestionUploadController::class, 'upload'])->middleware('permission:create');
+        Route::post('ingestion/{tenantId}/{jobId}/commit', [IngestionUploadController::class, 'commit'])->middleware('permission:create');
+
         Route::get('readiness-checks/{tenantId}', [ReadinessCheckController::class, 'index'])->middleware('permission:settings.manage');
         Route::post('readiness-checks', [ReadinessCheckController::class, 'store'])->middleware('permission:settings.manage');
         Route::get('readiness-checks/{tenantId}/{id}', [ReadinessCheckController::class, 'show'])->middleware('permission:settings.manage');
@@ -669,7 +702,6 @@ Route::prefix('v1')->group(function () {
             Route::get('workspace/sessions/{sessionId}/messages/{messageId}/follow-up', [AiWorkspaceController::class, 'followUp']);
             Route::get('workspace/sessions/{sessionId}/history', [AiWorkspaceController::class, 'history']);
 
-            Route::post('/ingestion/upload', [App\Http\Controllers\Api\IngestionUploadController::class, 'upload']);
         });
     });
 });

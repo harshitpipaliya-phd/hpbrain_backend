@@ -29,13 +29,29 @@ final class AiWorkspaceService
         $sessionId = Uuid::uuid4()->toString();
         $now       = now()->format('Y-m-d H:i:s');
 
+        /*
+          TWO COLUMNS HERE DID NOT EXIST, NOT ONE.
+
+          The audit (docs/API-FUNCTIONAL-AUDIT.md F2) reported `user_id`,
+          because MySQL names only the first unknown column it meets and stops.
+          `is_pinned` was wrong too — the column is `pinned` — so repairing only
+          the reported one would have moved the same 500 down two lines.
+
+          hpbrain_conversation_sessions actually has:
+            id, tenant_id, org_id, title, context_type, context_entity_id,
+            created_by, created_date, updated_date, pinned, deleted_date
+
+          `created_by` was already present and already correct, so the owning
+          user needed no new column — the row simply named it twice, once
+          rightly and once not. ConversationController has always used these
+          names against this table; only this service disagreed.
+        */
         DB::table('hpbrain_conversation_sessions')->insert([
             'id'           => $sessionId,
             'tenant_id'    => $tenantId,
-            'user_id'      => $userId,
             'created_by'   => $userId,
             'title'        => $title,
-            'is_pinned'    => false,
+            'pinned'       => false,
             'created_date' => $now,
             'updated_date' => $now,
         ]);
@@ -100,7 +116,14 @@ final class AiWorkspaceService
     {
         return DB::table('hpbrain_conversation_sessions')
             ->where('tenant_id', $tenantId)
-            ->where('user_id', $userId)
+            // `created_by`, not `user_id` — see createSession(). This is the
+            // read half of the same defect; the write above could never have
+            // stored a user_id for this to match.
+            ->where('created_by', $userId)
+            // Soft-deleted sessions stay out. The column exists and nothing
+            // here was honouring it, so a deleted conversation would have
+            // reappeared in the list the moment the query started working.
+            ->whereNull('deleted_date')
             ->orderByDesc('updated_date')
             ->get()
             ->map(fn ($r) => (array) $r)

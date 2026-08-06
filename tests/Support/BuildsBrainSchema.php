@@ -1216,12 +1216,34 @@ trait BuildsBrainSchema
             $t->text('title')->nullable();
             $t->text('context_type')->nullable();
             $t->string('context_entity_id', 36)->nullable();
-            // The migration names this created_by; AiWorkspaceService writes
-            // user_id/is_pinned. Both are present so the fixture matches the
-            // live table, which carries the Part 3.3 columns.
+            /*
+              THIS FIXTURE ONCE CARRIED user_id AND is_pinned, AND NEITHER HAS
+              EVER EXISTED IN THE DATABASE.
+
+              The comment that stood here said both were present "so the fixture
+              matches the live table, which carries the Part 3.3 columns". That
+              was not true of any environment. The authoritative DDL is
+              2026_01_01_001600_conversation_engine (created_by VARCHAR(255)
+              NOT NULL) plus 2026_01_01_001700_conversation_pinning (pinned,
+              deleted_date) — and 001600 goes as far as indexing
+              (tenant_id, created_by) under the name
+              idx_conversation_sessions_user, which settles which column means
+              "the user". Confirmed against the live MariaDB table on
+              2026-08-06: id, tenant_id, org_id, title, context_type,
+              context_entity_id, created_by, created_date, updated_date,
+              pinned, deleted_date.
+
+              So the fixture had been shaped around AiWorkspaceService's bug
+              instead of around the schema, and that is precisely why the suite
+              stayed green while GET /v1/ai/workspace/sessions returned 500 in
+              production (docs/API-FUNCTIONAL-AUDIT.md F2). A hand-built test
+              schema only proves anything while it agrees with the migrations —
+              the same trap 2026_08_01_000032_import_logs records in its own
+              docblock.
+            */
             $t->string('created_by')->nullable();
-            $t->string('user_id', 36)->nullable();
-            $t->boolean('is_pinned')->default(false);
+            $t->boolean('pinned')->default(false);
+            $t->timestamp('deleted_date')->nullable();
             $t->timestamp('created_date')->nullable();
             $t->timestamp('updated_date')->nullable();
         });

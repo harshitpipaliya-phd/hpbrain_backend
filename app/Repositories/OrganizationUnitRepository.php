@@ -32,7 +32,26 @@ final class OrganizationUnitRepository extends BaseRepository
             $q->where('status', $status);
         }
 
-        return $q->orderBy('sort_order')->orderBy('name')->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
+        // ORDERED BY NAME ALONE. This read used to lead with
+        // orderBy('sort_order'), and hpbrain_organization_units has no such
+        // column — the migration never declared one — so every call raised
+        // SQLSTATE[42S22] and this endpoint had never once returned a row
+        // (docs/API-FUNCTIONAL-AUDIT.md F1).
+        //
+        // The column is NOT added, because it would be dead the moment it
+        // existed: sort_order appears exactly once in this class, in this
+        // ORDER BY. create() and update() do not write it, no caller supplies
+        // it, and no screen offers a way to reorder units. The five tables that
+        // legitimately carry sort_order — industries, modules, navigation_items,
+        // organization_types, terminology — each pair the read with a write.
+        // Adding a column that nothing populates would sort every row equal and
+        // fall through to name regardless, which is exactly what this line now
+        // does, minus a column to explain to the next reader.
+        //
+        // If ordering units by hand becomes a requirement, the change is a
+        // migration plus a write path in create()/update() — a feature, and a
+        // different piece of work from repairing a broken read.
+        return $q->orderBy('name')->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
     }
 
     public function find(string $tenantId, string $id): ?array
