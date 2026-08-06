@@ -78,3 +78,13 @@ desktop.ini
 !/storage/framework/testing/.gitkeep
 !/storage/framework/views/.gitkeep
 !/storage/logs/.gitkeep
+
+.ingestion-bundle/
+
+.env.production-backup
+.env.bak-perf
+
+# Any local .env variant - backups, per-environment copies. The checked-in
+# template is the one deliberate exception.
+.env.*
+!.env.example

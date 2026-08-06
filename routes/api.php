@@ -66,7 +66,11 @@ use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\ReportingStructureController;
 use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\ImportController;
+<<<<<<< HEAD
 use App\Http\Controllers\Api\IngestionUploadController;
+=======
+use App\Http\Controllers\Api\IngestionController;
+>>>>>>> c469402d456a8c3f32d2b480606cba4e1f1e4042
 use App\Http\Controllers\Api\ReadinessCheckController;
 use App\Http\Controllers\Api\TemplateOverrideController;
 use App\Http\Controllers\Api\AiProviderController;
@@ -611,6 +615,7 @@ Route::prefix('v1')->group(function () {
         Route::post('imports/{tenantId}/{id}/rollback', [ImportController::class, 'rollback'])->middleware('permission:settings.manage');
         Route::get('imports/{tenantId}/{id}/logs', [ImportController::class, 'logs'])->middleware('permission:settings.manage');
 
+<<<<<<< HEAD
         /*
          | CSV ingestion. NOT under the 'ai' prefix.
          |
@@ -630,6 +635,16 @@ Route::prefix('v1')->group(function () {
         Route::get('ingestion/sources/{tenantId}', [IngestionUploadController::class, 'sources']);
         Route::post('ingestion/upload', [IngestionUploadController::class, 'upload'])->middleware('permission:create');
         Route::post('ingestion/{tenantId}/{jobId}/commit', [IngestionUploadController::class, 'commit'])->middleware('permission:create');
+=======
+        // ---- Ingestion (external upload + internal ERP read) ------------------
+        // Sits with the imports routes because it writes the same
+        // hpbrain_import_jobs / hpbrain_import_logs tables and is undone by the
+        // same POST /imports/{tenantId}/{id}/rollback.
+        Route::get('ingestion/sources/{tenantId}', [IngestionController::class, 'sources'])->middleware('permission:settings.manage');
+        Route::post('ingestion/upload', [IngestionController::class, 'upload'])->middleware('permission:settings.manage');
+        Route::post('ingestion/internal', [IngestionController::class, 'internal'])->middleware('permission:settings.manage');
+        Route::post('ingestion/{tenantId}/{jobId}/commit', [IngestionController::class, 'commit'])->middleware('permission:settings.manage');
+>>>>>>> c469402d456a8c3f32d2b480606cba4e1f1e4042
 
         Route::get('readiness-checks/{tenantId}', [ReadinessCheckController::class, 'index'])->middleware('permission:settings.manage');
         Route::post('readiness-checks', [ReadinessCheckController::class, 'store'])->middleware('permission:settings.manage');
@@ -701,7 +716,10 @@ Route::prefix('v1')->group(function () {
             Route::post('workspace/sessions/{sessionId}/messages/{messageId}/explain', [AiWorkspaceController::class, 'explain']);
             Route::get('workspace/sessions/{sessionId}/messages/{messageId}/follow-up', [AiWorkspaceController::class, 'followUp']);
             Route::get('workspace/sessions/{sessionId}/history', [AiWorkspaceController::class, 'history']);
+<<<<<<< HEAD
 
+=======
+>>>>>>> c469402d456a8c3f32d2b480606cba4e1f1e4042
         });
     });
 });

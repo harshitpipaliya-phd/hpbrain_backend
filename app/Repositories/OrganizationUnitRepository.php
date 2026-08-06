@@ -18,13 +18,10 @@ final class OrganizationUnitRepository extends BaseRepository
         return ['metadata'];
     }
 
-    public function list(string $tenantId, ?string $orgId = null, ?string $unitType = null, ?string $status = null): array
+    public function list(string $tenantId, string $orgId, ?string $unitType = null, ?string $status = null): array
     {
-        $q = $this->scoped($tenantId);
+        $q = $this->scoped($tenantId)->where('org_id', $orgId);
 
-        if ($orgId !== null) {
-            $q->where('org_id', $orgId);
-        }
         if ($unitType !== null) {
             $q->where('unit_type', $unitType);
         }
@@ -54,9 +51,9 @@ final class OrganizationUnitRepository extends BaseRepository
         return $q->orderBy('name')->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
     }
 
-    public function find(string $tenantId, string $id): ?array
+    public function find(string $tenantId, string $orgId, string $id): ?array
     {
-        $row = $this->scoped($tenantId)->where('id', $id)->first();
+        $row = $this->scoped($tenantId)->where('org_id', $orgId)->where('id', $id)->first();
 
         return $row ? $this->hydrate((array) $row) : null;
     }
@@ -66,9 +63,9 @@ final class OrganizationUnitRepository extends BaseRepository
         return $this->list($tenantId, $orgId);
     }
 
-    public function findByParent(string $tenantId, string $parentUnitId): array
+    public function findByParent(string $tenantId, string $orgId, string $parentUnitId): array
     {
-        return $this->scoped($tenantId)->where('parent_unit_id', $parentUnitId)->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
+        return $this->scoped($tenantId)->where('org_id', $orgId)->where('parent_unit_id', $parentUnitId)->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
     }
 
     public function create(string $tenantId, array $data): array
@@ -95,10 +92,10 @@ final class OrganizationUnitRepository extends BaseRepository
             'updated_date' => $now,
         ]);
 
-        return $this->find($tenantId, $id);
+        return $this->find($tenantId, $data['org_id'] ?? null, $id);
     }
 
-    public function update(string $tenantId, string $id, array $data): ?array
+    public function update(string $tenantId, string $orgId, string $id, array $data): ?array
     {
         $now = $this->now();
         $fields = ['updated_date' => $now];
@@ -126,14 +123,14 @@ final class OrganizationUnitRepository extends BaseRepository
             $fields['metadata'] = $data['metadata'] !== null ? json_encode($data['metadata']) : null;
         }
 
-        $this->scoped($tenantId)->where('id', $id)->update($fields);
+        $this->scoped($tenantId)->where('org_id', $orgId)->where('id', $id)->update($fields);
 
-        return $this->find($tenantId, $id);
+        return $this->find($tenantId, $orgId, $id);
     }
 
-    public function delete(string $tenantId, string $id): bool
+    public function delete(string $tenantId, string $orgId, string $id): bool
     {
-        return $this->scoped($tenantId)->where('id', $id)->delete() > 0;
+        return $this->scoped($tenantId)->where('org_id', $orgId)->where('id', $id)->delete() > 0;
     }
 
     public function getHierarchy(string $tenantId, string $orgId, ?string $parentId = null): array

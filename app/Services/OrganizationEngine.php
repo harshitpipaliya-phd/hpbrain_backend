@@ -65,7 +65,7 @@ final class OrganizationEngine
             if (isset($data['units']) && is_array($data['units'])) {
                 foreach ($data['units'] as $unit) {
                     if (isset($unit['id'])) {
-                        $this->unitRepository->update($tenantId, $unit['id'], $unit);
+                        $this->unitRepository->update($tenantId, $orgId, $unit['id'], $unit);
                     } else {
                         $this->unitRepository->create($tenantId, array_merge($unit, ['org_id' => $orgId, 'created_by' => $data['created_by']]));
                     }
@@ -82,7 +82,7 @@ final class OrganizationEngine
 
         return DB::transaction(function () use ($tenantId, $orgId, $units) {
             foreach ($units as $unit) {
-                $this->unitRepository->update($tenantId, $unit['id'], ['status' => 'archived']);
+                $this->unitRepository->update($tenantId, $orgId, $unit['id'], ['status' => 'archived']);
             }
 
             return true;

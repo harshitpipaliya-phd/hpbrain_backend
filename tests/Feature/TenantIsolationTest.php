@@ -97,4 +97,62 @@ final class TenantIsolationTest extends TestCase
         $result = $engine->getIndustry('healthcare');
         $this->assertEquals('Healthcare Platform', $result['name'] ?? null);
     }
+
+    /** @test */
+    public function tenant_cannot_read_another_tenant_organization_units(): void
+    {
+        DB::table('hpbrain_organization_units')->insert([
+            [
+                'id' => 'unit-a-1',
+                'tenant_id' => self::TENANT_A,
+                'org_id' => 'org-a',
+                'unit_type' => 'department',
+                'name' => 'Engineering',
+                'status' => 'active',
+                'created_by' => 'test',
+                'created_date' => '2026-01-01 00:00:00',
+                'updated_date' => '2026-01-01 00:00:00',
+            ],
+            [
+                'id' => 'unit-a-2',
+                'tenant_id' => self::TENANT_A,
+                'org_id' => 'org-a',
+                'unit_type' => 'department',
+                'name' => 'HR',
+                'status' => 'active',
+                'created_by' => 'test',
+                'created_date' => '2026-01-01 00:00:00',
+                'updated_date' => '2026-01-01 00:00:00',
+            ],
+            [
+                'id' => 'unit-b-1',
+                'tenant_id' => self::TENANT_B,
+                'org_id' => 'org-b',
+                'unit_type' => 'department',
+                'name' => 'Sales',
+                'status' => 'active',
+                'created_by' => 'test',
+                'created_date' => '2026-01-01 00:00:00',
+                'updated_date' => '2026-01-01 00:00:00',
+            ],
+        ]);
+
+        $response = $this->withHeaders($this->auth('admin', self::TENANT_A))
+            ->getJson('/api/v1/organization-units/'.self::TENANT_A.'?orgId=org-a');
+
+        $response->assertStatus(200);
+        $response->assertJsonFragment(['name' => 'Engineering']);
+        $response->assertJsonFragment(['name' => 'HR']);
+        $response->assertJsonMissing(['name' => 'Sales']);
+    }
+
+    /** @test */
+    public function organization_unit_index_requires_orgId(): void
+    {
+        $response = $this->withHeaders($this->auth('admin', self::TENANT_A))
+            ->getJson('/api/v1/organization-units/'.self::TENANT_A);
+
+        $response->assertStatus(422);
+        $response->assertJson(['error' => 'orgId_required']);
+    }
 }

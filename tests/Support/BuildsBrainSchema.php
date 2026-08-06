@@ -853,6 +853,9 @@ trait BuildsBrainSchema
             $t->timestamp('completed_date')->nullable();
             $t->timestamp('created_date')->nullable();
             $t->timestamp('updated_date')->nullable();
+            $t->string('source_id', 36)->nullable();
+            $t->string('sync_type', 50)->nullable();
+            $t->text('source_ref')->nullable();
         });
 
         Schema::create('hpbrain_import_logs', function ($t) {
@@ -866,6 +869,22 @@ trait BuildsBrainSchema
             $t->text('data')->nullable();
             $t->text('error_message')->nullable();
             $t->timestamp('created_date')->nullable();
+        });
+
+        Schema::create('hpbrain_data_sources', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('source_key', 191);
+            $t->string('source_type', 50);
+            $t->string('display_name');
+            $t->string('universal_entity', 100)->nullable();
+            $t->text('field_map')->nullable();
+            $t->string('checkpoint')->nullable();
+            $t->timestamp('last_synced_at')->nullable();
+            $t->boolean('is_active')->default(true);
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
         });
 
         Schema::create('hpbrain_readiness_checks', function ($t) {
