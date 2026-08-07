@@ -15,6 +15,11 @@ abstract class Controller
         return (string) $request->attributes->get('tenantId');
     }
 
+    protected function authTenantId(Request $request): string
+    {
+        return (string) $request->attributes->get('auth.tenantId');
+    }
+
     /**
      * The actor as the Brain knows it: a string id (UUID from
      * hpbrain_auth_users, or 'dev-user-1' under the dev-bypass token). Correct

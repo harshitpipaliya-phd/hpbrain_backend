@@ -9,7 +9,9 @@ use App\Domain\Universal\ResolvedSource;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Departments — OrganizationUnit in the Brain's vocabulary — are read from
@@ -30,28 +32,34 @@ final class DepartmentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
-        $rows = DB::table($unit->table)
+        $query = DB::table($unit->table)
             ->where($unit->tenantKey, $t)
             ->whereNull('deleted_at')
-            ->orderBy($unit->primaryKey)
-            ->get();
+            ->orderBy($unit->primaryKey);
+
+        $this->applyDepartmentVisibilityScope($query, $unit, $t);
+
+        $rows = $query->get();
 
         return response()->json($rows->map(fn ($r) => $this->map((array) $r, $unit))->all());
     }
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
-        $row = DB::table($unit->table)
+        $query = DB::table($unit->table)
             ->where($unit->primaryKey, $id)
             ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->first();
+            ->whereNull('deleted_at');
+
+        $this->applyDepartmentVisibilityScope($query, $unit, $t);
+
+        $row = $query->first();
 
         return $row
             ? response()->json($this->map((array) $row, $unit))
@@ -66,7 +74,7 @@ final class DepartmentController extends Controller
             'parentId'    => ['nullable', 'integer'],
         ]);
 
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
         $now = now()->format('Y-m-d H:i:s');
@@ -118,7 +126,7 @@ final class DepartmentController extends Controller
     {
         return response()->json(
             DB::table('hpbrain_audit_logs')
-                ->where('tenant_id', $this->tenantId($request))
+                ->where('tenant_id', $this->authTenantId($request))
                 ->where('entity_type', 'Department')->where('entity_id', $id)
                 ->orderByDesc('created_at')->get()
         );
@@ -132,7 +140,7 @@ final class DepartmentController extends Controller
             'parentId'    => ['sometimes', 'nullable', 'integer'],
         ]);
 
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
         $map = [
@@ -148,40 +156,49 @@ final class DepartmentController extends Controller
         }
 
         $fields['updated_at'] = now()->format('Y-m-d H:i:s');
-        $n = DB::table($unit->table)
+        $query = DB::table($unit->table)
             ->where($unit->primaryKey, $id)
             ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->update($fields);
+            ->whereNull('deleted_at');
+
+        $this->applyDepartmentVisibilityScope($query, $unit, $t);
+
+        $n = $query->update($fields);
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'department_not_found'], 404);
     }
 
     public function archive(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
-        $n = DB::table($unit->table)
+        $query = DB::table($unit->table)
             ->where($unit->primaryKey, $id)
             ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->update(['deleted_at' => now()->format('Y-m-d H:i:s')]);
+            ->whereNull('deleted_at');
+
+        $this->applyDepartmentVisibilityScope($query, $unit, $t);
+
+        $n = $query->update(['deleted_at' => now()->format('Y-m-d H:i:s')]);
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'department_not_found'], 404);
     }
 
     public function twin(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
         $person = $this->resolver->resolve($t, 'Person');
 
-        $row = DB::table($unit->table)
+        $query = DB::table($unit->table)
             ->where($unit->primaryKey, $id)
             ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->first();
+            ->whereNull('deleted_at');
+
+        $this->applyDepartmentVisibilityScope($query, $unit, $t);
+
+        $row = $query->first();
 
         if (! $row) {
             return response()->json(['error' => 'department_not_found'], 404);
@@ -281,5 +298,66 @@ final class DepartmentController extends Controller
             'openCasesTenantWide'  => DB::table('hpbrain_cases')
                 ->where('tenant_id', $t)->whereNotIn('status', ['closed'])->count(),
         ]);
+    }
+
+    private function applyDepartmentVisibilityScope(Builder $query, ResolvedSource $unit, string $tenantId): void
+    {
+        if ($unit->table !== 'hrms_departments') {
+            return;
+        }
+
+        if ($this->hasColumn($unit->table, 'is_calculated')) {
+            $query->where(fn (Builder $w) => $w->where('is_calculated', 0)->orWhereNull('is_calculated'));
+        }
+
+        if (! $this->hasColumns($unit->table, ['is_calculated', 'created_by', 'created_at', 'deleted_at'])) {
+            return;
+        }
+
+        $currentCohortStart = DB::table($unit->table)
+            ->where($unit->tenantKey, $tenantId)
+            ->whereNull('deleted_at')
+            ->where(fn (Builder $w) => $w->where('is_calculated', 0)->orWhereNull('is_calculated'))
+            ->whereNull('created_by')
+            ->whereNotNull('created_at')
+            ->min('created_at');
+
+        if ($currentCohortStart === null) {
+            return;
+        }
+
+        $hasTemplateRows = DB::table($unit->table)
+            ->where($unit->tenantKey, $tenantId)
+            ->whereNull('deleted_at')
+            ->where('is_calculated', 1)
+            ->exists();
+
+        $hasOlderManualRows = DB::table($unit->table)
+            ->where($unit->tenantKey, $tenantId)
+            ->whereNull('deleted_at')
+            ->where(fn (Builder $w) => $w->where('is_calculated', 0)->orWhereNull('is_calculated'))
+            ->whereNotNull('created_by')
+            ->where('created_at', '<', $currentCohortStart)
+            ->exists();
+
+        if ($hasTemplateRows && $hasOlderManualRows) {
+            $query->where('created_at', '>=', $currentCohortStart);
+        }
+    }
+
+    private function hasColumns(string $table, array $columns): bool
+    {
+        foreach ($columns as $column) {
+            if (! $this->hasColumn($table, $column)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        return Schema::hasColumn($table, $column);
     }
 }

@@ -55,7 +55,7 @@ final class PersonController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $person = $this->resolver->resolve($t, 'Person');
 
         return response()->json(
@@ -73,7 +73,7 @@ final class PersonController extends Controller
     public function search(Request $request): JsonResponse
     {
         $q = trim((string) $request->query('q', ''));
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $person = $this->resolver->resolve($t, 'Person');
 
         $searchable = $person->columns(['firstName', 'lastName', 'email', 'externalRef']);
@@ -94,7 +94,7 @@ final class PersonController extends Controller
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $person = $this->resolver->resolve($t, 'Person');
 
         $row = DB::table($person->table)
@@ -121,7 +121,7 @@ final class PersonController extends Controller
             'gender'     => ['nullable', 'string'],
         ]);
 
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $person = $this->resolver->resolve($t, 'Person');
         $profile = $this->resolver->resolve($t, 'PersonProfile');
 
@@ -203,7 +203,7 @@ final class PersonController extends Controller
     {
         return response()->json(
             DB::table('hpbrain_audit_logs')
-                ->where('tenant_id', $this->tenantId($request))
+                ->where('tenant_id', $this->authTenantId($request))
                 ->where('entity_type', 'Person')->where('entity_id', $id)
                 ->orderByDesc('created_at')->get()
         );
@@ -218,7 +218,7 @@ final class PersonController extends Controller
             'phone'     => ['sometimes', 'nullable', 'string'],
         ]);
 
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $person = $this->resolver->resolve($t, 'Person');
 
         $map = [
@@ -246,7 +246,7 @@ final class PersonController extends Controller
 
     public function archive(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $person = $this->resolver->resolve($t, 'Person');
 
         $n = DB::table($person->table)
@@ -266,7 +266,7 @@ final class PersonController extends Controller
 
     public function twin(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $t = $this->tenantId($request);
+        $t = $this->authTenantId($request);
         $source = $this->resolver->resolve($t, 'Person');
 
         $row = DB::table($source->table)

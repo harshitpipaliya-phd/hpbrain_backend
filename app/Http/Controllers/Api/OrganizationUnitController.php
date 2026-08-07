@@ -17,11 +17,11 @@ final class OrganizationUnitController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $tenantId = $this->tenantId($request);
-        $orgId = $request->query('orgId');
+        $tenantId = $this->authTenantId($request);
+        $orgId = $this->scopedOrgId($request, $tenantId);
 
-        if (!$orgId) {
-            return response()->json(['error' => 'orgId_required'], 422);
+        if ($orgId instanceof JsonResponse) {
+            return $orgId;
         }
 
         $unitType = $request->query('unitType');
@@ -32,13 +32,14 @@ final class OrganizationUnitController extends Controller
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $orgId = $request->query('orgId');
+        $tenant = $this->authTenantId($request);
+        $orgId = $this->scopedOrgId($request, $tenant);
 
-        if (!$orgId) {
-            return response()->json(['error' => 'orgId_required'], 422);
+        if ($orgId instanceof JsonResponse) {
+            return $orgId;
         }
 
-        $row = $this->repository->find($this->tenantId($request), $orgId, $id);
+        $row = $this->repository->find($tenant, $orgId, $id);
 
         return $row ? response()->json($row) : response()->json(['error' => 'organization_unit_not_found'], 404);
     }
@@ -59,9 +60,11 @@ final class OrganizationUnitController extends Controller
             'metadata'      => ['nullable', 'array'],
         ]);
 
+        $tenantId = $this->authTenantId($request);
+        $data['org_id'] = $tenantId;
         $data['created_by'] = $this->actorId($request);
 
-        return response()->json($this->repository->create($this->tenantId($request), $data), 201);
+        return response()->json($this->repository->create($tenantId, $data), 201);
     }
 
     public function update(Request $request, string $tenantId, string $id): JsonResponse
@@ -80,49 +83,65 @@ final class OrganizationUnitController extends Controller
             'metadata'      => ['sometimes', 'nullable', 'array'],
         ]);
 
-        $orgId = $request->query('orgId');
+        $tenant = $this->authTenantId($request);
+        $orgId = $this->scopedOrgId($request, $tenant);
 
-        if (!$orgId) {
-            return response()->json(['error' => 'orgId_required'], 422);
+        if ($orgId instanceof JsonResponse) {
+            return $orgId;
         }
 
-        $row = $this->repository->update($this->tenantId($request), $orgId, $id, $data);
+        unset($data['org_id']);
+        $row = $this->repository->update($tenant, $orgId, $id, $data);
 
         return $row ? response()->json($row) : response()->json(['error' => 'organization_unit_not_found'], 404);
     }
 
     public function destroy(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $orgId = $request->query('orgId');
+        $tenant = $this->authTenantId($request);
+        $orgId = $this->scopedOrgId($request, $tenant);
 
-        if (!$orgId) {
-            return response()->json(['error' => 'orgId_required'], 422);
+        if ($orgId instanceof JsonResponse) {
+            return $orgId;
         }
 
-        $ok = $this->repository->delete($this->tenantId($request), $orgId, $id);
+        $ok = $this->repository->delete($tenant, $orgId, $id);
 
         return $ok ? response()->json(['ok' => true]) : response()->json(['error' => 'organization_unit_not_found'], 404);
     }
 
     public function hierarchy(Request $request, string $tenantId): JsonResponse
     {
-        $orgId = $request->query('orgId');
+        $tenant = $this->authTenantId($request);
+        $orgId = $this->scopedOrgId($request, $tenant);
 
-        if (!$orgId) {
-            return response()->json(['error' => 'orgId_required'], 422);
+        if ($orgId instanceof JsonResponse) {
+            return $orgId;
         }
 
-        return response()->json($this->repository->getHierarchy($this->tenantId($request), $orgId));
+        return response()->json($this->repository->getHierarchy($tenant, $orgId));
     }
 
     public function tree(Request $request, string $tenantId): JsonResponse
     {
-        $orgId = $request->query('orgId');
+        $tenant = $this->authTenantId($request);
+        $orgId = $this->scopedOrgId($request, $tenant);
 
-        if (!$orgId) {
-            return response()->json(['error' => 'orgId_required'], 422);
+        if ($orgId instanceof JsonResponse) {
+            return $orgId;
         }
 
-        return response()->json($this->repository->getHierarchy($this->tenantId($request), $orgId));
+        return response()->json($this->repository->getHierarchy($tenant, $orgId));
+    }
+
+    private function scopedOrgId(Request $request, string $tenantId): string|JsonResponse
+    {
+        $orgId = $request->query('orgId');
+
+        if ($orgId !== null && (string) $orgId !== $tenantId) {
+            return response()->json(['error' => 'tenant_mismatch'], 403);
+        }
+
+        return $tenantId;
     }
 }

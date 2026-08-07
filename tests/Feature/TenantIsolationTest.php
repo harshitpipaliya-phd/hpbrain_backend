@@ -105,7 +105,7 @@ final class TenantIsolationTest extends TestCase
             [
                 'id' => 'unit-a-1',
                 'tenant_id' => self::TENANT_A,
-                'org_id' => 'org-a',
+                'org_id' => self::TENANT_A,
                 'unit_type' => 'department',
                 'name' => 'Engineering',
                 'status' => 'active',
@@ -116,7 +116,7 @@ final class TenantIsolationTest extends TestCase
             [
                 'id' => 'unit-a-2',
                 'tenant_id' => self::TENANT_A,
-                'org_id' => 'org-a',
+                'org_id' => self::TENANT_A,
                 'unit_type' => 'department',
                 'name' => 'HR',
                 'status' => 'active',
@@ -127,7 +127,7 @@ final class TenantIsolationTest extends TestCase
             [
                 'id' => 'unit-b-1',
                 'tenant_id' => self::TENANT_B,
-                'org_id' => 'org-b',
+                'org_id' => self::TENANT_B,
                 'unit_type' => 'department',
                 'name' => 'Sales',
                 'status' => 'active',
@@ -138,7 +138,7 @@ final class TenantIsolationTest extends TestCase
         ]);
 
         $response = $this->withHeaders($this->auth('admin', self::TENANT_A))
-            ->getJson('/api/v1/organization-units/'.self::TENANT_A.'?orgId=org-a');
+            ->getJson('/api/v1/organization-units/'.self::TENANT_A);
 
         $response->assertStatus(200);
         $response->assertJsonFragment(['name' => 'Engineering']);
@@ -147,12 +147,12 @@ final class TenantIsolationTest extends TestCase
     }
 
     /** @test */
-    public function organization_unit_index_requires_orgId(): void
+    public function organization_unit_index_rejects_a_forged_orgId(): void
     {
         $response = $this->withHeaders($this->auth('admin', self::TENANT_A))
-            ->getJson('/api/v1/organization-units/'.self::TENANT_A);
+            ->getJson('/api/v1/organization-units/'.self::TENANT_A.'?orgId='.self::TENANT_B);
 
-        $response->assertStatus(422);
-        $response->assertJson(['error' => 'orgId_required']);
+        $response->assertStatus(403);
+        $response->assertJson(['error' => 'tenant_mismatch']);
     }
 }

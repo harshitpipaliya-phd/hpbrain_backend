@@ -20,15 +20,8 @@ use Tests\Support\BuildsBrainSchema;
  * of representative routes; this proves it on all of them, generated from the
  * live route table so a new route is covered the day it is declared.
  *
- * THE ADMIN WIDENING IS DELIBERATE AND IS BOUNDED HERE. EnsureTenantScope lets
- * an admin address any organization that actually exists, because the Brain
- * keys data by the institute's sub_institute_id while a token carries exactly
- * one tenant claim — without the widening, every organization except the
- * token's own was unreadable and the intelligence screens could not show their
- * data under any URL. That is a real widening, so the tests below pin BOTH
- * halves of the bargain: what it permits, and every limit on it. Test names say
- * "deliberately" where the behaviour is intended, so a future reader does not
- * mistake a designed permission for a hole.
+     * Admin users are pinned to the tenant claim too. A route tenant that differs
+     * from the token tenant is a tenant mismatch, not an organization switch.
  */
 final class TenantIsolationMatrixTest extends TestCase
 {
@@ -177,28 +170,22 @@ final class TenantIsolationMatrixTest extends TestCase
         }
     }
 
-    // ---- The admin widening, and every bound on it ---------------------------
+    // ---- Admins are pinned to the same boundary ------------------------------
 
-    public function test_an_admin_may_deliberately_address_an_organization_that_exists(): void
+    public function test_an_admin_cannot_address_another_organization_that_exists(): void
     {
         $this->seedOrganization('6');
 
-        // The widening itself. Without it, an operator working across
-        // organizations cannot address any tenant but the one named in their
-        // single token claim.
-        $status = $this->getJson('/api/v1/workspace/6', $this->auth('admin'))->status();
-
-        self::assertNotSame(403, $status, 'admin should be able to address organization 6');
+        $this->getJson('/api/v1/workspace/6', $this->auth('admin'))
+            ->assertStatus(403)
+            ->assertJson(['error' => 'tenant_mismatch']);
     }
 
-    public function test_the_widening_deliberately_reaches_admin_only_and_no_other_role(): void
+    public function test_the_cross_tenant_refusal_reaches_every_role(): void
     {
         $this->seedOrganization('6');
 
-        // BOUND 1 — role. tenant_admin sounds like it should qualify and must
-        // not: it administers ONE tenant, which is the opposite of crossing
-        // between them.
-        foreach (self::PINNED_ROLES as $role) {
+        foreach (array_merge(['admin'], self::PINNED_ROLES) as $role) {
             $this->getJson('/api/v1/workspace/6', $this->auth($role))
                 ->assertStatus(403)
                 ->assertJson(['error' => 'tenant_mismatch'], "{$role} must not cross tenants");

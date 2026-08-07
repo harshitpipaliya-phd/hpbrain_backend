@@ -71,6 +71,70 @@ final class DepartmentResolverParityTest extends TestCase
     }
 
     /** @test */
+    public function department_and_people_reads_reject_another_organization_url(): void
+    {
+        DB::table('institute_detail')->insert([
+            'sub_institute_id' => 6, 'organization_name' => 'Fiber Valley',
+            'organization_code' => 'FIBER-VALLEY', 'industry_type' => 'Operations',
+            'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-02 00:00:00',
+        ]);
+        (new EntityMappingSeeder(['6']))->run();
+
+        DB::table('hrms_departments')->insert([
+            'id' => 10, 'sub_institute_id' => 6, 'department' => 'Cabling',
+            'roles_responsibility' => 'Foreign department', 'parent_id' => 0, 'status' => 1,
+            'created_by' => 1, 'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00',
+        ]);
+
+        DB::table('tbluser')->insert([
+            'id' => 10, 'sub_institute_id' => 6, 'employee_no' => 'FV1',
+            'first_name' => 'Fiber', 'last_name' => 'Worker', 'email' => 'fiber@example.test',
+            'department_id' => 10, 'user_profile_id' => 1, 'jobtitle_id' => 1, 'status' => 1,
+        ]);
+
+        $this->withHeaders($this->auth())
+            ->getJson('/api/v1/departments/6')
+            ->assertStatus(403)
+            ->assertJson(['error' => 'tenant_mismatch']);
+
+        $this->withHeaders($this->auth())
+            ->getJson('/api/v1/people/6')
+            ->assertStatus(403)
+            ->assertJson(['error' => 'tenant_mismatch']);
+    }
+
+    /** @test */
+    public function index_prefers_the_current_imported_erp_department_cohort_over_stale_template_rows(): void
+    {
+        DB::table('hrms_departments')->insert([
+            ['id' => 100, 'sub_institute_id' => self::TENANT, 'department' => 'Current Field Unit',
+             'roles_responsibility' => null, 'parent_id' => 0, 'status' => 1, 'is_calculated' => 0,
+             'created_by' => null, 'created_at' => '2026-08-04 13:27:29', 'updated_at' => '2026-08-04 13:27:29'],
+            ['id' => 101, 'sub_institute_id' => self::TENANT, 'department' => 'Current Support Unit',
+             'roles_responsibility' => null, 'parent_id' => 0, 'status' => 1, 'is_calculated' => 0,
+             'created_by' => null, 'created_at' => '2026-08-04 13:27:30', 'updated_at' => '2026-08-04 13:27:30'],
+            ['id' => 102, 'sub_institute_id' => self::TENANT, 'department' => 'Template Unit',
+             'roles_responsibility' => null, 'parent_id' => 0, 'status' => 1, 'is_calculated' => 1,
+             'created_by' => null, 'created_at' => null, 'updated_at' => null],
+            ['id' => 103, 'sub_institute_id' => self::TENANT, 'department' => 'Old Manual Unit',
+             'roles_responsibility' => null, 'parent_id' => 0, 'status' => 1, 'is_calculated' => 0,
+             'created_by' => 29, 'created_at' => '2025-11-06 01:27:10', 'updated_at' => null],
+        ]);
+
+        $body = $this->withHeaders($this->auth())
+            ->getJson('/api/v1/departments/'.self::TENANT)
+            ->assertStatus(200)
+            ->json();
+
+        $this->assertSame(['100', '101'], array_column($body, 'id'));
+
+        $this->withHeaders($this->auth())
+            ->getJson('/api/v1/departments/'.self::TENANT.'/103')
+            ->assertStatus(404)
+            ->assertJson(['error' => 'department_not_found']);
+    }
+
+    /** @test */
     public function head_id_stays_null_because_the_source_has_no_such_column(): void
     {
         // OrganizationUnit.head is unmapped in this ERP. The honest rendering is

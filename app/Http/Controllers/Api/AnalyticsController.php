@@ -622,6 +622,103 @@ final class AnalyticsController extends Controller
     }
 
     /**
+     * Signal-specific analytics dashboard.
+     *
+     * GET /analytics/{tenantId}/signals
+     */
+    public function signals(Request $request): JsonResponse
+    {
+        $t = $this->tenantId($request);
+        $days = max(1, min(365, (int) $request->query('days', 30)));
+        $from = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))
+            ->modify('-'.$days.' days')->format('Y-m-d');
+
+        $signals = DB::table('hpbrain_signals')->where('tenant_id', $t)->get();
+
+        $openStatuses = ['new', 'triaged', 'investigating', 'evidenced'];
+        $closedStatuses = ['resolved', 'closed', 'dismissed'];
+
+        $openSignals = $signals->filter(fn ($s) => in_array(strtolower((string) $s->status), $openStatuses, true))->count();
+        $closedSignals = $signals->filter(fn ($s) => in_array(strtolower((string) $s->status), $closedStatuses, true))->count();
+
+        $arrivalTrend = $signals
+            ->where('created_date', '>=', $from)
+            ->groupBy('created_date')
+            ->map(fn ($rows) => $rows->count())
+            ->sortKeys()
+            ->map(fn ($count, $date) => ['date' => $date, 'count' => $count])
+            ->values()
+            ->all();
+
+        $resolvedSignals = $signals->filter(fn ($s) => in_array(strtolower((string) $s->status), ['resolved', 'closed'], true));
+        $resolutionTrend = $resolvedSignals
+            ->where('updated_date', '>=', $from)
+            ->groupBy('updated_date')
+            ->map(fn ($rows) => $rows->count())
+            ->sortKeys()
+            ->map(fn ($count, $date) => ['date' => $date, 'count' => $count])
+            ->values()
+            ->all();
+
+        $mttrSeconds = 0;
+        foreach ($resolvedSignals as $s) {
+            $created = new \DateTimeImmutable($s->created_date);
+            $updated = new \DateTimeImmutable($s->updated_date);
+            $mttrSeconds += max(0, $updated->getTimestamp() - $created->getTimestamp());
+        }
+        $mttrHours = $resolvedSignals->isEmpty() ? null : round($mttrSeconds / $resolvedSignals->count() / 3600, 2);
+
+        $severityCounts = [];
+        foreach ($signals as $s) {
+            $key = strtolower((string) ($s->severity ?? 'unknown'));
+            $severityCounts[$key] = ($severityCounts[$key] ?? 0) + 1;
+        }
+
+        $classificationCounts = [];
+        foreach ($signals as $s) {
+            $key = (string) ($s->classification ?? 'unclassified');
+            $classificationCounts[$key] = ($classificationCounts[$key] ?? 0) + 1;
+        }
+
+        $confidenceBands = ['high' => 0, 'medium' => 0, 'low' => 0];
+        foreach ($signals as $s) {
+            $c = (float) ($s->confidence ?? 0);
+            if ($c >= 0.7) $confidenceBands['high']++;
+            elseif ($c >= 0.4) $confidenceBands['medium']++;
+            else $confidenceBands['low']++;
+        }
+
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $thisWeekStart = $now->modify('monday this week')->format('Y-m-d');
+        $lastWeekStart = $now->modify('monday last week')->format('Y-m-d');
+        $thisWeekCount = $signals->where('created_date', '>=', $thisWeekStart)->count();
+        $lastWeekCount = $signals->where('created_date', '>=', $lastWeekStart)->where('created_date', '<', $thisWeekStart)->count();
+        $weeklyGrowth = $lastWeekCount === 0 ? null : round((($thisWeekCount - $lastWeekCount) / $lastWeekCount) * 100, 1);
+
+        $trendComparison = [
+            'thisWeek' => $thisWeekCount,
+            'lastWeek' => $lastWeekCount,
+            'growthPercent' => $weeklyGrowth,
+            'direction' => $weeklyGrowth === null ? 'stable' : ($weeklyGrowth > 0 ? 'up' : ($weeklyGrowth < 0 ? 'down' : 'stable')),
+        ];
+
+        return response()->json([
+            'tenantId' => $t,
+            'generatedAt' => now()->format('Y-m-d H:i:s'),
+            'openSignals' => $openSignals,
+            'closedSignals' => $closedSignals,
+            'arrivalTrend' => $arrivalTrend,
+            'resolutionTrend' => $resolutionTrend,
+            'mttrHours' => $mttrHours,
+            'severityCounts' => (object) $severityCounts,
+            'classificationCounts' => (object) $classificationCounts,
+            'confidenceDistribution' => (object) $confidenceBands,
+            'weeklyGrowth' => $weeklyGrowth,
+            'trendComparison' => $trendComparison,
+        ]);
+    }
+
+    /**
      * Helper: group a collection of objects by a field and count occurrences.
      *
      * @param iterable<object> $rows

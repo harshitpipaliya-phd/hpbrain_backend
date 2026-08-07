@@ -304,12 +304,13 @@ final class AuthController extends Controller
         // Unlike login, this runs behind the tenant middleware, so the tenant
         // is already verified and the source resolves directly.
         $person = $isNumeric
-            ? $this->resolver->resolve($this->tenantId($request), 'Person')
+            ? $this->resolver->resolve($this->authTenantId($request), 'Person')
             : null;
 
         if ($isNumeric) {
             $user = DB::table($person->table)
                 ->where($person->primaryKey, (int) $actor)
+                ->where($person->tenantKey, $this->authTenantId($request))
                 ->whereNull('deleted_at')
                 ->first();
         } else {

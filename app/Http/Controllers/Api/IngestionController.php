@@ -67,7 +67,7 @@ final class IngestionController extends Controller
     public function upload(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'file'      => ['required', 'file', 'mimes:csv,txt', 'max:20480'],
+            'file'      => ['required', 'file', 'mimes:csv,txt,json,xml,html,htm,md,sql,pdf,doc,docx,xls,xlsx,zip,png,jpg,jpeg', 'max:20480'],
             'source_id' => ['required', 'string', 'max:191'],
             'org_id'    => ['nullable', 'string', 'max:36'],
         ]);
@@ -240,7 +240,7 @@ final class IngestionController extends Controller
         }
 
         try {
-            if ($job['import_type'] === 'csv_upload') {
+            if (str_ends_with((string) $job['import_type'], '_upload')) {
                 return (new CsvUploadSource($tenantId, $ref, $key))->fetch();
             }
 

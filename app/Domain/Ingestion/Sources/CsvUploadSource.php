@@ -54,6 +54,20 @@ final class CsvUploadSource implements DataSource
             throw new \RuntimeException("Cannot read upload at {$this->filePath}");
         }
 
+        $extension = strtolower(pathinfo($this->filePath, PATHINFO_EXTENSION));
+
+        if ($extension === 'json') {
+            return $this->fromRows($this->readJson(), 'json_upload');
+        }
+
+        if (in_array($extension, ['txt', 'md', 'markdown', 'xml', 'html', 'htm', 'sql'], true)) {
+            return $this->fromRows($this->readText($extension), "{$extension}_upload");
+        }
+
+        if ($extension !== 'csv') {
+            return $this->fromRows($this->readBinaryMetadata($extension), "{$extension}_upload");
+        }
+
         $handle = fopen($this->filePath, 'r');
 
         if ($handle === false) {
@@ -84,10 +98,107 @@ final class CsvUploadSource implements DataSource
             fclose($handle);
         }
 
+        return $this->fromRows($rows, 'csv_upload');
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function readJson(): array
+    {
+        $raw = file_get_contents($this->filePath);
+
+        if ($raw === false) {
+            throw new \RuntimeException("Cannot read JSON upload at {$this->filePath}");
+        }
+
+        $decoded = json_decode($raw, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \RuntimeException('JSON upload is invalid: '.json_last_error_msg());
+        }
+
+        $rows = array_is_list($decoded) ? $decoded : [$decoded];
+
+        return array_map(function ($row, int $index) {
+            if (is_array($row)) {
+                return $this->flatten($row);
+            }
+
+            return [
+                'title' => basename($this->filePath).' item '.($index + 1),
+                'state' => 'uploaded',
+                'evidence_text' => is_scalar($row) ? (string) $row : json_encode($row),
+                'external_ref' => (string) ($index + 1),
+            ];
+        }, $rows, array_keys($rows));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function readText(string $extension): array
+    {
+        $raw = file_get_contents($this->filePath);
+
+        if ($raw === false) {
+            throw new \RuntimeException("Cannot read upload at {$this->filePath}");
+        }
+
+        return [[
+            'title' => basename($this->filePath),
+            'state' => 'uploaded',
+            'evidence_text' => trim($raw),
+            'external_ref' => hash('sha256', $this->filePath.'|'.filesize($this->filePath)),
+            'file_type' => $extension,
+            'file_size_bytes' => (string) filesize($this->filePath),
+        ]];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function readBinaryMetadata(string $extension): array
+    {
+        return [[
+            'title' => basename($this->filePath),
+            'state' => 'uploaded',
+            'evidence_text' => 'Binary file uploaded for AI ingestion preview. Install a format-specific extractor to index full content.',
+            'external_ref' => hash_file('sha256', $this->filePath) ?: basename($this->filePath),
+            'file_type' => $extension,
+            'file_size_bytes' => (string) filesize($this->filePath),
+        ]];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, string>
+     */
+    private function flatten(array $row, string $prefix = ''): array
+    {
+        $out = [];
+
+        foreach ($row as $key => $value) {
+            $name = $prefix === '' ? (string) $key : "{$prefix}.{$key}";
+            if (is_array($value)) {
+                $out += $this->flatten($value, $name);
+            } else {
+                $out[$name] = is_scalar($value) || $value === null ? (string) $value : json_encode($value);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private function fromRows(array $rows, string $sourceType): IngestionBatch
+    {
         return new IngestionBatch(
             tenantId: $this->tenantId,
             sourceKey: $this->sourceKey,
-            sourceType: 'csv_upload',
+            sourceType: $sourceType,
             syncType: 'one_time_historical_import',
             rows: $rows,
             fetchedAt: new \DateTimeImmutable('now', new \DateTimeZone('UTC')),

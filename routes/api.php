@@ -226,6 +226,7 @@ Route::prefix('v1')->group(function () {
         Route::get('observability/metrics/{tenantId}', [ObservabilityController::class, 'metrics']);
 
         Route::get('analytics/{tenantId}', [AnalyticsController::class, 'index']);
+        Route::get('analytics/{tenantId}/signals', [AnalyticsController::class, 'signals']);
         Route::get('analytics/{tenantId}/executive-summary', [AnalyticsController::class, 'executiveSummary']);
         Route::get('analytics/{tenantId}/decision-intelligence', [AnalyticsController::class, 'decisionIntelligence']);
         Route::get('analytics/{tenantId}/trend', [AnalyticsController::class, 'trend']);
