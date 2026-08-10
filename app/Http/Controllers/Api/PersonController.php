@@ -119,11 +119,22 @@ final class PersonController extends Controller
             'email'      => ['required', 'email'],
             'phone'      => ['nullable', 'string'],
             'gender'     => ['nullable', 'string'],
+            'departmentId' => ['nullable', 'integer'],
+            'joiningDate'  => ['nullable', 'date'],
         ]);
 
         $t = $this->authTenantId($request);
         $person = $this->resolver->resolve($t, 'Person');
         $profile = $this->resolver->resolve($t, 'PersonProfile');
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
+
+        if (!empty($data['departmentId']) && !DB::table($unit->table)
+            ->where($unit->primaryKey, $data['departmentId'])
+            ->where($unit->tenantKey, $t)
+            ->whereNull('deleted_at')
+            ->exists()) {
+            return response()->json(['error' => 'department_not_found'], 422);
+        }
 
         $profileId = DB::table($profile->table)
             ->where($profile->tenantKey, $t)
@@ -147,6 +158,8 @@ final class PersonController extends Controller
             $person->field('email')       => $data['email'],
             $person->field('phone')       => $data['phone'] ?? null,
             $person->field('gender')      => $data['gender'] ?? null,
+            $person->field('unit')        => $data['departmentId'] ?? null,
+            $person->field('joinedDate')  => $data['joiningDate'] ?? null,
             $person->tenantKey            => $t,
             $person->field('profile')     => $profileId,
             $person->field('status')      => 1,
