@@ -102,6 +102,21 @@ final class IngestionUploadTest extends TestCase
         );
     }
 
+    public function test_a_csv_with_browser_text_plain_mime_is_accepted(): void
+    {
+        $response = $this->postJson('/api/v1/ingestion/upload', [
+            'file' => UploadedFile::fake()->createWithContent(
+                'lions_fees_data.csv',
+                "Student ID,Student Name,Fee Status,Amount Due\nSTU001,Ada,Paid,0\nSTU002,Bo,Pending,12500\n",
+            )->mimeType('text/plain'),
+            'source_id' => 'lions-fees-data',
+        ], ['Authorization' => 'Bearer '.$this->token()]);
+
+        $response->assertStatus(201);
+        self::assertSame(2, $response->json('preview.row_count'));
+        self::assertSame(['Student ID', 'Student Name', 'Fee Status', 'Amount Due'], $response->json('preview.headers'));
+    }
+
     /**
      * The file on disk keeps the extension the user actually uploaded.
      *
@@ -248,6 +263,24 @@ final class IngestionUploadTest extends TestCase
         ], ['Authorization' => 'Bearer '.$this->token()])
             ->assertStatus(422)
             ->assertJsonValidationErrors('file');
+    }
+
+    /**
+     * The backend accepts every format the SPA advertises. Non-tabular files
+     * become one metadata/evidence row until a richer extractor is installed.
+     */
+    public function test_frontend_advertised_binary_formats_are_accepted_for_preview(): void
+    {
+        foreach (['pdf', 'doc', 'docx', 'zip', 'png', 'jpg', 'jpeg'] as $extension) {
+            $response = $this->postJson('/api/v1/ingestion/upload', [
+                'file' => UploadedFile::fake()->createWithContent("source.{$extension}", 'binary-ish content'),
+                'source_id' => "source-{$extension}",
+            ], ['Authorization' => 'Bearer '.$this->token()]);
+
+            $response->assertStatus(201);
+            self::assertSame(1, $response->json('preview.row_count'));
+            self::assertSame($extension, $response->json('preview.sample_rows.0.file_type'));
+        }
     }
 
     public function test_a_file_over_the_cap_names_the_cap(): void

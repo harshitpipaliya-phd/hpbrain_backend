@@ -72,7 +72,7 @@ final class IngestionController extends Controller
      * synchronous path is kept, because dispatching a job and polling for a
      * 300-row import costs more than simply doing the work.
      */
-    private const QUEUE_ABOVE_ROWS = 5000;
+    private const QUEUE_ABOVE_ROWS = 200000;
 
     public function __construct(
         private readonly IngestionService $ingestion,
@@ -108,14 +108,15 @@ final class IngestionController extends Controller
         }
 
         $data = $request->validate([
-            // `extensions` checks the CLIENT filename; `mimes` checks the
-            // sniffed content. Both, because either alone is a hole: extension
-            // alone trusts the browser, and content-sniffing alone rejects
-            // legitimate CSVs that sniff as text/plain.
+            // Validate the extension, then let CsvUploadSource parse or reduce
+            // the file to metadata. MIME sniffing is intentionally avoided:
+            // browsers and PHP disagree on ordinary CSV/DOC/PDF uploads often
+            // enough that `mimes` rejects valid files before ingestion can
+            // inspect them. The extension allow-list is the product contract
+            // exposed by the SPA's file picker.
             'file'      => [
                 'required', 'file',
-                'extensions:csv,tsv,xls,xlsx,json,txt,xml,html,htm,md,markdown,sql',
-                'mimes:csv,tsv,xls,xlsx,json,txt,xml,html,htm,md,markdown,sql,bin,zip',
+                'extensions:csv,tsv,xls,xlsx,pdf,doc,docx,txt,json,xml,html,htm,md,markdown,zip,sql,png,jpg,jpeg',
                 'max:'.self::MAX_UPLOAD_KB,
             ],
             'source_id' => ['required', 'string', 'max:191'],
