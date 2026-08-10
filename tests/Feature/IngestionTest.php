@@ -7,7 +7,9 @@ namespace Tests\Feature;
 use App\Domain\Ingestion\IngestionService;
 use App\Domain\Ingestion\Sources\CsvUploadSource;
 use App\Repositories\DataSourceRepository;
+use App\Support\Jwt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\UploadedFile;
 use Tests\Support\BuildsBrainSchema;
 use Tests\TestCase;
 
@@ -29,6 +31,17 @@ final class IngestionTest extends TestCase
     private const ACTOR = 'test-actor';
 
     private string $csv;
+
+    private function auth(): array
+    {
+        return [
+            'Authorization' => 'Bearer '.Jwt::issueAccess([
+                'id' => self::ACTOR,
+                'tenantId' => self::TENANT,
+                'role' => 'admin',
+            ]),
+        ];
+    }
 
     protected function setUp(): void
     {
@@ -67,6 +80,44 @@ final class IngestionTest extends TestCase
             'evidence_text'      => 'Remarks',
             'evidence_timestamp' => 'Start Date',
         ];
+    }
+
+    /** @test */
+    public function upload_route_reports_the_actual_validation_error_for_a_missing_file(): void
+    {
+        $this->postJson('/api/v1/ingestion/upload', [
+            'source_id' => 'missing-file-test',
+        ], $this->auth())
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['file'])
+            ->assertJsonPath('errors.file.0', 'The file field is required.');
+    }
+
+    /** @test */
+    public function upload_route_accepts_the_frontend_advertised_markdown_extension(): void
+    {
+        $this->post('/api/v1/ingestion/upload', [
+            'file' => UploadedFile::fake()->createWithContent('runbook.markdown', "# Runbook\n\nEscalate stale tickets."),
+            'source_id' => 'markdown-source',
+        ], $this->auth())
+            ->assertCreated()
+            ->assertJsonStructure([
+                'job_id',
+                'preview' => ['row_count', 'headers', 'suggested_map', 'sample_rows'],
+            ])
+            ->assertJsonPath('preview.row_count', 1);
+    }
+
+    /** @test */
+    public function upload_route_accepts_the_frontend_advertised_legacy_excel_extension(): void
+    {
+        $this->post('/api/v1/ingestion/upload', [
+            'file' => UploadedFile::fake()->createWithContent('legacy-export.xls', 'legacy binary workbook bytes'),
+            'source_id' => 'legacy-excel-source',
+        ], $this->auth())
+            ->assertCreated()
+            ->assertJsonPath('preview.row_count', 1)
+            ->assertJsonPath('preview.sample_rows.0.file_type', 'xls');
     }
 
     /** @test */

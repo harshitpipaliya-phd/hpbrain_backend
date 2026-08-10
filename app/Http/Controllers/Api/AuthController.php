@@ -6,15 +6,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\Events\EventPublisher;
 use App\Domain\Events\LoopEvent;
+use App\Domain\Organization\OrganizationSignupService;
+use App\Domain\Organization\SignupConflictException;
 use App\Domain\Universal\EntityResolver;
 use App\Domain\Universal\ResolvedSource;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SignupRequest;
 use App\Support\Jwt;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Ramsey\Uuid\Uuid;
 
@@ -134,6 +138,99 @@ final class AuthController extends Controller
             ],
             'organization' => $organization,
         ]);
+    }
+
+    /**
+     * Self-service organization signup. Creates a tenant and signs its
+     * administrator in.
+     *
+     * THE ONLY PUBLIC WRITE IN THE API, which is why it is worth being explicit
+     * about what it does and does not trust. It takes no tenant id — it MINTS
+     * one, from school_setup's AUTO_INCREMENT — so there is nothing here for a
+     * caller to point at another organization. Every field in the body is either
+     * validated content or discarded. The tenant claim in the token that comes
+     * back is the id the database allocated, not anything the browser sent, and
+     * from the next request onwards EnsureTenantScope pins the session to it.
+     *
+     * It returns the SAME envelope as login, deliberately: the SPA finishes
+     * signup already authenticated, and one response shape means one code path
+     * on the client rather than a second, subtly different session bootstrap.
+     *
+     * Failure is atomic. OrganizationSignupService wraps every insert in a
+     * transaction, so a caller either gets a complete organization or gets none
+     * of it — never an id that half-exists.
+     */
+    public function signup(SignupRequest $request, OrganizationSignupService $signup): JsonResponse
+    {
+        $data = $request->validated();
+
+        try {
+            $result = $signup->provision($data);
+        } catch (SignupConflictException $e) {
+            // Lost a race on a unique key. The transaction rolled back, so
+            // nothing was left behind and the message is safe to show.
+            return response()->json([
+                'error'   => 'signup_conflict',
+                'message' => $e->getMessage(),
+                'errors'  => ['email' => [$e->getMessage()]],
+            ], 422);
+        } catch (\Throwable $e) {
+            // THE DETAIL GOES TO THE LOG, NOT TO THE BROWSER. A failed signup
+            // is the one place where the exception text is most likely to name
+            // a table, a column or a constraint of the shared ERP database.
+            // Never the password: only non-credential fields are recorded.
+            Log::error('Organization signup failed', [
+                'exception'        => $e::class,
+                'message'          => $e->getMessage(),
+                'organizationName' => $data['organizationName'] ?? null,
+                'email'            => $data['organizationEmail'] ?? null,
+            ]);
+
+            return response()->json([
+                'error'   => 'signup_failed',
+                'message' => 'We could not create your organization. Please try again.',
+            ], 500);
+        }
+
+        $tenantId = $result['tenantId'];
+        $userId = (string) $result['userId'];
+
+        // Resolved rather than assumed to be 'tenant_admin'. The profile row was
+        // just written as 'Admin', so this reads back through exactly the path
+        // login uses — if that mapping ever changes, signup and login change
+        // together instead of drifting apart.
+        $role = $this->resolveRole($result['adminProfileId'], $tenantId);
+
+        $claims = ['id' => $userId, 'tenantId' => $tenantId, 'role' => $role];
+
+        $accessToken = Jwt::issueAccess($claims);
+        $refreshToken = Jwt::issueRefresh($claims);
+
+        $this->events->emit(
+            LoopEvent::SESSION_STARTED,
+            $tenantId,
+            'Session',
+            Uuid::uuid4()->toString(),
+            $userId,
+            ['userId' => $userId, 'role' => $role, 'via' => 'signup'],
+        );
+
+        return response()->json([
+            'accessToken'  => $accessToken,
+            'refreshToken' => $refreshToken,
+            // The administrator is derived, so these come back from the service
+            // — they are what was written, not what was submitted.
+            'user' => [
+                'id'         => $userId,
+                'email'      => $result['adminEmail'],
+                'firstName'  => $result['adminFirstName'],
+                'lastName'   => $result['adminLastName'],
+                'employeeNo' => null,
+                'profileId'  => (string) $result['adminProfileId'],
+                'role'       => $role,
+            ],
+            'organization' => $this->loadOrganization($tenantId),
+        ], 201);
     }
 
     /**

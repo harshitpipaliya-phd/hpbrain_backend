@@ -1,11 +1,14 @@
 <?php
 declare(strict_types=1);
 namespace App\Providers;
+use App\Domain\Ai\AiGateway;
 use App\Domain\Ai\AiProvider;
 use App\Domain\Ai\Providers\AnthropicProvider;
 use App\Domain\Ai\Providers\DeepSeekProvider;
 use App\Domain\Ai\Providers\GeminiProvider;
 use App\Domain\Ai\Providers\NullAiProvider;
+use App\Domain\Ingestion\DatasetAnalysisService;
+use App\Repositories\ImportJobRepository;
 use Illuminate\Support\ServiceProvider;
 
 final class AiServiceProvider extends ServiceProvider
@@ -31,6 +34,13 @@ final class AiServiceProvider extends ServiceProvider
                 ),
                 default => new NullAiProvider(),
             };
+        });
+
+        $this->app->singleton(DatasetAnalysisService::class, function ($app) {
+            return new DatasetAnalysisService(
+                $app->make(AiGateway::class),
+                $app->make(ImportJobRepository::class),
+            );
         });
     }
 }

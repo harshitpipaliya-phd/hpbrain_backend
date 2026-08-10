@@ -6,6 +6,7 @@ namespace App\Domain\Ingestion;
 
 use App\Domain\Events\EventPublisher;
 use App\Domain\Events\LoopEvent;
+use App\Domain\Ingestion;
 use App\Repositories\ImportJobRepository;
 use App\Repositories\ImportLogRepository;
 use Illuminate\Support\Facades\DB;
@@ -57,6 +58,7 @@ final class IngestionService
         private readonly ImportJobRepository $jobs,
         private readonly ImportLogRepository $logs,
         private readonly EventPublisher $events,
+        private readonly ?DatasetAnalysisService $analysis = null,
     ) {
     }
 
@@ -96,6 +98,8 @@ final class IngestionService
                 'source_ref' => $batch->sourceRef,
             ]);
 
+        $schema = (new SchemaDetector($batch->rows, $batch->headers()))->detect();
+
         return [
             'job' => $this->jobs->find($batch->tenantId, $job['id']),
             'preview' => [
@@ -109,6 +113,7 @@ final class IngestionService
                 'next_checkpoint'  => $batch->nextCheckpoint,
                 'fetched_at'       => $batch->fetchedAt->format(\DateTimeInterface::ATOM),
                 'status'           => 'preview_only_not_committed',
+                'schema'           => $schema,
             ],
         ];
     }
@@ -185,6 +190,15 @@ final class IngestionService
             'rollback_data'   => ['created_ids' => $created],
             'completed_date'  => $this->timestamp(),
         ]);
+
+        if ($this->analysis !== null && $success > 0) {
+            try {
+                $schema = (new SchemaDetector($batch->rows, $batch->headers()))->detect();
+                $this->analysis->analyse($tenantId, $jobId, $schema, $success);
+            } catch (\Throwable) {
+                // AI analysis is best-effort and must not break commit.
+            }
+        }
 
         return [
             'success'    => $success,

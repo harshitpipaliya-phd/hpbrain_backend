@@ -60,6 +60,14 @@ final class CsvUploadSource implements DataSource
             return $this->fromRows($this->readJson(), 'json_upload');
         }
 
+        if ($extension === 'xlsx') {
+            try {
+                return $this->fromRows($this->readXlsx(), 'xlsx_upload');
+            } catch (\RuntimeException) {
+                return $this->fromRows($this->readBinaryMetadata('xlsx'), 'xlsx_upload');
+            }
+        }
+
         if (in_array($extension, ['txt', 'md', 'markdown', 'xml', 'html', 'htm', 'sql'], true)) {
             return $this->fromRows($this->readText($extension), "{$extension}_upload");
         }
@@ -132,6 +140,106 @@ final class CsvUploadSource implements DataSource
                 'external_ref' => (string) ($index + 1),
             ];
         }, $rows, array_keys($rows));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function readXlsx(): array
+    {
+        if (! class_exists(\ZipArchive::class)) {
+            throw new \RuntimeException('XLSX upload requires the Zip PHP extension.');
+        }
+
+        $zip = new \ZipArchive();
+
+        if ($zip->open($this->filePath) !== true) {
+            throw new \RuntimeException("Cannot open XLSX upload at {$this->filePath}");
+        }
+
+        $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+
+        if ($sheet === false) {
+            $zip->close();
+            throw new \RuntimeException('XLSX upload does not contain a readable first sheet.');
+        }
+
+        $sharedStringsXml = $zip->getFromName('xl/sharedStrings.xml');
+        $sharedStrings = [];
+
+        if ($sharedStringsXml !== false) {
+            $ssXml = simplexml_load_string($sharedStringsXml);
+            if ($ssXml !== false) {
+                $ssNs = $ssXml->getNamespaces(true);
+                $ssRoot = $ssXml->children($ssNs[''] ?? null);
+
+                foreach ($ssRoot->si as $si) {
+                    $siChildren = $si->children($ssNs[''] ?? null);
+                    $text = (string) ($siChildren->t ?? $siChildren->phoneticPr ?? '');
+                    $sharedStrings[] = $text;
+                }
+            }
+        }
+
+        $zip->close();
+
+        $xml = simplexml_load_string($sheet);
+
+        if ($xml === false) {
+            throw new \RuntimeException('XLSX first sheet is not valid XML.');
+        }
+
+        $ns = $xml->getNamespaces(true);
+        $sheetData = $xml->children($ns[''] ?? null)->sheetData;
+        $rows = [];
+        $headers = [];
+
+        foreach ($sheetData->row as $row) {
+            $cells = [];
+            $rowIndex = (string) $row['r'];
+
+            foreach ($row->c as $cell) {
+                $cellRef = (string) $cell['r'];
+                $column = preg_replace('/[0-9]/', '', $cellRef) ?: 'A';
+                $type = (string) $cell['t'];
+                $value = (string) $cell->v;
+
+                if ($type === 's' && $value !== '' && isset($sharedStrings[(int) $value])) {
+                    $value = $sharedStrings[(int) $value];
+                }
+
+                $cells[$column] = $value;
+            }
+
+            if (empty($headers)) {
+                $headers = array_values($cells);
+                continue;
+            }
+
+            if (count($cells) === 0) {
+                continue;
+            }
+
+            if (count($rows) >= self::MAX_ROWS) {
+                throw new \RuntimeException(
+                    'XLSX exceeds '.self::MAX_ROWS.' rows; split the file or use an incremental source.'
+                );
+            }
+
+            $row = [];
+            foreach ($headers as $index => $header) {
+                $columnLetters = $this->columnLettersForIndex($index);
+                $row[$header] = trim((string) ($cells[$columnLetters] ?? ''));
+            }
+
+            $rows[] = $row;
+        }
+
+        if ($headers === []) {
+            throw new \RuntimeException('XLSX has no header row.');
+        }
+
+        return $this->fromRows($rows, 'xlsx_upload');
     }
 
     /**
@@ -257,7 +365,7 @@ final class CsvUploadSource implements DataSource
     }
 
     /**
-     * @param  array<int, string>  $headers
+     * @param  array<string, string>  $headers
      * @param  array<int, string|null>  $record
      * @return array<string, string>
      */
@@ -274,5 +382,23 @@ final class CsvUploadSource implements DataSource
         }
 
         return $row;
+    }
+
+    /**
+     * Convert a 0-based column index to Excel column letters.
+     *
+     * @return string
+     */
+    private static function columnLettersForIndex(int $index): string
+    {
+        $letters = '';
+
+        do {
+            $remainder = $index % 26;
+            $letters = chr(65 + $remainder) . $letters;
+            $index = (int) ($index / 26) - 1;
+        } while ($index >= 0);
+
+        return $letters;
     }
 }

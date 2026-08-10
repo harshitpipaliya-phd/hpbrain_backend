@@ -15,6 +15,7 @@ use App\Repositories\DataSourceRepository;
 use App\Repositories\ImportJobRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -67,7 +68,7 @@ final class IngestionController extends Controller
     public function upload(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'file'      => ['required', 'file', 'mimes:csv,txt,json,xml,html,htm,md,sql,pdf,doc,docx,xls,xlsx,zip,png,jpg,jpeg', 'max:20480'],
+            'file'      => ['required', 'file', 'mimes:csv,xls,xlsx,txt,json,xml,html,htm,md,markdown,sql,pdf,doc,docx,zip,png,jpg,jpeg', 'max:20480'],
             'source_id' => ['required', 'string', 'max:191'],
             'org_id'    => ['nullable', 'string', 'max:36'],
         ]);
@@ -91,14 +92,23 @@ final class IngestionController extends Controller
             return response()->json(['error' => 'unreadable_upload', 'message' => $e->getMessage()], 422);
         }
 
-        $stored = $this->sources->findByKey($tenantId, $data['source_id']);
+        try {
+            $stored = $this->sources->findByKey($tenantId, $data['source_id']);
 
-        $result = $this->ingestion->preview(
-            $batch,
-            $this->actorId($request),
-            $stored['field_map'] ?? null,
-            $data['org_id'] ?? null,
-        );
+            $result = $this->ingestion->preview(
+                $batch,
+                $this->actorId($request),
+                $stored['field_map'] ?? null,
+                $data['org_id'] ?? null,
+            );
+        } catch (QueryException $e) {
+            report($e);
+
+            return response()->json([
+                'error' => 'database_unavailable',
+                'message' => 'Upload was received, but ingestion preview could not start because the database is unavailable.',
+            ], 503);
+        }
 
         return response()->json([
             'job_id'  => $result['job']['id'],

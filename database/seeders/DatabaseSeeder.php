@@ -17,6 +17,7 @@ final class DatabaseSeeder extends Seeder
             SkillSeeder::class,
             CompetencySeeder::class,
             LocationTypeSeeder::class,
+            DemoLionsSeeder::class,
         ]);
     }
 }

@@ -122,6 +122,20 @@ Route::prefix('v1')->group(function () {
         Route::post('auth/refresh', [AuthController::class, 'refresh'])->middleware('throttle:20,1');
     });
 
+    // Self-service organization signup. Creates a TENANT, so it is throttled
+    // harder than login: a login attempt costs one row read, while this one
+    // writes across six ERP tables plus 39 mapping rows and mints an identity.
+    // Five per ten minutes is generous for a human filling in a form once and
+    // hostile to anything creating tenants in bulk.
+    //
+    // REGISTERED OUTSIDE THE GROUP ABOVE, NOT INSIDE IT WITH ITS OWN LIMIT.
+    // Two unnamed `throttle:` middlewares on one route resolve to the SAME
+    // signature key — route URI plus IP — so both increment the same counter and
+    // every request is charged twice. Nested inside `throttle:10,1` this limit
+    // fired on the third signup rather than the sixth, which is how it was
+    // found. One throttle per route, and the number means what it says.
+    Route::post('auth/signup', [AuthController::class, 'signup'])->middleware('throttle:5,10');
+
     // ---- Authenticated ----------------------------------------------------
     Route::middleware(['jwt', 'tenant', 'permission:read'])->group(function () {
 
