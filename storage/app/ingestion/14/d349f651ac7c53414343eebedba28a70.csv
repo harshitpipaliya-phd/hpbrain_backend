@@ -1,0 +1,1842 @@
+"Calendar Assigned To","Calendar Subject","Calendar Description","Calendar Event Completion Remarks","Calendar Status","Calendar TL Remarks","Calendar Start Date & Time"
+"Harshit Pipaliya","What is GEO in Web(Generative Engine Optimization)",,,"In Progress",,"2026-01-09 15:30:00"
+"Harshit Pipaliya","Google ADK with LiteLLM","Google ADK with LiteLLM",progress,Held,,"2026-01-09 14:00:00"
+"Harshit Pipaliya","Test Code review agent codebase & plan for creating tools for this agent using Google adk reference guides",https://docs.google.com/document/d/1N7vrhyiNUfGHTmoyN0Hl7EIyVXcholrdg4NvgRoHy-w/edit?tab=t.0,,Planned,,"2026-01-10 10:30:00"
+"Harshit Pipaliya","Code Review and Optimization Agent using the G)oogle Agent Development Kit (ADK)",https://gemini.google.com/u/1/app/eae78704aa0464a3?is_sa=1&is_sa=1&android-min-version=301356232&ios-min-version=322.0&campaign_id=bkws&utm_source=sem&utm_medium=paid-media&utm_campaign=bkws&pt=9008&mt=8&ct=p-growth-sem-bkws&gclsrc=aw.ds&gad_source=1&gad_campaignid=20357620749&gbraid=0AAAAApk5Bhlqq7CQ_1Ricvximy71gAJrY&gclid=CjwKCAiA64LLBhBhEiwA-PxguzMebmUlO5qLxofBX38JR_Hy8BYNEwJr-10P--BGXGgoZAVMFp68uxoC_6UQAvD_BwE&pageId=none,,Held,,"2026-01-11 10:30:00"
+"Harshit Pipaliya","Development & Testing of Code Reviewer Agent (Google ADK)","Set up the project structure and virtual environment, integrated API keys, and started implementing agent logic. Actively debugging execution issues and refining agent behavior for accurate code review and optimization.",,"In Progress",,"2026-01-12 10:00:00"
+"Harshit Pipaliya","documentation on AgenticAI",,,"In Progress",,"2026-01-13 10:00:00"
+"Harshit Pipaliya","Complete SEO & GEO Optimization Guide for Scholar Clone Website","Based on the content of the website, here is an analysis of its potential for search engine and geographic optimization. The site is a presentation for ""Scholar Clone,"" a higher education ERP system.",,Held,,"2026-01-16 10:00:00"
+"Harshit Pipaliya","Complete SEO & GEO Optimization Guide for Scholar Clone Website (documentation)","This guide provides step-by-step instructions to optimize the Scholar Clone website for search engines (SEO) and geographic targeting (GEO). These changes will help your website appear higher in search results and attract more relevant visitors.",,Held,,"2026-01-16 12:00:00"
+"Harshit Pipaliya","Mapping existing Agentic AI backend architecture to each ops category","Web Ops → Services that perform network/web-related actions.
+
+File Ops → Services that read/write/manage files on server/cloud.
+
+Agent Ops → Coordination logic between AI agents and tool calls.",,Held,,"2026-01-16 14:30:00"
+"Harshit Pipaliya","Tool Integration in Existing Agentic AI Backend (Web Ops, File Ops, Agent Ops)","Created interfaces for the backend so the agent can call each tool via APIs or message handlers.
+
+Set up secure permission checks before an agent triggers any tool action.
+
+Built a test suite to validate that agents execute tasks correctly.","in progress",Held,,"2026-01-19 10:00:00"
+"Harshit Pipaliya","Fix Face Recognition Attendance System Encoding & Database Type Error","Resolve a runtime error in the Face Recognition Attendance System caused by face encodings being stored or loaded as strings instead of numeric arrays. Ensure all face encodings are correctly saved, loaded, and converted as NumPy float arrays before comparison.","in progress",Held,,"2026-01-19 14:00:00"
+"Harshit Pipaliya","Document requirements with Rajesh sir about what Face recognition project needs and list out which computer vision advanced models will be need","1) Understand requirements for end-to-end development to deployment
+2) What technologies will be required to complete the project
+3) Delivery plan of solution in form of apis to keep on application",,Planned,,"2026-01-20 10:15:00"
+"Harshit Pipaliya","Face Recognition Attendance System using ArcFace (InsightFace) for high-accuracy real-time recognition, with automatic, proxy-free attendance and secure embedding-based storage.","I implemented ArcFace (InsightFace) for high-accuracy facial recognition using 512-D embeddings and cosine similarity.
+This ensures accurate, proxy-free attendance.",,Held,,"2026-01-21 10:00:00"
+"Harshit Pipaliya","Face Recognition system project model stress testing based on sample complex far-distance inputs",,,Planned,,"2026-01-22 10:00:00"
+"Harshit Pipaliya","Review requirement doc sent by rajesh sir for standardizing our fastapi structure","and check if it is only stream-based or image based input too
+https://docs.google.com/document/d/1vwjA_O_Lp_U_mj69SZN79GCMnLNl9niJ8Hv-KGw0wAg/edit?tab=t.0#heading=h.wp3erwk4qw70",,Planned,,"2026-01-22 14:00:00"
+"Harshit Pipaliya","Face Recognition Attendance System:-Environment Setup & FastAPI Project Initialization","This phase focuses on setting up the Python environment, virtual environment, project structure, and installing required dependencies. A basic FastAPI application is created and verified to run successfully.",,Held,,"2026-01-22 10:00:00"
+"Harshit Pipaliya","Face Recognition Attendance System :- Database Design & Persistence Layer Implementation","This phase involves designing database schemas using SQLAlchemy and configuring a SQLite database. Core tables for students, face embeddings, and attendance records are created and validated.",,"In Progress",,"2026-01-22 14:00:00"
+"Harshit Pipaliya","Face Detection & Recognition Integration","Implement RetinaFace for detecting multiple faces and ArcFace for generating embeddings. Use cosine similarity for matching with configurable confidence and support batch processing within 2 seconds per image.",,Held,,"2026-01-23 10:00:00"
+"Harshit Pipaliya","Attendance API Service Development","Build FastAPI endpoints to accept image uploads, validate JWT tokens, and process attendance requests. Return structured JSON responses with full OpenAPI/Swagger documentation for ERP integration.",,Held,,"2026-01-23 14:30:00"
+"Harshit Pipaliya","Attendance Processing & Recognition Workflow","This phase manages the end-to-end attendance flow by detecting faces, generating embeddings, and matching them with registered students.
+It applies confidence thresholds, avoids duplicate entries, and sends a finalized attendance summary to the ERP system.",,Held,,"2026-01-24 10:00:00"
+"Harshit Pipaliya","System Security & Compliance Management","This phase ensures secure access using JWT authentication and protects sensitive configurations through environment variables.
+It enforces compliance by preventing raw image storage and maintaining audit logs for every API and attendance action.",,Held,,"2026-01-24 11:00:00"
+"Harshit Pipaliya","Testing, Accuracy & Performance Validation","This phase verifies system reliability through unit testing, integration testing, and face recognition accuracy evaluation.
+It also tests performance under load and handles edge cases such as multiple faces or low-confidence matches.",,Held,,"2026-01-24 14:00:00"
+"Harshit Pipaliya","Deployment & Production Setup (Hugging Face Spaces)","The application is packaged and deployed as a production-ready FastAPI service on Hugging Face Spaces.
+Environment secrets, hardware configuration, and ERP connectivity are validated to ensure stable operation.",,Held,,"2026-01-24 15:30:00"
+"Harshit Pipaliya","Operational Readiness & Project Handover","This phase focuses on documentation, monitoring setup, and final production readiness checks.
+It includes knowledge transfer to the ERP/backend team to ensure smooth operation and future maintenance.",,Held,,"2026-01-24 16:30:00"
+"Harshit Pipaliya","documentation on how to Deploy Face Recognition Attendance System on Hugging Face",https://docs.google.com/document/d/1_1OQHx8vRRXxamXTLmPBr-FScxle4Sh6uXKG4rxO54A/edit?tab=t.0,,Held,,"2026-01-27 10:30:00"
+"Harshit Pipaliya","Deploy Face Recognition Attendance System on Hugging Face","This project is deployed on Hugging Face Spaces using free CPU resources without Docker.
+It provides a FastAPI-based Face Recognition Attendance System with live API documentation accessible online",,Held,,"2026-01-27 14:00:00"
+"Harshit Pipaliya","Project Understanding & Planning (multi-face detection modal in existing attendance system)","Understand the full flow: enrollment → face embeddings storage → multi-face matching → attendance marking, plus security (JWT) and database structure.",,Held,,"2026-01-28 10:30:00"
+"Harshit Pipaliya","Build & Implementation(multi-face detection modal in existing attendance system)","Develop and integrate modules: enrollment API, multi-face attendance API (1–5 images), embedding + FAISS matching, quality checks, logs, and database operations.",,Held,,"2026-01-28 11:30:00"
+"Harshit Pipaliya","Deployment on Hugging Face(multi-face detection modal in existing attendance system)","Prepare HF-ready setup: correct requirements, CPU-safe InsightFace/onnxruntime, correct run.py + app/main.py, PORT binding, and verify APIs on /docs.",,Held,,"2026-01-28 15:30:00"
+"Harshit Pipaliya","Add Agentic_Tools Table and Associated APIs(learning)",https://docs.google.com/document/d/1uvK6CSb0_eqMmWSLccVntHsW7krq3aMH4mXcudyMb34/edit?tab=t.0,,Held,,"2026-01-28 17:30:00"
+"Harshit Pipaliya","Implementation of Agentic Tools Management API","Designed and integrated a backend module to store and manage tool assignments for each agent using a dedicated database table and REST APIs. Implemented secure POST and GET endpoints with proper validation, logging, and service-layer abstraction, following existing backend architecture standards.",,"In Progress",,"2026-01-29 10:30:00"
+"Harshit Pipaliya","error solving in multi-face detection modal","Errors in the multi-face detection module are solved by checking face detection output, image quality, and embedding generation for each detected person.
+Matching confidence, duplicate entries, and unknown faces are verified using logs and API responses to ensure correct attendance marking.",,Held,,"2026-01-29 15:30:00"
+"Harshit Pipaliya","ML Pipeline Orchestration for Scalable and Reliable Model Deployment Handling Feature Drift, Inference Scalability, and Model–Data Versioning","This task focuses on building an end-to-end ML pipeline that monitors feature drift, ensures scalable real-time inference, and supports automated retraining.
+It also emphasizes proper versioning of datasets and models to maintain reproducibility, traceability, and production reliability.",,"In Progress",,"2026-01-29 17:00:00"
+"Harshit Pipaliya","Removed Authentication from Face Recognition Attendance APIs","Disabled JWT/token verification from all endpoints and made enroll, attendance, and admin APIs publicly accessible. Updated project configuration to allow users to access system features without login or authorization.",,Held,,"2026-02-07 15:00:00"
+"Harshit Pipaliya","Demo of Face Recognition Attendance System with Public API Access","Presented a live demo to Uma Ma’am after removing authentication and making all APIs accessible without login. Demonstrated student enrollment, attendance marking, and system workflow successfully.",,Held,,"2026-02-07 17:30:00"
+"Harshit Pipaliya","Attendance Processing Logic Enhanced with New Validation Flow","Updated the attendance service to validate existing attendance using standard and division IDs. Implemented improved logic for marking attendance, handling duplicates, and maintaining accuracy across multiple images.",,Held,,"2026-02-09 00:00:00"
+"Harshit Pipaliya","Attendance API Modified for Frontend ERP Integration","Changed API parameters from class/division names to standard_id and division_id as required by the ERP frontend. Ensured compatibility with inspect values received from the frontend system.",,Held,,"2026-02-09 03:30:00"
+"Harshit Pipaliya","Attendance API Updated with Standard, Division, Date and Year Support","Enhanced the attendance API to accept standard_id, division_id, attendance_date, and year parameters. These fields are now used during attendance validation and stored in the database to maintain structured academic records.",,Held,,"2026-02-09 10:00:00"
+"Harshit Pipaliya","Attendance Model Modified to Store Academic Session Details","Updated the Attendance database model by replacing old class fields with standard_id, division_id, year, and date. This change ensures accurate attendance tracking based on academic structure and session year.",,Held,,"2026-02-09 11:00:00"
+"Harshit Pipaliya","CRUD Functions Updated for New Attendance Filters","Modified check_existing_attendance and create_attendance functions to use the new parameters (standard, division, year, date) while inserting and validating attendance records to prevent duplicate entries.",,Held,,"2026-02-09 14:00:00"
+"Harshit Pipaliya","Fix for Invalid Photo & Video Permissions in Play Store","Removed unnecessary READ_MEDIA_IMAGES and READ_MEDIA_VIDEO permissions and implemented one-time media selection using the system photo picker. Rebuilt and uploaded a new signed AAB to comply with Google Play privacy policy.","by rajesh sir",Held,,"2026-02-10 05:00:00"
+"Harshit Pipaliya","Attendance API Response Simplified for ERP Consumption","Modified the API response to include status, message, matched_student[], and unmatchedStudent[]. The arrays now store only student IDs, and status returns 1 for matched faces and 0 otherwise.",,Held,,"2026-02-10 10:30:00"
+"Harshit Pipaliya","Optimized Matched and Unmatched Student Identification Logic","Implemented logic to generate unique matched student IDs and calculate unmatched students by comparing detected matches with the enrolled student list.",,Held,,"2026-02-10 11:30:00"
+"Harshit Pipaliya","Improved Error Handling and Logging in Attendance Module","Fixed multiple runtime issues including import errors, indentation errors, and response type mismatches. Added structured logging and rollback handling for stable API execution.",,Held,,"2026-02-10 11:45:00"
+"Harshit Pipaliya","End-to-End Testing of Attendance API with Frontend Parameters","Tested the updated API using multipart requests with images, standard ID, division ID, date, and year. Verified correct response format and attendance marking workflow.",,Held,,"2026-02-10 14:30:00"
+"Harshit Pipaliya","Subject: Database Design & Migration for Agentic Tools","Designed and implemented the new agentic_tools database table with proper schema, indexing, and timestamp handling.
+Created and validated migration to ensure smooth deployment across local and HF Space environments.",,Held,,"2026-02-11 10:00:00"
+"Harshit Pipaliya","Development of Agentic Tools Management APIs","Implemented POST and GET APIs to create and retrieve tools assigned to specific AI agents using FastAPI and Pydantic validation.
+Ensured proper request validation, error handling, and structured JSON responses aligned with existing API standards.",,Held,,"2026-02-11 11:30:00"
+"Harshit Pipaliya","Service Layer Integration, Logging & Deployment Validation","Developed service-layer functions to separate business logic from route handlers and integrated API request logging for monitoring.
+Tested complete flow including edge cases and validated functionality in Hugging Face deployment environment.",,"In Progress",,"2026-02-11 14:00:00"
+"Harshit Pipaliya","ERP Student API Setup","Connected ERP API to get student data and images. System now loads student photos automatically for matching.",,Held,,"2026-02-12 10:00:00"
+"Harshit Pipaliya","solving error in ERP Student API Setup","1) call with dynamic parameter sub_institute_id,standard_id,syear API https://erp.triz.co.in/face_attendance/student_face_attendance?type=API&sub_institute_id=1&user_profile_name=admin&submit=1&standard=39&syear=2021
+2) get response from this API and run for loop to get student image from the url :https://erp.triz.co.in/storage/capture_photos/{{student_id}}/{{stu_image}}
+3) get uploaded classroom images and match student faces from api image
+4) in return response matched_student[] and unmatched_student[] with student_id from erp API",,Planned,,"2026-02-12 14:00:00"
+"Harshit Pipaliya","Add Agentic_Tools Table and Associated APIs","Create and apply a database migration for the new table
+Validate migration on local and HF Space environments",,"In Progress",,"2026-02-13 10:00:00"
+"Harshit Pipaliya","Add Agentic_Tools Table and Associated APIs",https://docs.google.com/document/d/1uvK6CSb0_eqMmWSLccVntHsW7krq3aMH4mXcudyMb34/edit?tab=t.0#heading=h.yyxg957infod,,"In Progress",,"2026-02-13 14:00:00"
+"Harshit Pipaliya","Face Recognition Attendance System apply changes comes from umma ma'am and deploy on HF","Face Recognition Attendance System apply changes comes from umma ma'am and deploy on HF",,Held,,"2026-02-16 10:00:00"
+"Harshit Pipaliya","Google ADK (tech task)",https://gemini.google.com/u/1/app/c_3039da8b8329527c,,"In Progress",,"2026-02-16 14:30:00"
+"Harshit Pipaliya","API Foundations & Model Packaging (fast API)( tech stack)",https://gemini.google.com/u/1/app/30d67b0a64f6a1e4?pageId=none,,"In Progress",,"2026-02-16 16:00:00"
+"Harshit Pipaliya","homework validation system solving with moncey","trying to solve api key issue(google AI studio)",,"In Progress",,"2026-02-18 02:00:00"
+"Harshit Pipaliya","Setup generate_videos module with image, audio, and text rendering support with darshna ma'am","(Module: AI Video Generation)
+(Sprint Goal: Implement video generation flow that combines image, audio, and dynamic text rendering into a single video clip)
+
+Steps Performed
+
+Required libraries installed (video processing, audio merging, text overlay)
+
+Created folder structure under apps/ai/src/generate_videos
+
+Developed video generation logic to combine image + audio
+
+Implemented text overlay functionality inside video frames
+
+Tested output video rendering with sample inputs","In Progress","In Progress",,"2026-02-18 10:00:00"
+"Harshit Pipaliya","video editing on  multi_face_detection_modal","Recorded reel showing input, processing, and final match result",,Held,,"2026-02-20 10:00:00"
+"Harshit Pipaliya","making post in canva for holika dahan ( scholer clone inovation )","a happy holi wishing post",,Held,,"2026-02-20 14:00:00"
+"Harshit Pipaliya","Setup Genkit Folder Structure with Prompt, Model, and Schema","Installed required libraries and organized Genkit folder structure in apps/ai/src/flows. Created prompt and schema for job role generation based on industry, department, and job role description.",,"In Progress",,"2026-02-20 16:00:00"
+"Harshit Pipaliya","Final Selection and Implementation Planning for Runway ML API Integration","Steps Performed:
+
+Compared shortlisted tools based on API support and performance
+
+Selected Runway ML API as the final video generation platform
+
+Planned backend integration workflow
+
+Prepared implementation and testing strategy",,Held,,"2026-02-21 00:00:00"
+"Harshit Pipaliya","Research on AI Video Generation Tools with API Support","Description:
+Conducted research to identify AI video generation platforms capable of generating short-form video content using AI models with official API support. The focus was on tools that support automation, backend integration, and scalable video generation workflows. Multiple platforms were reviewed based on their API availability, documentation, and video generation capabilities.
+
+Steps Performed:
+
+Identified tools supporting AI video generation via API
+
+Reviewed official documentation and developer integration support
+
+Analyzed features such as text-to-video and image-to-video generation
+
+Shortlisted tools suitable for automation and backend integration",,Held,,"2026-02-21 10:00:00"
+"Harshit Pipaliya","Evaluation and Technical Analysis of Runway ML API for Video Generation","Steps Performed:
+
+Studied Runway ML API documentation and integration process
+
+Reviewed video generation workflow and architecture
+
+Verified API authentication and request structure
+
+Analyzed model capabilities for short-form video generation",,Held,,"2026-02-21 11:00:00"
+"Harshit Pipaliya","Research and setup AI video generation API (RunwayML & DeepSeek)","(Module: LMS Video Generation), (Sprint Goal: Research and configure AI video generation tools and API access for automated short-form video creation)
+
+Steps Performed
+
+Researched AI video generation tools supporting developer API
+
+Created developer accounts and generated API keys
+
+Configured environment variables for secure API integration",Completed,Held,,"2026-02-23 10:00:00"
+"Harshit Pipaliya","Integration of DeepSeek API for automated script generation","(Module: LMS Video Generation), (Sprint Goal: Implement script generation logic using DeepSeek API based on skill and job role input)
+
+Steps Performed
+
+Integrated DeepSeek API for script generation
+
+Developed prompt template for short-form video content
+
+Implemented JSON parsing and structured script output",,Held,,"2026-02-23 11:30:00"
+"Harshit Pipaliya","Integration of RunwayML API for AI video generation","(Module: LMS Video Generation), (Sprint Goal: Generate videos using RunwayML API from automatically generated scripts)
+
+Steps Performed
+
+Integrated RunwayML public developer API
+
+Implemented video generation request and task creation
+
+Developed polling mechanism to retrieve generated video URL",,Held,,"2026-02-23 14:00:00"
+"Harshit Pipaliya","Automation and LMS video generation pipeline development","(Module: LMS Video Generation), (Sprint Goal: Automate full pipeline from script generation to video creation and result storage)
+
+Steps Performed
+
+Integrated CSV input processing and prompt automation
+
+Developed end-to-end script-to-video generation workflow
+
+Stored generated video results and metadata in Excel",,Held,,"2026-02-23 16:00:00"
+"Harshit Pipaliya","Setup Multi-Agent System Structure and Module Interconnectivity","(Module: Agentic AI Tools System), (Sprint Goal: Organize multi-agent architecture for task planning, execution, and tool integration to improve system modularity and scalability)
+
+Steps Performed:
+
+Studied multi-agent architecture and agent communication flow
+
+Defined roles and responsibilities for each agent module
+
+Designed folder structure and module interconnection strategy
+
+Prepared system design for scalable agent-based execution",,"In Progress",,"2026-02-24 10:00:00"
+"Harshit Pipaliya","Switch video generation tool from RunwayML to Pollo.ai and integrate API","(Module: LMS Video Generation), (Sprint Goal: Replace previous video API with Pollo.ai and validate end-to-end video creation flow)
+
+Steps Performed
+
+Updated base URL and request payload as per Pollo.ai API format
+
+Implemented environment variable setup for POLLO_API_KEY and request authentication
+
+Executed test runs and validated API connectivity + response handling",,Held,,"2026-02-24 12:00:00"
+"Harshit Pipaliya","Implement PixVerse AI API for Text-to-Video generation in pipeline","(Module: LMS Video Generation), (Sprint Goal: Debug and stabilize video generation API flow by fixing endpoint issues and request validation)
+
+Steps Performed
+
+Diagnosed DNS issue (api.pollo.ai / api.pixverse.ai) and corrected to official API hosts
+
+Fixed authentication method and environment variable handling (keys not set / wrong format / wrong headers)
+
+Resolved request validation issues (400 invalid input) by updating payload fields + handled credit-based 403 responses",,Held,,"2026-02-24 15:30:00"
+"Harshit Pipaliya","Resolve API integration errors (DNS, auth, payload validation, credits) for new video tools","(Module: LMS Video Generation), (Sprint Goal: Add PixVerse Text-to-Video generation API and connect it with existing script pipeline)
+
+Steps Performed
+
+Integrated PixVerse OpenAPI v2 endpoints for text-to-video generation and status polling
+
+Added required headers (API-KEY, Ai-trace-id) and configurable payload fields (model, quality, duration, aspect ratio)
+
+Connected PixVerse generation results into Excel output report for LMS integration",,Held,,"2026-02-24 14:00:00"
+"Harshit Pipaliya","Debug and Resolve Errors in Google ADK Job Role Generator Agent","dentified and resolved runtime and configuration errors during implementation of the Job Role Generator agent. Fixed environment setup, schema validation issues, and agent execution flow to ensure proper JSON output generation and multi-agent workflow functionality.",,"In Progress",,"2026-02-25 02:30:00"
+"Harshit Pipaliya","learning (The Hub and Transformers) from Tech stack",https://gemini.google.com/u/1/gem/learning-coach/fc68578f4be2ffa6,,"In Progress",,"2026-02-25 04:30:00"
+"Harshit Pipaliya","Setup and Implement Job Role Generator Agent using Python and Google ADK","Initialized Python environment and implemented Job Role Generator agent using Google ADK and Gemini model. Created agent folder structure and developed prompt and schema for generating structured job role JSON based on industry, department, and job role description.
+
+Steps Performed:
+
+Created Python virtual environment and installed google-adk and required libraries
+
+Initialized job_role_agent project and configured .env file
+
+Organized project structure with agent.py, schemas.py, and prompts.py
+
+Developed structured prompt for job role generation
+
+Implemented input and output schema using Pydantic
+
+Configured multi-agent workflow using SequentialAgent for generation and validation",,"In Progress",,"2026-02-25 10:00:00"
+"Harshit Pipaliya","Research and Learning of GEO (Generative Engine Optimization) Strategy","(Module: SEO & AI Visibility Optimization), (Sprint Goal: Understand GEO concepts to optimize website visibility in AI search engines like ChatGPT, Gemini, and Perplexity)
+
+Steps Performed
+
+Studied GEO fundamentals and AI search engine ranking factors
+
+Analyzed how structured content improves AI discoverability
+
+Learned importance of semantic content and authority signals
+
+Reviewed implementation strategy for ScholarClone website",,"In Progress",,"2026-02-26 02:00:00"
+"Harshit Pipaliya","Team Discussion on Weekly Progress and Task Planning","Module: Team Coordination), (Sprint Goal: Discuss weekly progress, resolve technical queries, and align on upcoming development tasks and priorities)
+
+Steps Performed
+
+Discussed tasks completed during the current week
+
+Reviewed overall development progress and workflow
+
+Discussed technical challenges and possible solutions
+
+Clarified upcoming tasks and responsibilities
+
+Planned next steps and priorities for the upcoming sprint
+
+Completion Mark: Completed",Completed,Held,,"2026-02-26 04:00:00"
+"Harshit Pipaliya","Analysis of GEO Implementation for ScholarClone Website Optimization","(Module: Website Optimization), (Sprint Goal: Plan GEO implementation to improve AI-based search visibility and ranking of ScholarClone platform)
+
+Steps Performed
+
+Reviewed current website structure and content organization
+
+Identified areas for semantic and structured content improvement
+
+Studied schema markup and AI-friendly content formatting
+
+Planned GEO optimization strategy for implementation",,"In Progress",,"2026-02-26 05:00:00"
+"Harshit Pipaliya","Implementation and Setup of Job Role Agent using Multi-Agent Architecture","(Module: Competency Management), (Sprint Goal: Implement Job Role Agent to generate and manage job role data using industry, department, and job role description with multi-agent system using Python and Google ADK)
+
+Steps Performed
+
+Installed required Python libraries and Google ADK dependencies
+
+Created folder structure for job_role_agent including prompt, model, and schema
+
+Developed prompt and schema for job role creation and validation
+
+Configured agent logic for processing job role input and generating structured output
+
+Tested agent flow with sample job role data",,"In Progress",,"2026-02-26 10:00:00"
+"Harshit Pipaliya","Implement Service, Speakable Schema and AI Citation Optimization","(Module: Generative Engine Optimization),
+(Sprint Goal: Enhance AI search visibility and voice-search readiness)
+
+Steps Performed
+
+Added Service schema for ERP modules
+
+Implemented Speakable schema for voice assistants
+
+Added AI-readable definition and comparison sections
+
+Created knowledge hub and structured FAQ expansion strategy","in progress","In Progress",,"2026-02-27 03:00:00"
+"Harshit Pipaliya","Implement sitemap.xml generation & dynamic canonical URLs for hp.scholarclone.com","(Module: Website SEO / GEO-AEO), (Sprint Goal: Improve crawlability + indexing by generating sitemap and setting correct canonical for every page)
+
+Steps Performed
+
+Installed next-sitemap and configured next-sitemap.config.js with siteUrl + exclude rules
+
+Added postbuild: next-sitemap in package.json to auto-generate sitemap during build
+
+Updated _app.js to generate canonical URL dynamically using router path (prevents duplicate indexing)
+
+Verified sitemap output and adjusted robots sitemap URL if required","In Progress","In Progress",,"2026-02-27 10:00:00"
+"Harshit Pipaliya","Add AI Answer Blocks + FAQPage & Breadcrumb JSON-LD schema for AEO/GEO","(Module: Website SEO / GEO-AEO), (Sprint Goal: Improve AI search visibility by adding answer-first content blocks + structured data for FAQs and breadcrumbs)
+
+Steps Performed
+
+Created reusable AnswerBlock component for definition-style content (AEO snippet-ready)
+
+Created reusable FAQ component using semantic HTML (details/summary)
+
+Added JSON-LD helpers for FAQPage and BreadcrumbList in jsonld.js
+
+Updated _app.js to inject page-level FAQ and breadcrumb schema using pageProps.seo
+
+Applied AnswerBlock + FAQs on homepage and added getStaticProps SEO object (title/description/canonical/faq/breadcrumbs)","In Progress","In Progress",,"2026-02-27 11:00:00"
+"Harshit Pipaliya","Implement Organization & WebPage Structured Data for GEO Optimization","(Module: Website GEO/AEO Optimization),
+(Sprint Goal: Improve AI engine understanding using organization-level structured data)
+
+Steps Performed
+
+Added logo and OpenGraph assets for brand identity
+
+Implemented Organization JSON-LD with contact and entity details
+
+Added WebPage schema for page-level indexing clarity
+
+Integrated structured data globally via _app.js","In Progress","In Progress",,"2026-02-27 14:00:00"
+"Harshit Pipaliya","Develop Module-Based Dynamic Pages with Internal Linking Structure","(Module: Website GEO/AEO Optimization),
+(Sprint Goal: Create scalable module landing pages for improved crawlability and AI content mapping)
+
+Steps Performed
+
+Created dynamic /modules/[slug] pages using static generation
+
+Implemented AnswerBlock and FAQ components
+
+Added internal linking between modules
+
+Developed modules index page for structured navigation","in progress","In Progress",,"2026-02-27 14:30:00"
+"Harshit Pipaliya","Implement Service, Speakable Schema and AI Citation Optimization","(Module: Generative Engine Optimization),
+(Sprint Goal: Enhance AI search visibility and voice-search readiness)
+
+Steps Performed
+
+Added Service schema for ERP modules
+
+Implemented Speakable schema for voice assistants
+
+Added AI-readable definition and comparison sections
+
+Created knowledge hub and structured FAQ expansion strategy","in progress","In Progress",,"2026-02-27 15:00:00"
+"Harshit Pipaliya","Script Preparation for Project Demonstration Video","Description:
+(Module: Content Development),
+(Sprint Goal: Prepare structured narration script for project explanation video)
+
+Steps Performed
+
+Defined video flow and scenes
+
+Created 60-second narration script
+
+Finalized user-guide explanation content",,Held,,"2026-03-02 00:00:00"
+"Harshit Pipaliya","Gather Information for Face Recognition Attendance System Video","Description:
+(Module: AI Project Demonstration),
+(Sprint Goal: Collect project workflow, features, and user guide content for video creation)
+
+Steps Performed
+
+Reviewed project functionality and workflow
+
+Identified key features for demonstration
+
+Planned video structure and user flow",Completed,Held,,"2026-03-02 10:30:00"
+"Harshit Pipaliya","AI Video Generation Tool Selection and Clip Creation","Description:
+(Module: AI Media Generation),
+(Sprint Goal: Research AI video tools and generate required AI clips using prompts)
+
+Steps Performed
+
+Researched AI video generation platforms
+
+Selected suitable AI video tool
+
+Generated AI clips using prepared prompts",Completed,Held,,"2026-03-02 11:30:00"
+"Harshit Pipaliya","Voice Over Generation using ElevenLabs","Description:
+(Module: Audio Generation),
+(Sprint Goal: Generate professional AI voiceover for project video)
+
+Steps Performed
+
+Uploaded finalized script
+
+Generated AI voice using ElevenLabs
+
+Downloaded and verified voice output",,"In Progress",,"2026-03-02 14:30:00"
+"Harshit Pipaliya","Video Editing and Enhancement using CapCut","Description:
+(Module: Video Production),
+(Sprint Goal: Edit project video with captions, transitions, and visual effects)
+
+Steps Performed
+
+Imported AI clips and project recordings
+
+Added captions and transitions
+
+Applied effects and synchronized voiceover",,"In Progress",,"2026-03-02 16:00:00"
+"Harshit Pipaliya","AI Video Creation for Face Recognition Attendance System Demonstration(submitted to kalpeshsir)","(Module: AI Product Demonstration),
+(Sprint Goal: Create AI-generated video explaining manual attendance challenges and automated face recognition attendance workflow)
+
+Steps Performed
+
+Gathered requirements and finalized video concept flow
+
+Researched and selected AI video generation tools (Runway ML & Pika Labs)
+
+Generated AI video clips using text-to-video prompts
+
+Prepared project explanation script and voice-over content
+
+Edited video using CapCut by adding captions, transitions, and AI effects
+
+Finalized and submitted demonstration video to reporting authority",Completed,Held,,"2026-03-03 10:30:00"
+"Harshit Pipaliya","Implement Artifact Pipeline for Data Loading","Steps Performed
+
+Created artifact pipeline for saving processed data
+
+Generated artifacts like matrix, roles, skills and embeddings
+
+Saved artifacts in artifacts folder for faster loading
+
+Verified artifact loading during API startup",Completed,Held,,"2026-03-05 00:30:00"
+"Harshit Pipaliya","Download and Setup Career Recommendation Engine Project","(Module: AI Recommendation System)
+Steps Performed
+
+Downloaded project zip file from moncey
+
+Extracted project and opened it in VS Code
+
+Created virtual environment for the project
+
+Reviewed folders and main code files",Completed,Held,,"2026-03-05 10:00:00"
+"Harshit Pipaliya","Install Dependencies and Run Project Locally","Steps Performed
+
+Installed required libraries using requirements file
+
+Activated virtual environment in terminal
+
+Ran FastAPI server using uvicorn command
+
+Checked API endpoints using browser and Swagger UI",Completed,Held,,"2026-03-05 10:30:00"
+"Harshit Pipaliya","Analyze Project Code and Understand Recommendation Flow","teps Performed
+
+Studied project modules like recommender and embeddings
+
+Reviewed how job roles and skills are connected
+
+Checked data processing and recommendation logic
+
+Identified areas for improvement in performance",Completed,Held,,"2026-03-05 11:00:00"
+"Harshit Pipaliya","Debug Errors and Fix Runtime Issues","Steps Performed
+
+Identified errors while running API server
+
+Fixed missing fields and incorrect request parameters
+
+Solved issues related to embeddings and artifact loading
+
+Re-tested API endpoints after fixing errors",Completed,Held,,"2026-03-05 12:00:00"
+"Harshit Pipaliya","Implement FAISS Index for Fast Skill Search","Steps Performed
+
+Installed FAISS library for vector similarity search
+
+Generated skill embeddings for vector indexing
+
+Built FAISS index from skill embeddings
+
+Saved FAISS index and metadata in artifacts folder",Completed,Held,,"2026-03-05 14:30:00"
+"Harshit Pipaliya","Integrate Cross Encoder Model for Skill Ranking","Steps Performed
+
+Added cross encoder model for ranking candidate skills
+
+Integrated reranking model with recommendation pipeline
+
+Used model to reorder skills based on relevance
+
+Tested improved recommendation results",Completed,Held,,"2026-03-05 16:00:00"
+"Harshit Pipaliya","Final Testing and Performance Optimization of Recommendation API","Steps Performed
+
+Ran FastAPI server and tested recommendation endpoint
+
+Verified FAISS retrieval and reranking working properly
+
+Checked recommendation accuracy and response time
+
+Confirmed system working correctly after enhancements",Completed,"In Progress",,"2026-03-05 17:00:00"
+"Harshit Pipaliya","Test and Validate Career Recommendation API","Performed testing of the recommendation API after implementing output formatting and schema updates. Verified that the system generates correct recommendations and returns structured responses without errors.
+
+Steps Performed
+
+Started FastAPI server locally using uvicorn
+
+Tested /recommend endpoint with sample input data
+
+Verified improved output structure and recommendation results
+
+Confirmed API functionality and response stability",Completed,"In Progress",,"2026-03-06 00:00:00"
+"Harshit Pipaliya","Update and Extend AI Attendance System Demo Video","Improved the AI Attendance System demo video based on the feedback from Kalpesh Sir. Added additional clips and extended the video length to clearly demonstrate the face detection and attendance marking process.
+
+Steps Performed
+
+Reviewed the previous attendance system demo video
+
+Added additional clips showing AI face detection in classroom
+
+Extended the video duration for better explanation
+
+Improved the overall visual flow of the demonstration",completed,Held,,"2026-03-06 10:00:00"
+"Harshit Pipaliya","GEO Optimization Implementation for Website( KALPESH SIR)(live by vivek sir)","Worked on Generative Engine Optimization (GEO) for the website to improve its structure and AI search visibility. Implemented improvements in metadata, structured content, and schema to make the website more understandable for AI and search engines.
+
+Steps Performed
+
+Reviewed website codebase for GEO optimization opportunities
+
+Improved metadata and structured content for better AI understanding
+
+Implemented schema and structured data improvements
+
+Verified GEO implementation across website pages",Completed,Held,,"2026-03-06 10:30:00"
+"Harshit Pipaliya","AEO Optimization and Website Publishing (kalpesh sir)","Started working on the Career Recommendation System for mapping industries, job roles, skills, and tasks. Reviewed the system architecture and began planning the implementation using Python, FastAPI, and a hybrid recommendation approach.
+
+Steps Performed
+
+Studied the project architecture and recommendation workflow
+
+Analyzed required data structure such as industries, job roles, skills, and tasks
+
+Reviewed hybrid recommendation approach (rule-based + ML + embeddings)
+
+Started planning implementation steps for the recommendation engine","in progress","In Progress",,"2026-03-06 12:00:00"
+"Harshit Pipaliya","Modify API Output Format for Career Recommendation System","Worked on improving the API response format to make the recommendation output more user-friendly and easy to understand. Implemented a new structured response format that highlights career moves, skill gaps, and quick improvement areas.
+
+Steps Performed
+
+Reviewed existing API response structure
+
+Implemented to_catchy_output() function for formatted output
+
+Integrated the new format with recommendation results
+
+Verified the output using API testing",completed,Held,,"2026-03-06 14:00:00"
+"Harshit Pipaliya","Update Recommend Endpoint for Enhanced Output","Modified the /recommend endpoint to return the enhanced career recommendation format instead of the raw system output. Ensured the internal recommendation logic remained unchanged while improving the response presentation.
+
+Steps Performed
+
+Updated /recommend endpoint logic in API
+
+Integrated formatted output function with API response
+
+Verified that recommendation scoring logic remained intact
+
+Tested endpoint functionality using Swagger UI",completed,Held,,"2026-03-06 15:00:00"
+"Harshit Pipaliya","Update Request Schema for Recommendation API","Updated the API request model to support additional fields such as industry, department, and user skills. This allows the recommendation engine to generate more relevant career suggestions based on user context.
+
+Steps Performed
+
+Modified RecommendRequest schema in API
+
+Added new fields for industry, department, and skills
+
+Updated request validation logic
+
+Tested request input structure through Swagger UI",completed,Held,,"2026-03-06 16:00:00"
+"Harshit Pipaliya","Project Architecture Planning for KASBA Framework (again)","Studied the full project document and understood the overall KASBA framework structure.
+Prepared the implementation flow for modules, services, database, and recommendation pipeline.
+
+Steps Performed:
+
+Reviewed the complete project document
+
+Identified major modules and service flow
+
+Planned the project architecture structure
+
+Finalized initial implementation approach",,Held,,"2026-03-07 10:00:00"
+"Harshit Pipaliya","Database Schema Design for Recommendation Platform","Designed the core database structure required for industries, job roles, skills, tasks, and users.
+Also planned relationship tables and indexing strategy for better performance.
+
+Steps Performed:
+
+Listed all required core tables
+
+Defined relationship tables
+
+Planned foreign key connections
+
+Reviewed index requirements for joins and search",Completed,Held,,"2026-03-07 11:00:00"
+"Harshit Pipaliya","FastAPI Microservice Structure Setup","Prepared the FastAPI-based service structure for different modules of the platform.
+Separated services for ingestion, recommendation, embeddings, ranking, and retraining.
+
+Steps Performed:
+
+Planned service-wise folder structure
+
+Defined purpose of each microservice
+
+Created clean modular backend approach
+
+Finalized API service separation",,Held,,"2026-03-07 14:00:00"
+"Harshit Pipaliya","Excel and CSV Ingestion Flow Planning","Designed the ingestion process for importing Excel and CSV data into the system.
+Included validation, normalization, de-duplication, and database insertion flow.
+
+Steps Performed:
+
+Studied file ingestion requirements
+
+Planned validation and normalization process
+
+Added de-duplication logic in flow
+
+Finalized database insertion pipeline",,Held,,"2026-03-07 16:00:00"
+"Harshit Pipaliya","Embedding Module Design for Semantic Search","Planned the embedding generation module for semantic similarity-based recommendations.
+Defined how embeddings will be stored, tracked, and used in similarity scoring.
+
+Steps Performed:
+
+Selected embedding approach for text data
+
+Defined embedding storage format in database
+
+Planned embedding version tracking
+
+Designed similarity scoring flow",,Held,,"2026-03-09 10:00:00"
+"Harshit Pipaliya","Developed Baseline Recommendation Engine","Built the baseline recommendation engine using SQL-based filtering and relational mapping between roles, skills, and tasks. This provides initial recommendations before advanced ML scoring.
+
+Steps Performed:
+
+Designed recommendation API input structure
+
+Implemented SQL queries to fetch candidate roles and skills
+
+Connected job roles with mapped skills and tasks
+
+Tested baseline recommendation output using sample data",Completed,Held,,"2026-03-09 11:00:00"
+"Harshit Pipaliya","Implemented Hybrid Recommendation Strategy","Enhanced the recommendation engine by combining SQL filtering with embedding similarity scoring. This hybrid approach improves accuracy and ranking of recommendations.
+
+Steps Performed:
+
+Integrated embedding similarity scoring into recommendation flow
+
+Combined SQL candidate filtering with semantic similarity
+
+Implemented weighted scoring mechanism for ranking results
+
+Tested hybrid recommendations with different input scenarios",Completed,Held,,"2026-03-09 14:00:00"
+"Harshit Pipaliya","Implemented Phase-wise Project Development Roadmap","Structured the development roadmap and implemented the foundational phase of the system including database schema, ingestion flow, and recommendation modules.
+
+Steps Performed:
+
+Organized project modules and microservice structure
+
+Implemented database schema and core tables
+
+Integrated ingestion and recommendation modules
+
+Verified system workflow from data ingestion to recommendation output",Completed,Held,,"2026-03-09 16:00:00"
+"Harshit Pipaliya","Create and Optimize Blog Content on College Placement Readiness (submitted the document to kalpeshsir)","AEO + GEO + SEO: Implement structured schema markup (Review existing GEO items: Organization, Breadcrumb, FAQs).
+
+Researched the topic of misleading college placement rates and developed a detailed SEO-optimized blog explaining placement readiness and employability gaps in higher education. The blog was structured with proper headings, schema markup, internal linking, and visual prompts to improve search visibility and user engagement.
+
+Steps Performed
+
+Analyzed placement ecosystem issues and defined blog topic
+
+Wrote structured blog content with SEO-friendly headings and keywords
+
+Added FAQ section and schema markup for AEO optimization
+
+Prepared image prompts and design layout for better visual presentation
+
+Added internal link placeholders and CTA section for conversion",Completed,Held,,"2026-03-10 10:00:00"
+"Harshit Pipaliya","Implementation of SEO, GEO, and AEO Optimization in Website(by kalpesh sir)(gapstogrowth.com)","Worked on improving the website's SEO, GEO, and AEO structure using KiloCode prompts in VS Code. The goal was to enhance search engine visibility and make the website more AI-citation friendly.
+
+Steps Performed:
+
+Executed step-by-step KiloCode prompts for SEO improvements
+
+Added metadata, schema, and structured data
+
+Improved internal linking and heading structure
+
+Implemented FAQ sections and AI-citation friendly content",,Held,,"2026-03-10 11:30:00"
+"Harshit Pipaliya","Website Performance and Core Web Vitals Optimization(gapstogrowth.com)","Reviewed the website performance and optimized it for better Core Web Vitals and loading behavior. The focus was to improve page speed and ensure smooth rendering without affecting design.
+
+Steps Performed:
+
+Audited pages for performance issues
+
+Optimized image usage and loading behavior
+
+Reduced layout shift risks
+
+Verified technical SEO improvements",,Held,,"2026-03-10 14:00:00"
+"Harshit Pipaliya","Content Authority and Guide Pages Creation","Created structured guide pages to strengthen topical authority and improve search visibility. These pages provide clear explanations and FAQ sections to support SEO and answer engine optimization.
+
+Steps Performed:
+
+Developed three guide pages for knowledge content
+
+Added structured headings and metadata
+
+Implemented FAQ schema for answer engines
+
+Connected guide pages through internal linking",Completed,Held,,"2026-03-10 15:00:00"
+"Harshit Pipaliya","Phase 3 – Website Deployment Readiness Audit for gapstogrowth.com","Conducted a full deployment readiness audit to ensure the website is ready for production launch. Verified metadata, schema, navigation, and crawlability across major pages.
+
+Steps Performed:
+
+Validated metadata and canonical URLs
+
+Checked sitemap, robots, and llms files
+
+Identified missing assets and broken links
+
+Verified internal navigation and schema structure",Completed,Held,,"2026-03-10 15:00:00"
+"Harshit Pipaliya","Search Engine Setup and Indexing Preparation","Prepared the website for search engine indexing and visibility. This included verifying crawl settings and preparing the site for Google Search Console and Bing Webmaster Tools.
+
+Steps Performed:
+
+Verified sitemap and robots configuration
+
+Checked schema validation for search engines
+
+Prepared indexing setup for Google and Bing
+
+Confirmed crawlability of important pages",,"In Progress",,"2026-03-10 16:00:00"
+"Harshit Pipaliya","SEO Monitoring and Website Authority Planning","Planned ongoing SEO and content strategy to strengthen website authority and improve ranking performance. The focus was on continuous monitoring and publishing high-value content.
+
+Steps Performed:
+
+Defined content publishing strategy
+
+Planned additional guide and FAQ pages
+
+Identified platforms for brand citations
+
+Prepared monitoring plan using analytics tools",Completed,"In Progress",,"2026-03-10 17:00:00"
+"Harshit Pipaliya","Final Deployment Readiness Review for Website","Reviewed the website to ensure it is ready for production deployment after completing SEO, GEO, and AEO optimization steps. Verified domain consistency, sitemap configuration, metadata, and navigation links across the project.
+
+Steps Performed:
+
+Ran final deployment readiness audit using KiloCode prompt
+
+Checked domain references and metadata consistency
+
+Verified sitemap, robots, and llms configuration
+
+Identified deploy blockers such as missing OG image and broken routes",,Held,,"2026-03-11 10:00:00"
+"Harshit Pipaliya","Fixing Deploy Blockers and Technical SEO Issues","Resolved critical issues that could affect website deployment and search engine visibility. The task focused on correcting navigation links, sitemap routes, and validating metadata and assets.
+
+Steps Performed:
+
+Removed or corrected invalid routes from sitemap
+
+Fixed broken navigation links in project files
+
+Verified Open Graph image references
+
+Checked placeholder domain and business data for replacement",,"In Progress",,"2026-03-11 11:00:00"
+"Harshit Pipaliya","Website SEO Domain and Canonical Consistency Fix","Reviewed the website codebase to identify domain inconsistencies in canonical URLs, metadata, and Open Graph tags. Standardized the domain usage across the project to ensure proper SEO indexing and avoid duplicate authority issues.
+
+Steps Performed
+
+Reviewed canonical URL usage across metadata files
+
+Identified hardcoded domain references causing inconsistency
+
+Standardized base domain configuration in SEO helper files
+
+Updated metadata and Open Graph URLs to use a single domain",,Held,,"2026-03-11 12:00:00"
+"Harshit Pipaliya","Sitemap Coverage and Crawlability Improvement","Analyzed the website sitemap to ensure all important pages are included for search engine indexing. Updated sitemap configuration to improve crawl coverage and ensure all product and solution pages are discoverable.
+
+Steps Performed
+
+Reviewed existing sitemap route configuration
+
+Identified missing product and solution pages
+
+Updated sitemap structure with additional routes
+
+Verified sitemap accuracy for search engine crawling",,Held,,"2026-03-11 14:00:00"
+"Harshit Pipaliya","SEO Metadata and Title Optimization","Improved website metadata structure to prevent duplicate branding in page titles and enhance search result visibility. Optimized title templates and page-level metadata for better SEO consistency.
+
+Steps Performed
+
+Reviewed global metadata configuration in layout files
+
+Identified duplicate branding in page titles
+
+Updated title template logic for consistent SEO formatting
+
+Verified page-level metadata structure across important pages",,Held,,"2026-03-11 15:00:00"
+"Harshit Pipaliya","Schema and Business Data Verification for SEO","Audited structured data and business information used in schema markup to ensure accuracy and credibility. Improved schema configuration and identified placeholder values that require real business information.
+
+Steps Performed
+
+Reviewed organization schema and structured data implementation
+
+Identified placeholder address and contact values
+
+Centralized business data configuration for schema usage
+
+Verified schema structure for SEO and search engine understanding",,Held,,"2026-03-11 17:00:00"
+"Harshit Pipaliya","YouTube Channel Creation and Login Setup for Gaps to Growth Website","Created and configured the YouTube channel for the Gaps to Growth website to support brand presence and future video marketing activities.
+Completed the login setup and verified account access so the channel can be used smoothly for content uploads and business promotion.
+
+Steps Performed:
+Reviewed brand name and website requirement for channel setup
+Created the YouTube channel for Gaps to Growth
+Completed account login and access verification
+Checked basic channel readiness for future use",Completed,"In Progress",,"2026-03-11 18:00:00"
+"Harshit Pipaliya","Design and Refinement of Gaps to Growth Brand Logo( submit to kalpesh sir)","orked on designing a professional brand logo for the “Gaps to Growth” website that reflects business consulting, transformation, and growth. The logo concept includes a hexagonal “G” symbol with upward bars and an arrow representing business improvement and growth through strategic solutions.",Completed,Held,,"2026-03-12 10:30:00"
+"Harshit Pipaliya","SEO, GEO and AEO Error Resolution for Gaps to Growth Website","Performed a detailed audit of the Gaps to Growth website and identified multiple SEO, GEO, and AEO related issues affecting search visibility and structured data performance. All detected errors were analyzed and resolved to ensure proper indexing, metadata accuracy, and schema implementation.
+
+Steps Performed
+
+Reviewed website structure and identified SEO related errors
+
+Fixed metadata, headings, and schema markup issues
+
+Corrected sitemap and indexing configuration
+
+Verified GEO and AEO implementation across main pages
+
+Re-tested pages to confirm error resolution
+
+Completion Mark: Completed
+
+CRM Entry 2
+
+Subject: Final Implementation of SEO, GEO and AEO Optimization for Gaps to Growth
+
+Status: Completed
+
+Description:
+Completed the full SEO, GEO, and AEO optimization process for the Gaps to Growth website to improve search engine visibility and AI search discoverability. The website was finalized with structured content, optimized metadata, and proper search engine readiness.
+
+Steps Performed
+
+Implemented complete on-page SEO optimization
+
+Applied GEO optimization for location-based visibility
+
+Integrated AEO structure for AI search engines
+
+Verified schema markup and structured data
+
+Conducted final review to ensure production readiness",Completed,Held,,"2026-03-12 11:30:00"
+"Harshit Pipaliya","Final Completion and Delivery of Gaps to Growth Website Optimization","Completed the full SEO, GEO, and AEO implementation for the Gaps to Growth website and performed the final verification of all pages and configurations. After resolving remaining issues and validating the optimization, the website is now prepared as the final product and ready for use.
+
+Steps Performed
+
+Finalized SEO, GEO, and AEO optimizations across the website
+
+Verified metadata, schema markup, and structured content
+
+Tested sitemap, indexing, and search engine visibility settings
+
+Reviewed overall website functionality and optimization status
+
+Confirmed the website as the final ready product",Completed,Held,,"2026-03-12 14:00:00"
+"Harshit Pipaliya","Recommendation Engine Architecture Review(job role)","Reviewed the recommendation engine architecture and compared the current project implementation with the provided documentation. Verified whether the system follows the hybrid recommendation strategy and overall data flow.
+
+Steps Performed
+
+Studied documentation of the recommendation system architecture
+
+Compared project modules with the required recommendation pipeline
+
+Checked SQL filtering, embedding similarity, and ranking flow
+
+Identified areas that needed improvements and fixes",,Held,,"2026-03-12 15:00:00"
+"Harshit Pipaliya","Recommendation Engine Execution and System Testing","Executed the recommendation engine project locally and tested the main API flows to ensure the system runs correctly. Verified application startup and endpoint responses through local testing.
+
+Steps Performed
+
+Started FastAPI application using uvicorn
+
+Fixed virtual environment path issue causing startup error
+
+Opened Swagger documentation to verify API routes
+
+Tested recommendation endpoint with sample input data",,Held,,"2026-03-12 16:00:00"
+"Harshit Pipaliya","Recommendation Engine Validation and Final Workflow Check","Validated the overall workflow of the recommendation engine including ingestion, recommendation generation, and feedback handling. Ensured the main system components work together correctly.
+
+Steps Performed
+
+Verified ingestion and recommendation service integration
+
+Checked feedback logging for recommendation results
+
+Reviewed retraining and model activation endpoints
+
+Confirmed health endpoints and system stability",,Held,,"2026-03-12 17:00:00"
+"Harshit Pipaliya","Logo Color Scheme Update for Gaps to Growth Brand(by kalpesh sir & dev sir)","Updated the visual identity of the Gaps to Growth logo to align with the new brand color strategy. The logo color scheme was modified to use green and grey tones to represent growth, professionalism, and corporate credibility. and also orange and blue",,Held,,"2026-03-12 18:00:00"
+"Harshit Pipaliya","Logo Design Enhancement – Rocket Element Integration(kalpesh sir)","Updated the “Gaps to Growth” logo by integrating a rocket element into the hexagonal G design to visually represent growth and innovation. The rocket flame was aligned with the inner G shape and design balance was improved.",,Held,,"2026-03-13 10:00:00"
+"Harshit Pipaliya","Workstation Monitor and System Setup","Set up the company workstation due to laptop performance issues to ensure a stable development environment for project work.
+
+Steps Performed:
+
+Connected monitor with CPU and verified display setup
+
+Completed wiring for keyboard, mouse, and other peripherals
+
+Configured system startup and basic system settings
+
+Verified hardware connections and system functionality
+
+Prepared workstation for development and project tasks",Completed,Held,,"2026-03-16 10:00:00"
+"Harshit Pipaliya","Development Environment Setup for SEO AI Agents Project","Completed full development environment setup for the AI Agents for Daily SEO Optimization project on a new system.
+
+Steps Performed:
+
+Installed VS Code and required extensions
+
+Installed Python and created virtual environment
+
+Installed Node.js, Git, and Docker
+
+Installed project dependencies using requirements.txt
+
+Verified environment setup successfully",,Held,,"2026-03-16 12:00:00"
+"Harshit Pipaliya","AI SEO Agents Project Structure Initialization","Initialized the base project architecture for the SEO AI Agents system with a modular and scalable structure.
+
+Steps Performed:
+
+Created project folder and base structure
+
+Added agents, services, core, models, and utils modules
+
+Created documentation and configuration files
+
+Added initial FastAPI application setup
+
+Verified project structure and file organization",Completed,Held,,"2026-03-16 14:00:00"
+"Harshit Pipaliya","Core Configuration and Master Workflow Setup","Implemented core configuration, logging system, models, and the master SEO workflow controller for orchestrating agents.
+
+Steps Performed:
+
+Implemented environment configuration system
+
+Added centralized logging functionality
+
+Created reusable SEO data models
+
+Implemented Daily SEO Master Workflow controller
+
+Added workflow execution endpoint in API",,Held,,"2026-03-16 15:00:00"
+"Harshit Pipaliya","Website Crawling and SEO Data Extraction Module","Developed the website crawling module to discover pages and extract basic SEO metadata for analysis.
+
+Steps Performed:
+
+Implemented crawler service for internal page discovery
+
+Extracted SEO metadata (title, description, headings)
+
+Added URL normalization and helper utilities
+
+Collected page data for further SEO analysis
+
+Tested crawling functionality through API endpoints",,Held,,"2026-03-16 16:00:00"
+"Harshit Pipaliya","Basic Technical SEO Audit and Internal Linking Analysis","Implemented technical monitoring and internal linking analysis agents using crawled website data.
+
+Steps Performed:
+
+Developed technical SEO monitoring agent
+
+Implemented detection for missing titles, meta tags, and headings
+
+Added internal linking suggestion logic
+
+Integrated agents into master workflow execution
+
+Tested workflow execution and SEO analysis output",,"In Progress",,"2026-03-16 17:00:00"
+"Harshit Pipaliya","Keyword Analysis and CTR Optimization Implementation","Keyword Analysis and CTR Optimization Implementation",,Held,,"2026-03-17 10:00:00"
+"Harshit Pipaliya","LLM Optimization Layer Integration","LLM Optimization Layer Integration",,Held,,"2026-03-17 11:00:00"
+"Harshit Pipaliya","Competitor Monitoring and Backlink Discovery Module","Competitor Monitoring and Backlink Discovery Module",,Held,,"2026-03-17 12:00:00"
+"Harshit Pipaliya","Schema Markup and Ranking Tracking Implementation","Schema Markup and Ranking Tracking Implementation",,Held,,"2026-03-17 14:00:00"
+"Harshit Pipaliya","Content Distribution and Workflow Enhancement","Content Distribution and Workflow Enhancement",,Held,,"2026-03-17 15:00:00"
+"Harshit Pipaliya","Final Testing, Debugging, and Project Stabilization","Final Testing, Debugging, and Project Stabilization",,"In Progress",,"2026-03-17 16:00:00"
+"Harshit Pipaliya","Setup new system and completed project backup","Setup new system and completed project backup",,Held,,"2026-03-18 10:00:00"
+"Harshit Pipaliya","Shifted my work to a new system and ensured all project files and setup are properly configured.","Fixed BeautifulSoup dependency issue in crawler",,Held,,"2026-03-18 11:00:00"
+"Harshit Pipaliya","While running the project, I faced an error related to missing bs4 module.  Steps Performed:  Identified missing BeautifulSoup dependency  Installed beautifulsoup4 package  Restarted the server  Verified crawler working properly","Corrected FastAPI run command issue",,Held,,"2026-03-18 12:00:00"
+"Harshit Pipaliya","Server was not starting properly due to incorrect Uvicorn command.  Steps Performed:  Identified wrong app reference (app:api)  Updated command to correct path (app.main:app)  Restarted server  Verified application running successfully","Swagger UI was not loading due to internal Pydantic model issues.
+
+Steps Performed:
+
+Debugged OpenAPI error
+
+Fixed request and response model structure
+
+Simplified schema definitions
+
+Verified Swagger working correctly",,Held,,"2026-03-18 14:00:00"
+"Harshit Pipaliya","Fixed DEFAULT_REPORT_PATH import error in workflow","Workflow API was failing due to incorrect constant import.
+
+Steps Performed:
+
+Identified missing constant in config file
+
+Moved constant to constants file",,Held,,"2026-03-18 15:00:00"
+"Harshit Pipaliya","Fixed crawler method mismatch issue","Fixed crawler method mismatch issue",,Held,,"2026-03-18 16:30:00"
+"Harshit Pipaliya","Crawler API was failing because of incorrect method name usage.  Steps Performed:  Identified missing crawl_website method  Added wrapper method / corrected method call  Tested crawl API  Verified response working properly","Tested all APIs and fixed internal server errors",,"In Progress",,"2026-03-18 17:30:00"
+"Harshit Pipaliya","https://www.gapstogrowth.com publishing with viveksir and make report on output",,,Held,,"2026-03-19 10:00:00"
+"Harshit Pipaliya","Added Database Persistence for SEO Workflow","Integrated database layer into the SEO AI Agents project to store workflow runs, agent results, and crawl data. Designed structured tables for tracking history and improving system reliability. Ensured smooth data saving without affecting existing API functionality.",,Held,,"2026-03-19 12:00:00"
+"Harshit Pipaliya","Improved Workflow Execution & Agent Handling","Upgraded the master workflow by adding run tracking, agent status monitoring, retry handling, and proper execution flow. Implemented error handling so system continues even if some agents fail. Improved overall stability and logging of the SEO automation process.",,Held,,"2026-03-19 14:00:00"
+"Harshit Pipaliya","Enhanced Internal Linking & CMS Update System","Developed advanced internal linking logic using content similarity and smart scoring. Added a safe CMS update layer to generate draft SEO changes like meta updates, FAQs, and link suggestions without directly modifying live content. Improved automation quality and production readiness.",,Held,,"2026-03-19 15:30:00"
+"Harshit Pipaliya","Tested SEO Automation System & Verified Outputs and live on hugging face","Performed end-to-end testing of the SEO AI Agents system including workflow execution, database storage, agent outputs, and CMS draft generation.
+
+https://harshit20991999-seo-ai-agents.hf.space",,Held,,"2026-03-20 10:00:00"
+"Harshit Pipaliya","SEO AI Agents – POST APIs Documentation and send it to ajit sir","These APIs perform all major actions like crawling, SEO analysis, content generation, and automation workflows.",,Held,,"2026-03-20 12:30:00"
+"Harshit Pipaliya","working on Simplified SEO AI Agents Workflow","Reorganized the SEO AI Agents project to make the workflow easier to understand by reducing API complexity and structuring it into a clear flow (Input → Crawl → Audit → Agents → Final Report). Also improved the output format to make results more user-friendly and better for presentation.",,"In Progress",,"2026-03-20 15:00:00"
+"Harshit Pipaliya","URL Validation Error Handling Issue in API","The system was returning a 500 Internal Server Error instead of the expected 400 Bad Request when the target URL was missing in the request. This issue occurred due to improper exception handling where HTTPException was being caught inside a generic exception block. The problem has been resolved by updating the error handling logic to re-raise HTTPException and only handle unexpected errors as 500. Middleware validation was also improved to ensure proper request validation.",,Held,,"2026-04-01 15:00:00"
+"Harshit Pipaliya","FastAPI Dependency Conflict and Environment Setup Issue solving","The project encountered multiple dependency conflicts between FastAPI, Pydantic, and other installed libraries such as google-adk and mcp. This caused runtime errors and prevented the server from starting. The issue was resolved by creating a clean virtual environment and installing compatible versions of required packages. Unnecessary conflicting libraries were removed to ensure smooth application execution.",,"In Progress",,"2026-04-01 17:30:00"
+"Harshit Pipaliya","ai video genration for scholerclone & gapstogrowth and send to shivraj sir","with shivrajsir",,Held,,"2026-04-01 10:00:00"
+"Harshit Pipaliya","Architecture Design & Data Foundation Setup – HP KASBA Framework","Designed multi-module system (industry, roles, skills, tasks, training, content)
+Defined relational schema in MariaDB with normalized core & relationship tables
+Implemented indexing strategy (FKs, joins, text fields)
+Built Excel/CSV ingestion pipeline using Python (Pandas, SQLAlchemy, Pydantic)
+Added validation, normalization, and de-duplication steps
+Automated ingestion using FastAPI background tasks / scheduler",,Held,,"2026-04-03 10:00:00"
+"Harshit Pipaliya","Embedding Infrastructure & Semantic Recommendation Setup","Integrated SentenceTransformers (all-MiniLM-L6-v2) for embeddings
+Stored embeddings in MariaDB as BLOB with version tracking
+Built semantic similarity engine using NumPy (cosine similarity)
+Implemented hybrid retrieval (SQL filtering + vector similarity)
+Added optimization via pre-clustering & optional Redis caching
+Designed embedding refresh pipeline (scheduled updates)",,Held,,"2026-04-03 11:30:00"
+"Harshit Pipaliya","ML Model Development & Fine-Tuning Pipeline","Developed classification models (Industry, Job Role) using HuggingFace Transformers
+Created training datasets from structured DB tables
+Implemented multi-label classification (BCEWithLogitsLoss)
+Built ranking models (CrossEncoder) for skill & content relevance
+Trained models using PyTorch with MLflow tracking
+Deployed models via FastAPI microservices (TorchScript export)",,Held,,"2026-04-03 14:00:00"
+"Harshit Pipaliya","video making in notebooklm and edit in capcut","send to shivraj sir (gapstogrowth )",,Held,,"2026-04-03 15:00:00"
+"Harshit Pipaliya","Recommendation Engine, Personalization & Deployment","Built hybrid recommendation engine (rule-based + ML + embeddings)
+Implemented task, skill, and training recommendation workflows
+Added user personalization using collaborative filtering (LightFM)
+Designed feedback loop (clicks, ratings, dwell time tracking)
+Enabled retraining pipeline (weekly batch + monthly fine-tuning)",,"In Progress",,"2026-04-03 16:00:00"
+"Harshit Pipaliya","New YouTube Channel Creation – TRIZ","Created new YouTube channel “TRIZ” including basic setup, branding elements, and initial configuration.",,Held,,"2026-04-14 00:00:00"
+"Harshit Pipaliya","YouTube Content Upload – GapstoGrowth & ScholarClone","Uploaded 8 videos on GapstoGrowth YouTube channel and 8 videos on ScholarClone channel. Ensured proper titles, thumbnails, and scheduling.",,Held,,"2026-04-14 14:00:00"
+"Harshit Pipaliya","Calendar System Development Task","Worked on calendar system integration, focusing on functionality, API handling, and task synchronization improvements.",,"In Progress",,"2026-04-14 15:00:00"
+"Harshit Pipaliya","AI Video Script Creation & CapCut AI Generation for g2g , sc and triz","Planned 9 YouTube Shorts topics based on niche/content strategy
+Wrote short engaging scripts (40–60 sec format)
+Used CapCut AI video generator to create initial videos
+Selected templates, visuals, and auto-generated captions
+Exported draft versions for editing",,Held,,"2026-05-01 10:00:00"
+"Harshit Pipaliya","Video Editing & Optimization for Shorts using capcut","Edited all 9 videos in CapCut
+Added transitions, background music, and sound effects
+Optimized captions, timing, and visual flow
+Ensured vertical format (9:16) and high engagement style
+Finalized videos with proper titles and hooks",,Held,,"2026-05-01 11:00:00"
+"Harshit Pipaliya","YouTube Upload & Scheduling till to the 5-5-2026","Uploaded all 9 Shorts to YouTube channel
+Added SEO-friendly titles, descriptions, and hashtags
+Set thumbnails (if applicable) and visibility settings
+Scheduled posts for consistent publishing timeline
+Verified uploads and ensured proper scheduling",,Held,,"2026-05-01 14:00:00"
+"Harshit Pipaliya","Intelligent Fee Concession & Discount Recommendation Engine – Project Setup","Started the project by setting up FastAPI backend
+Created proper folder structure (models, routes, services, schemas)
+Connected database and configured environment variables
+Installed all required dependencies and fixed initial setup issues
+Ran the server and verified everything is working properly",,Held,,"2026-05-01 15:00:00"
+"Harshit Pipaliya","Intelligent Fee Concession & Discount Recommendation Engine – Decision Logic Development","Worked on main concession logic in decision engine file
+Added rules for eligibility like income, category, and student performance
+Connected logic with service layer for better flow
+Created API endpoints to calculate concession dynamically
+Tested the functionality using sample student data and verified results",,Held,,"2026-05-01 16:00:00"
+"Harshit Pipaliya","Intelligent Fee Concession & Discount Recommendation Engine – API Integration & Reports","Integrated ERP API to fetch student fee details
+Developed APIs for student data and concession reports
+Created report routes for proper output handling
+Handled API errors and validated responses
+Completed end-to-end testing from input to final output",,"In Progress",,"2026-05-01 17:00:00"
+"Harshit Pipaliya","Concession Logic Enhancement & Rule Modification","Reviewed existing concession decision logic
+Updated eligibility rules (income, category, performance criteria)
+Improved condition handling for edge cases
+Refactored decision engine for better readability and scalability
+Tested updated logic with multiple scenarios",,Held,,"2026-05-02 10:00:00"
+"Harshit Pipaliya","student details API Integration & Data Fetching","Integrated external API for student data retrieval
+Configured request parameters (student_id, institute_id, token, etc.)
+Implemented API call using FastAPI service layer
+Parsed and validated response data
+Connected fetched data with concession decision module",,Held,,"2026-05-02 12:00:00"
+"Harshit Pipaliya","Bug Fixing & Error Resolution in  Intelligent Fee Concession & Discount Recommendation Engine","Identified runtime and logical errors in API and decision engine
+Fixed data mismatch and null value handling issues
+Resolved API response parsing errors",,Held,,"2026-05-02 14:00:00"
+"Harshit Pipaliya","System Testing & Workflow Validation","Tested complete concession request workflow (request → decision → response)
+Verified API endpoints functionality
+Validated correct output based on different student profiles
+Ensured proper status handling (approved/rejected/pending)
+Performed final debugging and confirmation of working system",,"In Progress",,"2026-05-02 16:00:00"
+"Harshit Pipaliya","Deployment on Hugging Face","Prepared project for deployment (cleaned codebase & dependencies)
+Created deployment configuration files (requirements.txt, app entry point)
+Set up Hugging Face Space environment
+Started uploading project files to repository
+Configuring runtime settings and environment variables",,"In Progress",,"2026-05-02 18:00:00"
+"Harshit Pipaliya","Multi-Tasking AI Agent Development with Dev UI Integration (documentation)","submitted to shivrajsir",,Held,,"2026-05-04 10:00:00"
+"Harshit Pipaliya","Intelligent Fee Concession Engine – Hugging Face Deployment Error Resolution","Identified deployment issue showing “No application file” error
+Fixed README configuration (correct SDK and app_file path)
+Switched from Gradio to Docker setup for FastAPI compatibility
+Added required Dockerfile and verified root file structure
+Successfully resolved configuration and build errors",,Held,,"2026-05-04 11:00:00"
+"Harshit Pipaliya","Intelligent Fee Concession Engine – Deployment on Hugging Face Spaces and submitt to ajit sir","Prepared project for deployment on Hugging Face Spaces
+Configured Docker environment for FastAPI backend
+Uploaded project files including requirements.txt and Dockerfile
+Deployed application and verified API endpoints
+Deployment completed and app made accessible via public URL",,Held,,"2026-05-04 14:00:00"
+"Harshit Pipaliya","professional documentation based on Intelligent Fee Concession & Discount Recommendation Engine",detailed,,Held,,"2026-05-04 16:00:00"
+"Harshit Pipaliya","Task plan","1) Assist Ajit bhai to rajesh sir for existing agent integration at frontend 
+2) Take feedback or what next to do for other school in the same agent from Abhi bhai",,Planned,,"2026-05-16 00:00:00"
+"Harshit Pipaliya","AI Video Creation using CapCut , Script Generation for 3 min video for G2G","Collected and reviewed video content requirements.
+Prepared and structured the script for AI video generation.
+Uploaded and integrated the script into CapCut AI tools.
+Generated AI scenes and voice narration.
+Reviewed generated output and adjusted scene flow for better content quality.",,Held,,"2026-05-18 10:00:00"
+"Harshit Pipaliya","3-Minute Video Editing with Effects and Transitions and AI voice over of mine and also add avatar","Imported generated video clips into the editing timeline.
+Arranged clips according to the script sequence.
+Applied transition effects between scenes.
+Added visual effects, text animations, and timing adjustments.
+Synchronized audio and finalized a 3-minute edited video.",,Held,,"2026-05-18 11:30:00"
+"Harshit Pipaliya","Fee Concession Engine Analysis, Testing and Workflow Explanation to rajesh sir","Reviewed the Fee Concession Engine workflow and project structure.
+Verified student data processing and input handling functionality.
+Checked score calculation and rule-based logic implementation.
+Reviewed tier assignment and recommendation generation process.
+Explained complete working flow and functionality to Rajesh Sir.",,Held,,"2026-05-18 14:30:00"
+"Harshit Pipaliya","Research and Analysis of Indian English Accent Tools for change voice in video","Identified AI tools supporting Indian English accent generation, including ElevenLabs, Murf AI, PlayHT, HeyGen, and LOVO AI.
+Compared features including voice cloning, accent customization, language support, and export capabilities across tools.
+Tested voice quality and pronunciation accuracy for Indian English speech generation and narration scenarios.
+Reviewed compatibility with AI video platforms including CapCut and AI avatar/video generation workflows.
+Documented suitable tools for future implementation based on voice quality and project requirements.
+Findings indicated that ElevenLabs and Murf AI provided stronger natural-sounding Indian English voices for video narration use cases, while PlayHT offered broader language and accent coverage.",completed,"In Progress",,"2026-05-18 16:30:00"
+"Harshit Pipaliya","GapstoGrowth Marketing Video Creation Using CapCut AI","Analyzed the GapstoGrowth website structure and services to understand the business concept and messaging.
+Created a detailed marketing video script for business promotion.
+Used CapCut AI video generation features to create the video.
+Added relevant visuals, transitions, animations, and text overlays for better engagement.
+Optimized video flow and timing for a professional corporate presentation.
+Generated and reviewed the final video output.",completed,Held,,"2026-05-20 10:00:00"
+"Harshit Pipaliya","Indian English Voice Integration Using ElevenLabs for Video Enhancement (kalpesh sir)","Identified voice enhancement requirements for the generated marketing video.
+Used ElevenLabs to convert narration into an Indian English accent.
+Tested two different Indian English voice models for pronunciation and clarity comparison.
+Evaluated voice quality, tone, and synchronization with video content.
+Applied the selected voiceover to the final video.
+Reviewed and submitted the completed video to Kalpesh Sir.",,Held,,"2026-05-20 11:30:00"
+"Harshit Pipaliya","AI Teacher System Agent Architecture Analysis and Understanding  from document given by shivrajsir","Studied the proposed AI Teacher System architecture document.
+Reviewed the recommended 7-agent architecture with Laravel-based orchestration.
+Analyzed responsibilities of major agents including Conversation Orchestrator, Learning Tutor, Assessment & Diagnosis, Learner State, Pedagogy Decision, Remediation Feedback, and Teacher Copilot agents.
+Examined MariaDB schema structure and Neo4j graph model relationships.
+Reviewed Laravel service structure and API route organization.
+Understood implementation roadmap phases and adaptive learning workflow for future development activities.",,Held,,"2026-05-20 14:30:00"
+"Harshit Pipaliya","YouTube Video SEO Optimization and Content Publishing Configuration","Prepared SEO-optimized content details for the generated business marketing video.
+Created an optimized video title focused on business growth and audience reach.
+Developed a detailed video description with relevant keywords and business-related content.
+Identified and added suitable hashtags and search tags for improved discoverability.
+Created keyword strategies for better ranking and audience engagement.
+Suggested thumbnail text and content presentation elements to increase click-through rate.
+Finalized upload metadata and publishing details for YouTube video optimization.",,Held,,"2026-05-20 16:30:00"
+"Harshit Pipaliya","Task Plan based on weekly goal","1) Discuss with abhi bhai & shivraj sir about the fee concession & Discount Recommendation extended logic for Lions school start implementing
+2) PAL Agents overview: discuss with shivraj sir & discuss initial code setup
+3) Video pipeline: Explain  what is manual and what has been integrated for automation (indian accent voice, avatar creation, scripts)",,Planned,,"2026-05-21 10:00:00"
+"Harshit Pipaliya","Day 1 – LangGraph Core Concepts ( learning )","Understand why LangGraph vs plain LangChain
+Learn the StateGraph mental model (nodes, edges, state)
+Define a TypedDict state schema
+Add nodes and wire conditional edges
+Visualize the graph using draw_mermaid_png",,Held,,"2026-05-21 10:00:00"
+"Harshit Pipaliya","Day 1 – Build First LangGraph Agent","Set up project env and install langgraph, langchain, langchain-openai
+Build a 3-node linear graph (input → llm → output)
+Add a conditional edge to route based on LLM response
+Run the graph and inspect state at each step
+Mini project: ""Decide"" agent — takes user input, routes through LLM, returns structured output",,Held,,"2026-05-21 12:00:00"
+"Harshit Pipaliya","Researched Improvement Opportunities for AI-Based Adaptive Learning Platform","Reviewed the existing adaptive learning system architecture and agent workflow.
+Studied potential enhancement areas for improving learning experience and system intelligence.
+Analyzed concepts such as learner personalization, memory handling, misconception tracking, and content recommendation approaches.
+Evaluated ideas for improving scalability, response quality, and educational effectiveness.
+Documented observations and future enhancement recommendations for the AI learning platform architecture.",,Held,,"2026-05-21 14:30:00"
+"Harshit Pipaliya","Task Plan based on weekly goal","1) Discuss with abhi bhai & shivraj sir about the fee concession & Discount Recommendation extended logic for Lions school start implementing
+2) Langgraph video series: learn from Krish Naik's playlist
+3) Video pipeline: List out what is manual and R&D for how it can be semi-automated for automation pipeline (indian accent voice, avatar creation, storyboarding) of 3-5 minute video",,Planned,,"2026-05-22 09:30:00"
+"Harshit Pipaliya","Requirement Analysis and Idea Research for AI Content Studio Agent","Conducted research on AI-based content generation systems and multi-agent workflows.
+Identified key project objectives for a Social Media and YouTube Script Generator Agent.
+Collected requirements for script generation including hooks, scene structure, timing, visuals, and SEO details.
+Reviewed platform-specific requirements for YouTube Shorts, YouTube videos, Instagram Reels, and TikTok.
+Finalized core features and workflow requirements for implementation.",,Held,,"2026-05-22 10:00:00"
+"Harshit Pipaliya","Studied and Designed Multi-Agent Architecture Using LangGraph","Learned LangGraph workflow concepts by following the LangGraph video series and playlist from Krish Naik on YouTube.
+Studied core concepts including nodes, edges, state management, and workflow execution.
+Analyzed multi-agent architecture patterns for AI-driven content generation systems.
+Defined responsibilities for Planner Agent, Research Agent, Hook Agent, Script Writer Agent, SEO Agent, and Auditor Agent.",,Held,,"2026-05-22 11:00:00"
+"Harshit Pipaliya","Developed Content Generation Workflow and Output Strategy Using LangGraph Concepts","Learned workflow design concepts and content generation patterns by following the LangGraph YouTube playlist from Krish Naik.
+Designed the complete content generation workflow based on user inputs including topic, content details, platform type, and content tone.
+Defined the output structure for script generation including timing, visuals, camera angles, music suggestions, and voice-over content.
+Planned SEO-related output generation including titles, descriptions, hashtags, and thumbnail concepts.
+Added quality validation logic and feedback loop requirements through an Auditor Agent for improving content quality and consistency.
+Reviewed content generation standards for better user engagement and output structure.",,Held,,"2026-05-22 14:30:00"
+"Harshit Pipaliya","watch next video of capcut for better outcome of video generation task","Watched the next CapCut tutorial/video series to understand advanced video editing and content creation techniques.
+Studied methods for improving transitions, effects, text animations, and scene timing for better content quality.
+Reviewed workflow improvements for AI-generated scripts and video creation processes.",,Held,,"2026-05-22 17:00:00"
+"Harshit Pipaliya","Project Dependency Analysis and Environment Compatibility Fix","Reviewed existing project dependencies and identified version conflicts causing package installation failures.
+Analyzed compatibility issues between LangChain, LangGraph, and related libraries.
+Updated dependency versions to maintain compatibility while preserving project workflow and architecture.
+Reconfigured package requirements to ensure successful environment setup and stable execution.
+Validated package structure and prepared the application for further integration testing.",,Held,,"2026-05-25 10:30:00"
+"Harshit Pipaliya","API Migration and Application Startup Error Resolution","Replaced OpenAI-based integration with Gemini API configuration for cost-effective implementation.
+Updated environment variables and modified API integration settings across the project structure.
+Investigated application startup failures and resolved module import and configuration issues.
+Corrected FastAPI application execution path and verified project initialization flow.
+Performed troubleshooting and testing to ensure the application starts successfully without runtime errors.",,Held,,"2026-05-25 14:00:00"
+"Harshit Pipaliya","AI Video Generation for ScholarClone and Triz Using CapCut AI","Created initial video content for ScholarClone and Triz using CapCut AI generation features.
+Prepared script-based input and generated visual scenes based on project requirements.
+Evaluated generated outputs and selected suitable scenes for further enhancement.
+Maintained content flow and structure according to intended messaging and branding.",,Held,,"2026-05-25 15:30:00"
+"Harshit Pipaliya","Video Editing and Enhancement for ScholarClone and Triz Content","Edited generated video content by arranging scenes and refining overall structure.
+Applied transitions, effects, timing adjustments, and visual enhancements.
+Synchronized scene duration and improved video flow for better audience engagement.",,Planned,,"2026-05-25 16:30:00"
+"Harshit Pipaliya","Indian English Voice Generation and Integration Using ElevenLabs","Explored Indian English voice options in ElevenLabs for video narration.
+Generated and tested multiple voice variations for pronunciation and clarity.
+Selected appropriate voice output based on natural speech quality and tone.
+Integrated voice narration into the video content and aligned it with scene timing.
+Performed audio quality verification and synchronization checks.",,Held,,"2026-05-25 17:30:00"
+"Harshit Pipaliya","Project Setup and Git Configuration","Opened project folder and initialized Git for version control.
+Created required project configuration files.
+Added ignore rules for environment folders and temporary files.
+Verified project structure before preparing it for upload.",,Planned,,"2026-05-26 10:00:00"
+"Harshit Pipaliya","Upload Project to GitHub Repository","Created GitHub repository for project storage and management.
+Connected local project with remote GitHub repository.
+Added project files, created commit history, and pushed source code successfully.
+Verified project upload and repository synchronization.",,Held,,"2026-05-26 12:00:00"
+"Harshit Pipaliya","Configure and Start Project Deployment on Render","Connected GitHub repository with Render platform for deployment.
+Configured application build and startup settings.
+Started deployment process and monitored deployment logs.
+Reviewed build status and checked configuration for successful application hosting.",,Planned,,"2026-05-26 14:00:00"
+"Harshit Pipaliya","Submitted Deployment Task Progress to Ajit Sir","Reviewed completed deployment activities and project status.
+Shared implementation progress and deployment updates with Ajit Sir.
+Discussed completed steps and current deployment stage.
+Collected feedback and noted further actions if required.",,Planned,,"2026-05-26 16:00:00"
+"Harshit Pipaliya","Explained Render Deployment Documentation to Karan on Call","Connected with Karan on a call and explained the Render deployment process.",,Planned,,"2026-05-26 16:30:00"
+"Harshit Pipaliya","Project Structure Review for Render Deployment Requirements","Reviewed project files and dependencies.
+Verified deployment requirements.
+Identified necessary configuration files.
+Prepared deployment checklist.",,"In Progress",,"2026-05-27 10:00:00"
+"Harshit Pipaliya","GitHub Repository Setup and Source Code Verification","Checked repository structure.
+Verified source code availability.
+Organized deployment-ready files.
+Confirmed project synchronization.",,Planned,,"2026-05-27 12:00:00"
+"Harshit Pipaliya","Content Analysis and Video Planning for YouTube Calendar Content","Reviewed content calendar requirements.
+Analyzed topics for Gaps to Growth, ScholarClone, and Triz channels.
+Identified target audience and video objectives.
+Prepared video generation workflow.",,Held,,"2026-05-27 15:00:00"
+"Harshit Pipaliya","Requirement Analysis and Planning for ScriptStudio_AI Agent Development","Reviewed project requirements.
+Identified required functionalities.
+Planned implementation workflow.
+Prepared development roadmap.",,Held,,"2026-05-27 17:00:00"
+"Harshit Pipaliya","Development Environment Setup for ScriptStudio_AI Project","Configured Python environment.
+Installed required dependencies.
+Verified package compatibility.
+Prepared project workspace.",,Held,,"2026-05-28 10:00:00"
+"Harshit Pipaliya","AI Video Generation for Gaps to Growth Channel Content","Generated video assets based on approved script.
+Created scene flow according to content requirements.
+Reviewed generated output for quality.
+Saved final version for editing.",,Held,,"2026-05-28 12:00:00"
+"Harshit Pipaliya","AI Video Generation for ScholarClone Channel Content","Processed content into video format.
+Generated visuals matching script flow.
+Verified timing and content accuracy.
+Prepared draft video output.
+CRM Entry 5
+
+Subject: AI Video Generation for Triz Channel Content
+
+Description:
+
+Generated video sequence using approved content.
+Created scene transitions and visual elements.
+Checked video continuity.
+Exported draft version.
+CRM Entry 6
+
+Subject: Voiceover Preparation and Media Synchronization for Videos
+
+Description:
+
+Prepared voiceover content.
+Matched audio timing with generated scenes.
+Adjusted pacing for better viewer engagement.
+Organized media assets.
+CRM Entry 7
+
+Subject: Video Editing and Scene Optimization for Multi-Channel Content
+
+Description:
+
+Refined scene transitions.
+Adjusted video timing and sequencing.
+Improved overall content presentation.
+Reviewed visual consistency.
+CRM Entry 8
+
+Subject: Quality Review and Content Verification for Generated Videos
+
+Description:
+
+Conducted final review of generated videos.
+Checked script alignment with visuals.
+Verified content completeness.
+Documented required corrections.
+CRM Entry 9
+
+Subject: Finalization and Export of YouTube Video Deliverables
+
+Description:
+
+Applied final modifications.
+Exported completed videos.
+Organized deliverables by channel.
+Prepared files for submission.
+CRM Entry 10
+
+Subject: Submission of Generated Video Content for Internal Review
+
+Description:
+
+Compiled final video outputs.
+Shared completed content for review.
+Provided status update on deliverables.
+Recorded completion of assigned video generation tasks.
+Task 2: Render Deployment Projects (10 CRM Entries)
+CRM Entry 1
+
+Subject: Project Structure Review for Render Deployment Requirements
+
+Description:
+
+Reviewed project files and dependencies.
+Verified deployment requirements.
+Identified necessary configuration files.
+Prepared deployment checklist.
+CRM Entry 2
+
+Subject: GitHub Repository Setup and Source Code Verification
+
+Description:
+
+Checked repository structure.
+Verified source code availability.
+Organized deployment-ready files.
+Confirmed project synchronization.
+CRM Entry 3
+
+Subject: Configuration Validation for Fees_Agent_K12-main Deployment
+
+Description:
+
+Reviewed project configuration.
+Checked environment settings.
+Validated deployment dependencies.
+Prepared application for hosting.
+CRM Entry 4
+
+Subject: Render Deployment Execution for Fees_Agent_K12-main Project
+
+Description:
+
+Connected GitHub repository to Render.
+Configured deployment settings.
+Initiated deployment process.
+Monitored deployment status.
+CRM Entry 5
+
+Subject: Deployment Configuration and Validation for calendar-api-fixed
+
+Description:
+
+Reviewed application setup.
+Configured environment variables.
+Verified dependency installation process.
+Prepared deployment environment.
+CRM Entry 6
+
+Subject: Render Hosting Setup and Deployment for calendar-api-fixed
+
+Description:
+
+Linked repository with Render service.
+Configured build settings.
+Executed deployment.
+Performed deployment monitoring.
+CRM Entry 7
+
+Subject: Deployment Preparation and Configuration Review for fee_concession_engine1
+
+Description:
+
+Analyzed project requirements.
+Validated startup configuration.
+Reviewed deployment settings.
+Confirmed readiness for hosting.
+CRM Entry 8
+
+Subject: Render Deployment Execution for fee_concession_engine1 Application
+
+Description:
+
+Connected GitHub source.
+Started deployment workflow.
+Monitored build and deployment logs.
+Verified successful deployment process.
+CRM Entry 9
+
+Subject: Deployment Testing and Issue Verification Across Hosted Projects
+
+Description:
+
+Performed deployment validation.
+Checked application accessibility.
+Verified service startup behavior.
+Documented observations.
+CRM Entry 10
+
+Subject: Deployment Status Reporting and Project Submission
+
+Description:
+
+Compiled deployment status updates.
+Shared hosted project information.
+Documented deployment activities.
+Submitted deployment completion report.
+Task 3: ScriptStudio_AI Agent Development Using Python and LangChain (10 CRM Entries)
+CRM Entry 1
+
+Subject: Requirement Analysis and Planning for ScriptStudio_AI Agent Development
+
+Description:
+
+Reviewed project requirements.
+Identified required functionalities.
+Planned implementation workflow.
+Prepared development roadmap.
+CRM Entry 2
+
+Subject: Development Environment Setup for ScriptStudio_AI Project
+
+Description:
+
+Configured Python environment.
+Installed required dependencies.
+Verified package compatibility.
+Prepared project workspace.
+CRM Entry 3
+
+Subject: Project Structure Creation and Backend Architecture Design
+
+Description:
+
+Organized project directories.
+Defined application structure.
+Planned module separation.
+Prepared development framework.
+CRM Entry 4
+
+Subject: LangChain Integration and Initial Agent Configuration
+
+Description:
+
+Integrated LangChain framework.
+Configured agent workflow.
+Established processing pipeline.
+Verified initial functionality.
+CRM Entry 5
+
+Subject: Script Generation Logic Development and Workflow Implementation
+
+Description:
+
+Developed script generation flow.
+Implemented content processing logic.
+Configured output structure.
+Tested generation workflow.
+CRM Entry 6
+
+Subject: Prompt Engineering and Response Optimization for Agent Output
+
+Description:
+
+Created prompt templates.
+Refined response generation process.
+Improved output consistency.
+Tested prompt performance.
+CRM Entry 7
+
+Subject: API Integration and Backend Functionality Validation
+
+Description:
+
+Configured required API connections.
+Validated request-response flow.
+Tested backend processing.
+Verified system stability.
+CRM Entry 8
+
+Subject: Debugging and Issue Resolution During Agent Development
+
+Description:
+
+Identified development issues.
+Applied required fixes.
+Retested application workflows.
+Improved overall functionality.
+CRM Entry 9
+
+Subject: Functional Testing and Output Verification for ScriptStudio_AI
+
+Description:
+
+Executed test scenarios.
+Verified generated script quality.
+Checked workflow consistency.
+Documented testing results.
+CRM Entry 10
+
+Subject: Final Review and Submission of ScriptStudio_AI Development Work
+
+Description:
+
+Performed final code review.
+Confirmed functionality completion.
+Organized project deliverables.
+Submitted development progress update.
+Task 4: Task Understanding and Submission to Ajit Sir & Shivraj Sir (5 CRM Entries)
+CRM Entry 1
+
+Subject: Requirement Discussion and Task Understanding Session with Team
+
+Description:
+
+Reviewed assigned tasks.
+Discussed expected deliverables.
+Clarified implementation requirements.
+Recorded action items.
+CRM Entry 2
+
+Subject: Progress Review and Status Communication on Assigned Activities
+
+Description:
+
+Tracked ongoing task progress.
+Updated work status.
+Shared implementation updates.
+Collected feedback for improvements.
+CRM Entry 3
+
+Subject: Internal Verification and Documentation of Completed Activities
+
+Description:
+
+Reviewed completed work.
+Organized supporting documentation.
+Verified task completion details.
+Prepared submission materials.
+CRM Entry 4
+
+Subject: Submission of Development and Deployment Task Updates to Ajit Sir
+
+Description:
+
+Compiled work progress information.
+Shared completed task updates.
+Provided implementation summary.
+Recorded submission status.
+CRM Entry 5
+
+Subject: Submission of Final Work Status and Deliverables to Shivraj Sir
+
+Description:
+
+Submitted completed task details.
+Shared project progress summary.
+Provided documentation and updates.
+Confirmed completion of assigned activities.",,Held,,"2026-05-28 15:00:00"
+"Harshit Pipaliya","AI Video Generation for Triz Channel Content","Generated video sequence using approved content.
+Created scene transitions and visual elements.
+Checked video continuity.
+Exported draft version.",,Held,,"2026-05-28 17:00:00"
+"Harshit Pipaliya","ScriptStudio_AI Project Structure Creation and Backend Architecture Design Using Python and LangChain","Organized the ScriptStudio_AI project directory structure for scalable development.
+Defined backend architecture using Python and FastAPI.
+Planned module separation for script generation, prompt management, and API integration.
+Prepared the development framework for LangChain-based AI workflow implementation.",,Held,,"2026-06-01 10:00:00"
+"Harshit Pipaliya","LangChain Integration and Initial Agent Configuration for ScriptStudio_AI","Integrated LangChain framework into the ScriptStudio_AI project.
+Configured AI agent workflow for automated script generation.
+Established processing pipeline using LangChain and Gemini API.
+Verified initial functionality and response generation flow.
+CRM Entry 5",,Held,,"2026-06-01 14:00:00"
+"Harshit Pipaliya","Script Generation Logic Development and Workflow Implementation in ScriptStudio_AI  Description:","Developed AI-powered script generation workflow for ScriptStudio_AI.
+Implemented content processing logic using LangChain chains and prompt templates.
+Configured structured output generation for different script formats.
+Tested end-to-end generation workflow and response accuracy.",,Held,,"2026-06-01 15:30:00"
+"Harshit Pipaliya","Prompt Engineering and AI Response Optimization for ScriptStudio_AI Agent","Created optimized prompt templates for script generation tasks.
+Refined Gemini AI response generation process through prompt engineering.
+Improved output consistency, formatting, and content relevance.
+Conducted prompt testing and performance validation.",,Held,,"2026-06-01 17:00:00"
+"Harshit Pipaliya","Gemini API Integration and Backend Functionality Validation for ScriptStudio_AI","Configured Gemini API integration within the ScriptStudio_AI backend.
+Validated request-response workflow between LangChain and Gemini models.
+Tested backend processing and script generation functionality.
+Verified application stability and API communication.",,Held,,"2026-06-02 10:00:00"
+"Harshit Pipaliya","Debugging and Issue Resolution During ScriptStudio_AI Agent Development","Identified issues related to LangChain workflow and API integration.
+Applied fixes to backend logic and script generation modules.
+Retested application workflows after implementing corrections.
+Improved overall functionality and generation reliability.",,Held,,"2026-06-02 12:00:00"
+"Harshit Pipaliya","Functional Testing and Output Verification of ScriptStudio_AI Using Gemini and LangChain","Executed functional test scenarios for ScriptStudio_AI.
+Verified AI-generated script quality and output structure.
+Checked workflow consistency across different input cases.
+Documented testing observations and validation results.",,Held,,"2026-06-02 14:00:00"
+"Harshit Pipaliya","Final Review and Submission of ScriptStudio_AI AI Script Generation Agent","Performed final review of ScriptStudio_AI source code and workflow.
+Confirmed successful integration of Python, FastAPI, LangChain, and Gemini API.
+Organized project deliverables and implementation documentation.
+Submitted development progress and completed project updates for review.",,Planned,,"2026-06-02 16:00:00"
+"Harshit Pipaliya","Initial Review and Deployment Planning for Fees_Agent_K12-main Project on Render (assigne by ajit sir)","Reviewed the Fees_Agent_K12-main project structure and deployment requirements.
+Verified application dependencies and startup configuration.
+Identified required environment variables and hosting settings.
+Prepared deployment plan for Render platform.",,Held,,"2026-06-03 10:00:00"
+"Harshit Pipaliya","GitHub Repository Configuration and Source Code Verification for Fees_Agent_K12-main","Verified GitHub repository structure for Fees_Agent_K12-main.
+Checked project files and deployment-related configurations.
+Confirmed repository readiness for Render deployment.
+Validated source code synchronization.",,Held,,"2026-06-03 11:30:00"
+"Harshit Pipaliya","Render Deployment Setup and Configuration for Fees_Agent_K12-main Application","Connected Fees_Agent_K12-main GitHub repository with Render.
+Configured build and start commands.
+Set up required deployment settings.
+Initiated deployment process on Render.",,Held,,"2026-06-03 14:00:00"
+"Harshit Pipaliya","Deployment Monitoring and Validation of Fees_Agent_K12-main on Render","Monitored Render build and deployment logs.
+Verified successful application deployment.
+Checked service accessibility and startup behavior.
+Documented deployment status and observations.",,Held,,"2026-06-03 15:30:00"
+"Harshit Pipaliya","Deployment Requirement Analysis and Configuration Review for calendar-api-fixed","Reviewed calendar-api-fixed project architecture and requirements.
+Verified dependency configuration and startup settings.
+Identified environment variable requirements.
+Prepared project for Render deployment.",,Held,,"2026-06-03 17:00:00"
+"Harshit Pipaliya","GitHub Integration and Render Deployment Execution for calendar-api-fixed","Connected calendar-api-fixed repository with Render.
+Configured deployment environment and service settings.
+Executed application deployment process.
+Monitored deployment progress and build completion.",,Held,,"2026-06-04 10:00:00"
+"Harshit Pipaliya","Deployment Verification and Functional Testing of calendar-api-fixed Application","Validated successful deployment of calendar-api-fixed.
+Tested API accessibility and endpoint functionality.
+Reviewed application logs and runtime behavior.
+Recorded deployment validation results.",,Held,,"2026-06-04 11:00:00"
+"Harshit Pipaliya","Deployment Preparation and Environment Configuration for fee_concession_engine1","Reviewed fee_concession_engine1 project deployment requirements.
+Verified project structure and dependency setup.
+Configured necessary deployment parameters.
+Prepared application for Render hosting.",,Held,,"2026-06-04 14:00:00"
+"Harshit Pipaliya","Render Deployment and Build Monitoring for fee_concession_engine1 Project","Connected fee_concession_engine1 GitHub repository to Render.
+Configured build and runtime settings.
+Executed deployment workflow.
+Monitored deployment logs and application startup process.",,"In Progress",,"2026-06-04 15:30:00"
+"Harshit Pipaliya","Final Deployment Validation and Submission Report for Fees_Agent_K12-main, calendar-api-fixed, and fee_concession_engine1","Performed deployment verification across all three projects.
+Reviewed hosted application status and accessibility.
+Documented deployment configurations and outcomes.
+Submitted deployment completion report and project status update for review.",,Held,,"2026-06-04 17:30:00"
+"Harshit Pipaliya","Deployment of Updated code base provided by Ajit of FEES DEFAULTER AGENT OF K12 on Render as per the guidelines document of deployment.","Updated codebase : https://github.com/AJprSINGH/Fees_Agent_K12
+
+Deployment doc : https://docs.google.com/document/d/1QeHk1Df_NArzDPUNOy2KegvqHPB8-tW9BAG9fp506Y8/edit?usp=sharing",,"In Progress",,"2026-06-05 16:00:00"
+"Harshit Pipaliya","AI Video Generation, Editing, and YouTube Upload for ScholarClone Channel","Reviewed content calendar topics assigned for the Gaps to Growth channel.
+Prepared script and media requirements for video creation.
+Generated AI-based video content according to the approved topic.
+Verified content flow and scene structure before editing.",,Held,,"2026-06-05 12:00:00"
+"Harshit Pipaliya","AI Video Generation and Content Creation for Gaps to Growth YouTube Channel","Reviewed content calendar topics assigned for the Gaps to Growth channel.
+Prepared script and media requirements for video production.
+Generated AI-based video content according to approved content guidelines.
+Edited and optimized video scenes for better audience engagement.
+Exported final video and uploaded it to the Gaps to Growth YouTube channel.
+Verified successful publishing and content availability.",,Held,,"2026-06-05 10:00:00"
+"Harshit Pipaliya","End-to-End Video Production and Publishing for Triz YouTube Channel","Reviewed assigned Triz content and planned video production workflow.
+Generated AI-powered video content using the approved topic and script.
+Edited video assets, synchronized media elements, and refined presentation.
+Completed final testing and quality verification of the video.
+Uploaded the finished video to the Triz YouTube channel.
+Verified successful publishing and completion of the assigned task.",,Held,,"2026-06-05 14:30:00"
+"Harshit Pipaliya","Deployment of Updated code base provided by Ajit of FEES DEFAULTER AGENT OF K12 on Render as per the guidelines document of deployment.",,,Planned,,"2026-06-08 12:00:00"
+"Harshit Pipaliya","skill gap finding through a skills valuation algorithm or ML model that assesses the value or worth of an individual",,,Planned,,"2026-06-08 13:00:00"
+"Harshit Pipaliya","K12 Fee Defaulter Detection System Documentation (submitted to Ajit Sir)","Created complete API documentation for the K12 Fee Defaulter Detection System project including workflow, API endpoints, request/response formats, input-output details, and submitted to Ajit Sir.",,Held,,"2026-06-08 12:00:00"
+"Harshit Pipaliya","Video Script Writing, AI Video Generation, Editing & YouTube Deployment (9 videos submitted to karan )","Content Research & Planning
+Researched trending topics related to AI, Education, HRTech, Talent Management, and Future of Work.
+Planned short-form video content strategy for YouTube Shorts and social media platforms.
+Identified hooks, target audience pain points, and engagement-focused storytelling angles.
+Script Writing
+Wrote engaging short-video scripts in Indian English style for 20–60 second videos.
+Created strong hooks, storytelling flow, CTA lines, captions, and screen text overlays.
+Structured scripts for talking-head videos, animated explainers, and AI-generated videos.
+AI Video Generation
+Generated AI-ready video prompts for CapCut AI and other AI video generation tools.
+Designed scene-by-scene visuals, transitions, animations, B-roll ideas, and voiceover flow.
+Created optimized prompts for fast and high-engagement short videos.
+Video Editing & Post-Production
+Edited short-form videos with captions, transitions, text overlays, animations, sound effects, and background music.
+Optimized pacing, visual storytelling, and retention-focused editing style for YouTube Shorts and Instagram Reels.
+Designed thumbnail concepts and visual branding elements.
+Content Optimization
+Added hashtags, SEO-friendly titles, descriptions, and engagement CTAs.
+Optimized videos for audience retention, click-through rate, and platform reach.
+Prepared platform-specific formatting for vertical short-form content.
+YouTube Deployment & Publishing
+Uploaded and published videos on YouTube Shorts and social media platforms.
+Managed video scheduling, captions, tags, playlists, and publishing workflow.
+Monitored content consistency and deployment timelines for marketing campaigns.
+Performance & Brand Growth Support
+Supported digital branding through consistent educational and AI-focused content creation.
+Created content aimed at improving engagement, visibility, lead generation, and audience growth.",,Held,,"2026-06-08 14:00:00"
+"Harshit Pipaliya","Generated, Edited, and Submitted Weekly Content Videos for Two Channels","Created 4 videos based on this week's content calendar for two channels. Generated video content, performed editing and quality checks, optimized video flow and visuals, and finalized all deliverables. Submitted the completed videos to Karan for review and further publishing process.",,Held,,"2026-06-09 10:00:00"
+"Harshit Pipaliya","Research and Development for AI-Based Skill Gap Analysis and Skills Valuation System","Conducted R&D on an AI-powered Skill Gap Analysis and Skills Valuation System. Researched methodologies for skill assessment, skill gap identification, and individual value scoring using weighted algorithms and machine learning models. Analyzed frameworks for Career Readiness Score (CRS), Individual Value Index (IVI), Employability Score (ES), and Future Growth Potential Score (FGPS). Documented system architecture, evaluation parameters, and implementation approaches for workforce capability assessment and personalized learning recommendations.",,"In Progress",,"2026-06-09 15:00:00"
+"Harshit Pipaliya","Environment Setup and Dependency Resolution for AI Content Studio Agent","Reviewed project structure and identified application root directory.
+Installed Python 3.11 to ensure compatibility with project dependencies.
+Created and configured a new virtual environment for the project.
+Upgraded pip, setuptools, and wheel packages.
+Installed all required dependencies from requirements.txt.
+Diagnosed and resolved dependency installation and package compatibility issues.
+Investigated module import errors and corrected project execution path.
+Recreated the virtual environment after detecting broken path references.
+Configured project environment for API integration and application startup.",,"In Progress",,"2026-06-09 17:00:00"
+"Harshit Pipaliya","AI Content Studio Project Audit and Workflow Verification","Reviewed the AI Content Studio project structure, analyzed LangGraph workflow execution, verified agent connectivity (Planner, Research, Hook, Script Writer, SEO, Auditor), identified deployment and runtime issues, and documented recommendations for improving stability, validation, logging, and API reliability without changing the existing workflow.",,Held,,"2026-06-10 10:00:00"
+"Harshit Pipaliya","API Testing, Configuration Setup, and Deployment Readiness Enhancement","Configured environment variables, validated API endpoints, reviewed FastAPI startup process, enhanced health-check functionality, implemented production-readiness fixes, tested workflow execution path, and prepared deployment guidelines for local execution and future hosting on Render/Hugging Face platforms.",,"In Progress",,"2026-06-10 14:00:00"
+"Harshit Pipaliya","SIVAS R&D Report — Skill Gap & ML Value Assessment System(file:///C:/Users/omshivay/Downloads/rd_report.html#cover)","Developed a comprehensive enterprise-grade R&D report (70 sections, 38+ pages) covering a Skills Valuation Algorithm and ML-based Individual Value Assessment System. Includes IVI/CRS/SGS scoring formulas, XGBoost/LightGBM/Neural Network ML stack, BERT NLP pipeline, FastAPI microservices architecture, LangGraph multi-agent workflow, ChromaDB vector DB design, AWS/Azure/GCP deployment, 3-phase roadmap, and ROI analysis. Delivered as a single standalone HTML file with interactive dashboard styling.",,Held,,"2026-06-10 16:00:00"
+"Harshit Pipaliya","AI Content Studio Backend Debugging","Analyzed the 500 Internal Server Error in the /generate-script API.
+Identified LangGraph and Pydantic compatibility issues.
+Upgraded LangGraph, LangChain, and related dependencies.
+Fixed FastAPI app configuration and routing issues.
+Corrected workflow state handling using model_dump().
+Validated Swagger (/docs) accessibility and server startup.",,Held,,"2026-06-11 10:00:00"
+"Harshit Pipaliya","API Integration and Startup Fixes","Investigated Uvicorn startup failures and import errors.
+Resolved app vs api naming conflicts in main.py.
+Removed incorrect Uvicorn runtime configuration.
+Verified initialization of all workflow agents and tools.
+Tested API endpoints after applying fixes.
+Prepared the project for end-to-end workflow validation and deployment.",,Held,,"2026-06-11 14:00:00"
+"Harshit Pipaliya","AI Content Studio Agent v2.0 — Project Documentation","Created full technical documentation for the AI Content Studio Agent v2.0 project. Covers system overview, 8-agent LangGraph pipeline, two API endpoints (script generator + platform upload package), all 6 social platform specs, script format reference, storyboard scene fields, tech stack, and quick start guide. Delivered as a styled HTML file.",,Held,,"2026-06-11 17:30:00"
+"Harshit Pipaliya","YouTube Shorts Creation – HR Skill Intelligence Video Series","Created and optimized 4 YouTube Shorts focused on employee retention, appraisal automation, training ROI, and workforce capability intelligence. Developed AI video scripts, motion graphics, subtitles, SEO-friendly titles/descriptions, end screens, and CTA-focused edits for audience engagement and platform growth.
+
+ScholarClone PAL — YouTube CRM Entry",,Held,,"2026-06-15 10:00:00"
+"Harshit Pipaliya","YouTube Shorts Creation – AI Education & CBSE School Video Series","Produced 4 educational YouTube Shorts covering at-risk student detection, AI-native CBSE schools, NEP 2020 implementation, and AI-powered learning systems. Added AI-generated visuals, mastery tracking animations, subtitles, SEO optimization, branding, and engagement-focused editing for YouTube Shorts.",,Held,,"2026-06-15 12:00:00"
+"Harshit Pipaliya","YouTube Shorts Creation – AI Education & CBSE School Video Series","Produced 4 educational YouTube Shorts covering at-risk student detection, AI-native CBSE schools, NEP 2020 implementation, and AI-powered learning systems. Added AI-generated visuals, mastery tracking animations, subtitles, SEO optimization, branding, and engagement-focused editing for YouTube Shorts.",,Planned,,"2026-06-15 14:30:00"
+"Harshit Pipaliya","YouTube Shorts Creation – AI-Native University Awareness Videos","Created 2 YouTube Shorts focused on AI transformation in Indian universities, including NAAC automation, placement systems, and AI-native campus operations. Developed scripts, animations, subtitles, SEO metadata, branding elements, and CTA integration optimized for higher education audiences.",,Held,,"2026-06-15 15:30:00"
+"Harshit Pipaliya","HP Proctoring — Diagnosed libgl1-mesa-glx Docker Build Failure on Render(karan's proctoring task)","Client's Render deployment was failing with E: Package 'libgl1-mesa-glx' has no installation candidate on Debian Trixie-based Python 3.10-slim image. Root cause identified: libgl1-mesa-glx and libxrender-dev packages were removed in Debian Trixie. Inspected uploaded project ZIP (HP_PROCTORING_SYSTEM-main) and confirmed the root Dockerfile still contained the old package names despite client believing it was already fixed. Both builder and runtime stages were affected.
+
+Entry 2
+Subject: HP Proctoring — Delivered Fixed Multi-Stage Dockerfile for Render Deployment
+Description: Rewrote the root Dockerfile for HP_PROCTORING_SYSTEM replacing libgl1-mesa-glx → libgl1 and libxrender-dev → libxrender1 in both builder and runtime stages. Also added g++, cmake, python3-dev to builder stage for dlib/face-recognition compatibility, added PYTHONDONTWRITEBYTECODE and PYTHONUNBUFFERED env vars, and removed || true pip flag that was silently hiding install errors. Provided step-by-step GitHub edit + Render clear cache & redeploy instructions.
+Sonnet 4.6 Low",,Held,,"2026-06-18 10:00:00"
+"Harshit Pipaliya","HP Proctoring — Delivered Fixed Multi-Stage Dockerfile for Render Deployment","Rewrote the root Dockerfile for HP_PROCTORING_SYSTEM replacing libgl1-mesa-glx → libgl1 and libxrender-dev → libxrender1 in both builder and runtime stages. Also added g++, cmake, python3-dev to builder stage for dlib/face-recognition compatibility, added PYTHONDONTWRITEBYTECODE and PYTHONUNBUFFERED env vars, and removed || true pip flag that was silently hiding install errors. Provided step-by-step GitHub edit + Render clear cache & redeploy instructions.",,Held,,"2026-06-18 12:00:00"
+"Harshit Pipaliya","AI Content Studio — Redesigned /generate-script API Output Format","In the AI Content Studio Agent project, the /generate-script API endpoint was returning a heavy JSON response with 15+ fields including storyboard, SEO data, CapCut settings, and platform state. Client requirement was to strip everything and return only a clean, production-ready video script string that any AI video tool or human editor can directly execute without parsing.",,Held,,"2026-06-19 10:00:00"
+"Harshit Pipaliya","AI Content Studio — Simplified ScriptResponse Pydantic Model to Single Field","As part of the AI Content Studio Agent refactor, the ScriptResponse model in app/core/models.py was reduced from a complex multi-field schema to a single script: str field. Corresponding changes were made in app/api/main.py to return only the script string from the pipeline state, removing all intermediate data from the API response.",,Held,,"2026-06-19 14:00:00"
+"Harshit Pipaliya","AI Content Studio — Rewrote video_script.py Prompt for Production Script Format","The VIDEO_SCRIPT_PROMPT in app/agents/video_script.py was fully rewritten to instruct Gemini to output plain text scripts in the format TITLE → [Xs-Ys] TEXT ON SCREEN / VISUAL / VOICEOVER — one block per scene, no JSON wrapping, no bullets, no emojis. Fallback script function was also updated to match the same format. Final ZIP delivered to client.",,Held,,"2026-06-19 16:00:00"
+"Harshit Pipaliya","Created 3-Part YouTube Shorts Series – GapsToGrowth","Created a complete 3-part YouTube Shorts series by combining seven weekly content topics. Developed CapCut AI-ready scripts, scene-wise video prompts, ElevenLabs voice scripts, and strong CTAs for improved audience engagement and lead generation.",,Held,,"2026-06-23 10:00:00"
+"Harshit Pipaliya","Developed 3-Part YouTube Shorts Series – TRIZ University Intelligence","Converted five weekly content topics into a connected three-part YouTube Shorts series. Prepared AI video generation scripts, scene directions, optimized voiceovers, and storytelling focused on future-ready curriculum and higher education innovation.",,Held,,"2026-06-23 14:00:00"
+"Harshit Pipaliya","Produced 3-Part Diagnostic Learning Shorts Series for scholar clone","Created a three-part educational Shorts series on the Diagnostic Gap (Score → Reason → Action). Designed CapCut AI scripts, ElevenLabs narration, cinematic scene prompts, and lead generation CTA to promote diagnostic learning and sample report downloads.",,Held,,"2026-06-23 16:00:00"
+"Harshit Pipaliya","Prepared SEO & Social Media Upload Documentation and share to karan","Compiled a complete upload documentation for all nine videos, including platform-specific titles, descriptions, captions, hashtags, CTAs, and SEO optimization for YouTube Shorts, Instagram Reels, and Facebook Reels to streamline the publishing workflow.",,Held,,"2026-06-23 18:00:00"
+"Harshit Pipaliya","Repository Analysis & Setup--Claude Desktop GTM Plugin Integration Research( with karan)","Reviewed both GitHub repositories (claude-gtm-plugin and gtm) to understand project architecture and integration requirements. Identified that claude-gtm-plugin is a skills/prompt library and gtm contains the actual MCP server implementation. Installed project dependencies, verified Node.js environment, and prepared the GTM project for Claude Desktop integration.
+Status: Completed",,Held,,"2026-06-24 14:30:00"
+"Harshit Pipaliya","MCP Server Build & Configuration --: GTM MCP Server Build and Validation","Successfully installed dependencies for the GTM MCP server, executed TypeScript build process, generated dist/index.js, and validated server startup. Confirmed successful MCP server execution with output: GTM MCP Server running on stdio. Verified project structure and build artifacts required for Claude Desktop integration.",,Held,,"2026-06-24 16:30:00"
+"Harshit Pipaliya","Claude Desktop MCP Integration :-- Claude Desktop GTM MCP Integration","Configured Claude Desktop MCP settings by creating and updating the configuration file with GTM MCP server details. Added server configuration pointing to D:\claude\gtm\mcp-server\dist\index.js, restarted Claude Desktop, verified MCP server registration, and confirmed GTM server visibility within the Claude Desktop Developer settings. Successfully completed end-to-end MCP integration and server connection testing.",,Held,,"2026-06-24 17:30:00"
+"Harshit Pipaliya","Task Plan for today","1) Start Drafting Complete Workflows - Full-cycle sequences from first touch to signed deal
+2) Agentic BDR Guide - Learn to build autonomous AI agents for research, personalization, and outbound",,Planned,,"2026-06-25 10:00:00"
+"Harshit Pipaliya","GTM Skills Repository Analysis & Team Mapping  (Analyze GTM Skills Structure and Map Assets to Business Teams)","Clone and review GTM Skills repository
+Explore OpenClaw Skills structure (Scout, Rep, Closer, Writer, Mission Control)
+Identify which skills belong to SDR, AE, Marketing, RevOps, and CSM teams
+Create GTM Team Mapping document
+Document business use cases for each skill category",,Held,,"2026-06-25 10:00:00"
+"Harshit Pipaliya","Task plan for today based on gtm task plan 1 (Map GTM Skills to Teams)","https://docs.google.com/document/d/1w4EeAyvPA1w9N4eERb74hQ7oM9Ljl6rg98eQgrEdORw/edit?tab=t.2nqag5qu2sld#heading=h.j8fnbf7600g9
+
+Subtask 1: Inventory the Repository
+Subtask 2: Create Team Mapping Matrix",,Planned,,"2026-06-26 09:30:00"
+"Harshit Pipaliya","GTM Skills — Subtask 1 — Repository Inventory","Cloned GTM Skills GitHub repo (github.com/gtm-skills/gtm)
+Explored all folders in GTM Skills project
+Found 22 assets across 6 folders
+Created GTM Skills inventory spreadsheet with file names, sizes, purpose, and team
+
+Deliverable: gtm_skills_subtask1_2.xlsx",,Held,,"2026-06-26 10:00:00"
+"Harshit Pipaliya","GTM Skills — Subtask 2 — Team Mapping Matrix","Read all GTM Skills SKILL.md files
+Mapped each GTM Skills agent to its business team (SDR, AE, Marketing, RevOps)
+Defined capabilities and business outcomes per team
+
+Deliverable: team_mapping.yaml",,Held,,"2026-06-26 12:00:00"
+"Harshit Pipaliya","GTM Skills — Subtask 3 — Prompt Catalog","Tagged all 5 GTM Skills agents with metadata (team, stage, model, capabilities)
+Added handoff chain and business outcomes
+Exported as structured JSON
+
+Deliverable: prompts_catalog.json",,Held,,"2026-06-26 15:00:00"
+"Harshit Pipaliya","GTM Skills — Subtask 4 — Prompt Search API","Built FastAPI app for GTM Skills with 7 search endpoints
+Search GTM Skills agents by team, stage, or keyword
+Ran locally on http://localhost:8000/docs
+
+Deliverable: main.py",,Held,,"2026-06-27 10:00:00"
+"Harshit Pipaliya","ScholarClone PAL – 3 YouTube Shorts Series Creation","Converted six weekly YouTube Shorts into three premium Indian corporate-style YouTube Shorts for ScholarClone PAL. Created CapCut AI-ready scripts with a neutral Indian English accent, professional avatar guidance, and messaging focused on school leaders, principals, academic coordinators, and educators. Optimized for engagement while maintaining a premium education consulting tone.",,Held,,"2026-06-29 10:00:00"
+"Harshit Pipaliya","TRIZ Innovation & G2G – Premium Video Script Development","Developed three consolidated YouTube Shorts each for TRIZ Innovation and G2G by merging weekly content into concise, high-impact videos. Scripts were written in professional Indian English with a corporate presentation style, designed for AI avatar platforms like CapCut AI, targeting higher education institutions, university leadership, and academic decision-makers.",,Held,,"2026-06-29 14:00:00"
+"Harshit Pipaliya","Indian AI Avatar & Voice Optimization for Educational Videos","Created AI-ready presentation prompts including Indian corporate avatar specifications, neutral Indian English accent, professional narration style, visual direction, and copy-paste prompts optimized for CapCut AI Video Generator. Ensured all scripts reflect a premium Indian education consulting style suitable for institutional audiences.",,Held,,"2026-06-29 15:30:00"
+"Harshit Pipaliya","Social Media SEO Upload Kit – 9 Video Series Documentation( give to karan)","Prepared a copy-paste SEO Upload Kit document for all nine videos, following the same structure as the reference document. Included platform-specific upload content for YouTube Shorts, Instagram Reels, and Facebook Reels with optimized titles, descriptions/captions, and hashtags, enabling quick and consistent publishing across all social media platforms.",,Held,,"2026-06-29 17:00:00"
+"Harshit Pipaliya","Assessment Rubric Agent – Local Environment Setup & Debugging","Set up the Assessment Rubric Agent project in a local Python virtual environment by installing all required dependencies from requirements.txt. While running the application (python run.py), encountered a ModuleNotFoundError due to the missing assessment_rubric_agent.core.schemas package. Investigated the project structure, compared the extracted source with the original ZIP, and identified that the local project was extracted incompletely, causing the schemas directory (including contracts.py and related files) to be absent. Verified that the original ZIP contains the missing files and determined that re-extracting or restoring the missing directory is required before the application can run successfully.",,Held,,"2026-06-29 18:00:00"
+"Harshit Pipaliya","Conducted initial requirement analysis for the K–12 Transportation Management module","Conducted initial requirement analysis for the K–12 Transportation Management module by reviewing existing transportation workflows, stakeholder responsibilities (Admin, Teacher, Staff, Parents), operational processes, and expected outcomes. Documented key functional areas, identified primary user interactions, and established the foundation for the module's information architecture and user experience planning.",,Held,,"2026-06-29 17:00:00"
+"Harshit Pipaliya","Assessment Rubric Agent – EXE Packaging Setup","Created the start_server.py launcher, configured the FastAPI application entry point, and prepared the project for executable packaging using PyInstaller.",,Held,,"2026-06-30 10:00:00"
+"Harshit Pipaliya","Assessment Rubric Agent – PyInstaller Build","Configured PyInstaller with project source files, CSV data, output folders, and required dependencies to generate the Windows executable.",,Held,,"2026-06-30 12:00:00"
+"Harshit Pipaliya","Assessment Rubric Agent – EXE Testing & Runtime Debugging","Tested the generated executable, identified runtime dependency issues (assessment_rubric_agent, fastapi, pandas), and updated the launcher and build configuration to resolve packaging errors.",,Held,,"2026-06-30 14:00:00"
+"Harshit Pipaliya","GTM Skills — Subtask 5 & 6 — SQLite Database + Workflow Registry","Built SQLite database with 6 tables (agents, stages, capabilities, output_formats, handoffs) storing all 5 GTM Skills agents
+Created database-backed FastAPI version replacing hardcoded data
+Defined 4 repeatable agent workflows in YAML (outbound sequence, signal-based sequence, deal closing, stalled deal recovery)
+Mapped each workflow step to agent, input, output, and next action for Mission Control orchestration
+Deliverable: gtm_skills.db, build_db.py, main_db.py, workflow_registry.yaml",,Held,,"2026-06-30 16:00:00"
+"Harshit Pipaliya","GTM Skills Repository Documentation – Marketing & Sales Feature Analysis(shared with shivrajsir)","Analyzed the GTM Skills repository to understand its architecture, purpose, and business capabilities.
+Identified role-wise features for Marketing, Sales, Customer Success, and Revenue Operations.",,Held,,"2026-06-30 18:00:00"
+"Harshit Pipaliya","GTM Skills — Subtask 7 — SDR Agent (Gemini)","Built SDR agent using Google Gemini API with 4 functions (Scout, Writer x2, Closer)
+Agent takes company name as input and outputs research, cold email, LinkedIn message, and discovery questions
+Switched from deprecated google.generativeai to new google.genai package
+Fixed encoding issues and model compatibility errors
+Deliverable: sdr_agent.py",,Held,,"2026-07-01 10:00:00"
+"Harshit Pipaliya","GTM Skills — API Fix — Gemini Model + Encoding Error","Diagnosed 404 model not found error — switched model from gemini-1.5-flash to gemini-2.0-flash
+Hit free tier quota limit (429 error) — switched to gemini-1.5-flash-8b
+Fixed SyntaxError Non-UTF-8 encoding issue by rewriting file with # -*- coding: utf-8 -*- header
+Deliverable: Updated sdr_agent.py",,Held,,"2026-07-01 12:30:00"
+"Harshit Pipaliya","GTM Skills — Project Status Check","Verified all project files exist in E:\gtm
+Confirmed 6 subtasks completed with all deliverables in place
+Identified and copied 3 missing files (team_mapping.yaml, prompts_catalog.json, workflow_registry.yaml) to correct location
+Deliverable: Complete E:\gtm project folder with all 7 files
+
+Verified all project files exist in E:\gtm
+Confirmed 6 subtasks completed with all deliverables in place
+Identified and copied 3 missing files (team_mapping.yaml, prompts_catalog.json, workflow_registry.yaml) to correct location
+Deliverable: Complete E:\gtm project folder with all 7 files",,"In Progress",,"2026-07-01 15:00:00"
+"Harshit Pipaliya","Company Research Agent Planning & Architecture (with shivraj and rajesh sir)","Analyzed the GTM Skills repository for compatibility with a company research agent.
+Defined the Phase 1 scope to generate company information based on user commands.
+Designed the agent workflow to collect company details, validate data, convert it into JSON, and prepare it for REST API storage.
+Finalized the project architecture, folder structure, and future scalability for additional GTM agents.",,"In Progress",,"2026-07-01 16:30:00"
+"Harshit Pipaliya","API Integration Planning & Multi-Agent Roadmap","Planned the integration flow between the Company Research Agent and the external REST API provided by the client.
+Defined the required company data schema and validation process before API submission.
+Prepared a production-ready project structure and implementation prompt for development.
+Planned future phases, including Bulk Email Sender Agent and Reply Tracker Agent, while keeping the initial phase focused solely on company data collection and API storage.",,"In Progress",,"2026-07-01 17:30:00"
+"Harshit Pipaliya","Defined Ideal Customer Profile (ICP) and Target Customer Segmentation","Analyzed the provided customer data for ABC Manufacturing Pvt. Ltd.
+Identified the Ideal Customer Profile (ICP) based on successful customer characteristics.
+Documented firmographic, technographic, buying trigger, stakeholder, pain point, and disqualifier criteria.
+Created a standardized one-page ICP document for use by Sales and Marketing teams.",,Held,,"2026-07-02 15:00:00"
+"Harshit Pipaliya","Prepared Sales Outreach Framework and Lead Scoring Model","Created a sales outreach briefing template using the provided customer information.
+Developed a structured lead scoring model with demographic and behavioral scoring criteria.
+Defined Hot, Warm, Cold, MQL, and SQL score thresholds.
+Designed lead routing logic for SDRs, Account Executives, and Marketing teams.",,Held,,"2026-07-02 17:00:00"
+"Harshit Pipaliya","Created ICP & Sales Research Framework","Prepared the Ideal Customer Profile (ICP) template, created a CEO questionnaire with example responses, built a sample customer profile, and finalized the company research prompt structure for sales outreach. Also defined the required business information needed to generate ICPs, company briefings, and lead scoring models for the GTG AI Sales Agent.",,Held,,"2026-07-02 16:00:00"
+"Harshit Pipaliya","Company Intel Agent - Investigated Gemini API Authentication Error","Analyzed the FastAPI application logs for the Company Intel Agent and identified the root cause of the 500 Internal Server Error. Traced the issue through the LangGraph and LangChain execution flow to the Gemini API authentication failure caused by an invalid Google API key.",,Held,,"2026-07-04 10:00:00"
+"Harshit Pipaliya","Company Intel Agent - Debugged API Key Configuration","Verified the Gemini API integration, reviewed environment variable configuration (.env), inspected model initialization, and documented the required changes to resolve the invalid API key authentication issue and restore agent functionality.",,Held,,"2026-07-04 12:00:00"
+"Harshit Pipaliya","Subject	Description Company Intel Agent - Investigated Gemini API Authentication Error	Analyzed the FastAPI application logs for the Company Intel Agent and identified the root cause of the 500 Internal Server Error. Traced the issue through the LangGraph","Generated and configured a valid Google Gemini API key, updated the environment configuration, restarted the FastAPI application, and successfully restored communication between the Company Intel Agent and the Gemini API.",,"In Progress",,"2026-07-04 14:00:00"
+"Harshit Pipaliya","Company Intel Agent - Validated API Integration","Tested the /agent/query endpoint after updating the API credentials, confirmed successful request processing without authentication errors, and verified that the AI agent returned valid responses through the FastAPI service.",,"In Progress",,"2026-07-04 15:00:00"
+"Harshit Pipaliya","Was away from the office for personal work. Resumed regular work after the scheduled leave period.",,,Held,,"2026-07-04 16:00:00"
+"Harshit Pipaliya","Claude Product Capability Inquiry","hp asked general questions about Claude's content generation capabilities and free vs. paid plan differences (no project or file created). Clarified: Claude generates docx, xlsx, pptx, PDF, code, Markdown, HTML/web apps, and diagrams — same across free and paid tiers. Claude does NOT generate images, video, or audio on any plan. Paid plans differ in usage limits and model access (Sonnet vs Opus), not file-type support. This was a Q&A/informational exchange, not a work deliverable.",,Held,,"2026-07-04 18:00:00"

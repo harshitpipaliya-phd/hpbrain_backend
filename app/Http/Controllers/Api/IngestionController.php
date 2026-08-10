@@ -12,6 +12,7 @@ use App\Domain\Universal\EntityResolver;
 use App\Domain\Universal\UnsupportedEntityException;
 use App\Http\Controllers\Controller;
 use App\Repositories\DataSourceRepository;
+use App\Jobs\CommitIngestionJob;
 use App\Repositories\ImportJobRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,8 +45,34 @@ use Illuminate\Support\Facades\Storage;
  */
 final class IngestionController extends Controller
 {
-    /** Matches the 20 MB cap the validation rule enforces. */
     private const UPLOAD_DISK = 'local';
+
+    /**
+     * Upload cap, in kilobytes.
+     *
+     * 20 MB was too small for the datasets this product exists to read — a
+     * 65,000-row employee export with thirty columns is comfortably past it as
+     * CSV and further as XLSX. Raised to 64 MB.
+     *
+     * THIS NUMBER IS NOT SUFFICIENT ON ITS OWN. PHP rejects an oversized body
+     * before any Laravel rule runs, so upload_max_filesize and post_max_size
+     * must be at least this large or the user gets a 413 (or a bare
+     * "failed to upload") instead of the clean message this cap produces.
+     * uploadPrecondition() detects that misconfiguration and says so by name
+     * rather than leaving it to be guessed.
+     */
+    private const MAX_UPLOAD_KB = 65536;
+
+    /**
+     * Above this many rows, commit is queued instead of run in the request.
+     *
+     * At the measured ~200 rows/second against the remote database, 5,000 rows
+     * is roughly 25 seconds — already past what a user should watch a spinner
+     * for, and close enough to typical proxy timeouts to be risky. Below it the
+     * synchronous path is kept, because dispatching a job and polling for a
+     * 300-row import costs more than simply doing the work.
+     */
+    private const QUEUE_ABOVE_ROWS = 5000;
 
     public function __construct(
         private readonly IngestionService $ingestion,
@@ -67,23 +94,80 @@ final class IngestionController extends Controller
      */
     public function upload(Request $request): JsonResponse
     {
+        // A PHP-LEVEL UPLOAD FAILURE IS DIAGNOSED BEFORE VALIDATION RUNS.
+        //
+        // When PHP sets an UPLOAD_ERR_* code, Laravel's implicit `uploaded`
+        // rule reports the single string "The file failed to upload." for all
+        // seven causes — over the ini limit, no temp directory, unwritable temp
+        // directory, a truncated request, an extension that aborted it. That
+        // message is what a user sees, and it names none of them, so the same
+        // 422 has been reported for a 60 MB file and for a missing C:\xampp\tmp
+        // with nothing to tell them apart. Every branch below is actionable.
+        if ($precondition = $this->uploadPrecondition($request)) {
+            return $precondition;
+        }
+
         $data = $request->validate([
-            'file'      => ['required', 'file', 'mimes:csv,xls,xlsx,txt,json,xml,html,htm,md,markdown,sql,pdf,doc,docx,zip,png,jpg,jpeg', 'max:20480'],
+            // `extensions` checks the CLIENT filename; `mimes` checks the
+            // sniffed content. Both, because either alone is a hole: extension
+            // alone trusts the browser, and content-sniffing alone rejects
+            // legitimate CSVs that sniff as text/plain.
+            'file'      => [
+                'required', 'file',
+                'extensions:csv,tsv,xls,xlsx,json,txt,xml,html,htm,md,markdown,sql',
+                'mimes:csv,tsv,xls,xlsx,json,txt,xml,html,htm,md,markdown,sql,bin,zip',
+                'max:'.self::MAX_UPLOAD_KB,
+            ],
             'source_id' => ['required', 'string', 'max:191'],
             'org_id'    => ['nullable', 'string', 'max:36'],
         ]);
 
         $tenantId = $this->tenantId($request);
+        $upload = $request->file('file');
+
+        /*
+          THE STORED FILENAME MUST KEEP THE REAL EXTENSION.
+
+          ->store() names files with hashName(), which derives the extension
+          from guessExtension() — a MIME sniff. A perfectly ordinary CSV sniffs
+          as text/plain, so it was written to disk as `<hash>.txt`. Two lines
+          later CsvUploadSource reads the extension back off that stored path,
+          saw `txt`, and took its plain-text branch: the ENTIRE FILE became one
+          row with the filename as `title` and the whole content as
+          `evidence_text`.
+
+          That is why real organization data never arrived. A 65,000-row export
+          did not fail — it ingested as a single document record, quietly. The
+          .txt files sitting in storage/app/ingestion/7/ are the fossils of it.
+
+          Using the client extension here is safe because `extensions:` above
+          has already validated it against an allow-list, and basename() strips
+          any path the client tried to smuggle in.
+        */
+        $extension = strtolower($upload->getClientOriginalExtension() ?: 'csv');
+        $storedName = bin2hex(random_bytes(16)).'.'.$extension;
 
         // Stored under the tenant id so two tenants uploading the same
         // filename cannot collide, and so an operator can see at a glance
         // whose file a stray upload belongs to.
-        $path = $request->file('file')->store("ingestion/{$tenantId}", self::UPLOAD_DISK);
+        $path = $upload->storeAs("ingestion/{$tenantId}", $storedName, self::UPLOAD_DISK);
+
+        if ($path === false) {
+            return response()->json([
+                'error'   => 'storage_failed',
+                'message' => 'The file was received but could not be written to storage. Check that the storage directory is writable.',
+            ], 500);
+        }
 
         $source = new CsvUploadSource(
             tenantId: $tenantId,
             filePath: Storage::disk(self::UPLOAD_DISK)->path($path),
             sourceKey: $data['source_id'],
+            // Passed explicitly rather than re-derived from the path, so
+            // parsing can never again depend on how storage chose to name the
+            // file. The original name travels with it for provenance.
+            originalName: $upload->getClientOriginalName(),
+            originalExtension: $extension,
         );
 
         try {
@@ -114,6 +198,132 @@ final class IngestionController extends Controller
             'job_id'  => $result['job']['id'],
             'preview' => $result['preview'],
         ], 201);
+    }
+
+    /**
+     * Diagnose a PHP-level upload failure, or return null if there is none.
+     *
+     * Laravel collapses all seven UPLOAD_ERR_* codes into one message. This
+     * separates them, because the fixes are completely different: raising an
+     * ini value, creating a directory, granting write permission, or retrying a
+     * dropped connection. The technical detail is logged; the caller gets a
+     * sentence naming what to change.
+     *
+     * The ini values are read at request time rather than hardcoded so the
+     * message quotes the limit actually in force on this machine — which is the
+     * one fact the person reading it needs and cannot see.
+     */
+    private function uploadPrecondition(Request $request): ?JsonResponse
+    {
+        /*
+          READ THE FILE BAG DIRECTLY. NEVER hasFile() HERE.
+
+          This is the bug that made the first version of this method useless.
+          hasFile() calls isValidFile(), which requires getPath() !== '' — and
+          on UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_NO_TMP_DIR and UPLOAD_ERR_PARTIAL,
+          PHP hands Laravel an empty tmp_name. getPath() is therefore '' and
+          hasFile() returns FALSE for precisely the failures this method exists
+          to diagnose. The guard bailed out, execution fell through to the
+          `uploaded` rule, and the user got "The file failed to upload." — the
+          exact generic message this was written to replace.
+
+          $request->files->get() returns the UploadedFile whatever state it is
+          in, which is what makes the error code readable at all. Verified:
+          with an empty tmp_name and UPLOAD_ERR_INI_SIZE, hasFile() is false
+          while files->get() returns the object carrying getError() === 1.
+        */
+        $file = $request->files->get('file');
+
+        /*
+          TYPE-CHECKED AGAINST THE SYMFONY BASE CLASS, NOT LARAVEL'S SUBCLASS.
+
+          The second bug in this method, and the reason it still returned the
+          generic message after the first fix. On a REAL request PHP's $_FILES
+          is converted by Symfony's FileBag, which constructs
+          Symfony\...\File\UploadedFile. Laravel only upgrades those to
+          Illuminate\Http\UploadedFile inside allFiles()/convertUploadedFiles() —
+          a path that ->files->get() does not take. So the object here is the
+          Symfony parent, `instanceof Illuminate\Http\UploadedFile` was false,
+          and the guard returned null on every genuine upload failure.
+
+          It was invisible to both the CLI probe and the feature tests because
+          Request::create() and $this->postJson() accept an already-constructed
+          Illuminate UploadedFile and keep it — so the narrow check passed there
+          and failed only against the real web server.
+
+          Illuminate's class extends this one, so matching the parent covers
+          both and cannot regress in the other direction.
+        */
+        if (! $file instanceof \Symfony\Component\HttpFoundation\File\UploadedFile) {
+            return null;
+        }
+
+        if ($file->isValid()) {
+            return null;
+        }
+
+        $code = $file->getError();
+        $uploadMax = (string) ini_get('upload_max_filesize');
+        $postMax = (string) ini_get('post_max_size');
+        $tmpDir = (string) (ini_get('upload_tmp_dir') ?: sys_get_temp_dir());
+
+        [$error, $message] = match ($code) {
+            UPLOAD_ERR_INI_SIZE => [
+                'file_exceeds_php_limit',
+                "The file is larger than this server's PHP upload limit (upload_max_filesize = {$uploadMax}). "
+                ."Raise upload_max_filesize and post_max_size to at least ".(self::MAX_UPLOAD_KB / 1024)." MB in php.ini and restart the web server.",
+            ],
+            UPLOAD_ERR_FORM_SIZE => [
+                'file_exceeds_form_limit',
+                'The file is larger than the limit declared by the upload form.',
+            ],
+            UPLOAD_ERR_PARTIAL => [
+                'upload_incomplete',
+                'Only part of the file reached the server. The connection was interrupted — please retry the upload.',
+            ],
+            UPLOAD_ERR_NO_FILE => [
+                'no_file_received',
+                'No file was received. Choose a file and try again.',
+            ],
+            UPLOAD_ERR_NO_TMP_DIR => [
+                'missing_temp_directory',
+                "PHP has no temporary upload directory. Create {$tmpDir} and make it writable by the web server user, then restart it.",
+            ],
+            UPLOAD_ERR_CANT_WRITE => [
+                'temp_directory_not_writable',
+                "PHP could not write the upload to {$tmpDir}. Grant the web server user write permission on that directory.",
+            ],
+            UPLOAD_ERR_EXTENSION => [
+                'upload_blocked_by_extension',
+                'A PHP extension on this server stopped the upload. Check the PHP error log for which one.',
+            ],
+            default => [
+                'upload_failed',
+                'The file could not be received by the server.',
+            ],
+        };
+
+        // Server-side detail, including the numeric code and the limits in
+        // force, so the log answers the question without a second reproduction.
+        \Illuminate\Support\Facades\Log::error('Ingestion upload rejected by PHP', [
+            'upload_error_code'   => $code,
+            'error'               => $error,
+            'client_name'         => $file->getClientOriginalName(),
+            'upload_max_filesize' => $uploadMax,
+            'post_max_size'       => $postMax,
+            'upload_tmp_dir'      => $tmpDir,
+            'tmp_dir_exists'      => is_dir($tmpDir),
+            'tmp_dir_writable'    => is_writable($tmpDir),
+        ]);
+
+        return response()->json([
+            'error'   => $error,
+            'message' => $message,
+            // Mirrored under `errors.file` so the SPA's existing extractor —
+            // which reads errors.file[0] first — shows this instead of falling
+            // back to the generic status text.
+            'errors'  => ['file' => [$message]],
+        ], 422);
     }
 
     /**
@@ -207,6 +417,55 @@ final class IngestionController extends Controller
             ], 410);
         }
 
+        /*
+          LARGE IMPORTS GO TO THE QUEUE; SMALL ONES DO NOT.
+
+          The field map is validated HERE, before dispatch, so an incomplete map
+          still fails fast with a 422 the user can act on rather than becoming a
+          job that fails silently in a worker minutes later.
+        */
+        try {
+            $validatedMap = FieldMap::fromConfig($data['field_map']);
+
+            if (! $validatedMap->isCommittable()) {
+                throw new \InvalidArgumentException(
+                    'Field map must bind at least "title" and "state" before commit.'
+                );
+            }
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['error' => 'incomplete_field_map', 'message' => $e->getMessage()], 422);
+        }
+
+        if (count($batch->rows) > self::QUEUE_ABOVE_ROWS) {
+            $this->jobs->update($tenant, $jobId, [
+                'status'     => 'queued',
+                'total_rows' => count($batch->rows),
+            ]);
+
+            if ($data['save_map'] ?? false) {
+                $this->sources->saveFieldMap($tenant, (string) $job['source_id'], $validatedMap->toArray());
+            }
+
+            CommitIngestionJob::dispatch(
+                $tenant,
+                $jobId,
+                (string) $job['source_ref'],
+                $batch->sourceKey,
+                $data['field_map'],
+                $this->actorId($request),
+            );
+
+            // 202, not 201: the work is accepted and not yet done. The client
+            // polls the job endpoint for progress rather than waiting here.
+            return response()->json([
+                'job_id'     => $jobId,
+                'status'     => 'queued',
+                'total_rows' => count($batch->rows),
+                'poll'       => "/api/v1/imports/{$tenant}/{$jobId}",
+                'message'    => 'Ingestion has been queued. Track progress on the job.',
+            ], 202);
+        }
+
         try {
             $result = $this->ingestion->commit($jobId, $batch, $data['field_map'], $this->actorId($request));
         } catch (\InvalidArgumentException $e) {
@@ -231,7 +490,13 @@ final class IngestionController extends Controller
             'errors'     => $result['errors'],
             'skipped'    => $result['skipped'],
             'signal_ids' => array_slice($result['signal_ids'], 0, 20),
-            'status'     => 'committed',
+            // Reports what actually happened rather than a flat 'committed'.
+            // A run with rejected rows must not look identical to a clean one.
+            'status'     => match (true) {
+                $result['success'] === 0 && $result['errors'] > 0 => 'failed',
+                $result['errors'] > 0                             => 'completed_with_errors',
+                default                                           => 'committed',
+            },
         ]);
     }
 

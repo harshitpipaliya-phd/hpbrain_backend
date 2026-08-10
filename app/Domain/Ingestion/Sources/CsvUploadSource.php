@@ -30,17 +30,58 @@ final class CsvUploadSource implements DataSource
 {
     /**
      * Rows are held in memory, so the file size is bounded at the HTTP layer.
-     * This cap is the second line of defence: a 20 MB CSV of short rows is
-     * roughly 200k rows, and materialising those as PHP arrays is where the
-     * memory goes, not the file itself.
+     * This cap is the second line of defence: materialising rows as PHP arrays
+     * is where the memory goes, not the file itself.
+     *
+     * RAISED FROM 50,000, which rejected ordinary organization exports — a
+     * 65,000-row employee file is a normal size for this product and was
+     * refused outright. 200,000 rows of ~30 narrow columns is roughly 240 MB of
+     * PHP arrays against the configured 512 MB memory_limit, which is the real
+     * ceiling here; raising this further without moving to a streaming reader
+     * would trade a clear error for an out-of-memory fatal.
+     *
+     * IT THROWS RATHER THAN TRUNCATING, deliberately. A cap that silently kept
+     * the first N rows would produce totals that look plausible and are wrong,
+     * which is the one failure mode this product cannot tolerate.
      */
-    private const MAX_ROWS = 50000;
+    private const MAX_ROWS = 200000;
 
+    /**
+     * @param  string|null  $originalName       the client filename, for provenance
+     * @param  string|null  $originalExtension  the VALIDATED client extension; when
+     *        null the extension is read off $filePath, which is only correct if the
+     *        caller named the stored file itself.
+     */
     public function __construct(
         private readonly string $tenantId,
         private readonly string $filePath,
         private readonly string $sourceKey,
+        private readonly ?string $originalName = null,
+        private readonly ?string $originalExtension = null,
     ) {
+    }
+
+    /**
+     * The format to parse as.
+     *
+     * PREFERS THE CALLER'S EXTENSION OVER THE STORED PATH'S, and that ordering
+     * is the whole point. Laravel's ->store() names uploads from a MIME sniff,
+     * so an ordinary CSV — which sniffs as text/plain — was written as
+     * `<hash>.txt`. Reading the extension back off that path made fetch() take
+     * the plain-text branch and collapse the entire file into a single document
+     * row: sixty-five thousand rows in, one row out, no error raised.
+     *
+     * The path is still the fallback, because ErpDataSource-style callers and
+     * the existing tests construct this class with a real filename and no
+     * explicit extension.
+     */
+    private function format(): string
+    {
+        if ($this->originalExtension !== null && $this->originalExtension !== '') {
+            return strtolower($this->originalExtension);
+        }
+
+        return strtolower(pathinfo($this->filePath, PATHINFO_EXTENSION));
     }
 
     public function fetch(?string $sinceCheckpoint = null): IngestionBatch
@@ -54,7 +95,7 @@ final class CsvUploadSource implements DataSource
             throw new \RuntimeException("Cannot read upload at {$this->filePath}");
         }
 
-        $extension = strtolower(pathinfo($this->filePath, PATHINFO_EXTENSION));
+        $extension = $this->format();
 
         if ($extension === 'json') {
             return $this->fromRows($this->readJson(), 'json_upload');
@@ -72,7 +113,7 @@ final class CsvUploadSource implements DataSource
             return $this->fromRows($this->readText($extension), "{$extension}_upload");
         }
 
-        if ($extension !== 'csv') {
+        if (! in_array($extension, ['csv', 'tsv'], true)) {
             return $this->fromRows($this->readBinaryMetadata($extension), "{$extension}_upload");
         }
 
@@ -82,11 +123,13 @@ final class CsvUploadSource implements DataSource
             throw new \RuntimeException("Cannot open upload at {$this->filePath}");
         }
 
+        $delimiter = $this->detectDelimiter();
+
         try {
-            $headers = $this->readHeaders($handle);
+            $headers = $this->readHeaders($handle, $delimiter);
             $rows = [];
 
-            while (($record = fgetcsv($handle)) !== false) {
+            while (($record = fgetcsv($handle, 0, $delimiter)) !== false) {
                 // fgetcsv yields [null] for a blank line. Skipping it here
                 // keeps blank separator lines out of the row count, which is
                 // the number the reviewer checks the preview against.
@@ -322,9 +365,60 @@ final class CsvUploadSource implements DataSource
      * @param  resource  $handle
      * @return array<int, string>
      */
-    private function readHeaders($handle): array
+    /**
+     * Which character separates this file's fields.
+     *
+     * fgetcsv defaults to a comma, so a semicolon-delimited export — what Excel
+     * produces on any machine with a comma decimal separator, i.e. most of
+     * Europe — parsed as ONE column whose name was the entire header line. It
+     * did not error; it produced a single-column dataset, which is worse.
+     *
+     * Decided by counting candidates in the header line and taking the most
+     * frequent. The header is the right line to sample because it is the one
+     * line guaranteed to contain every separator exactly once between fields
+     * and no free text with stray punctuation. A tie falls back to comma.
+     */
+    private function detectDelimiter(): string
     {
-        $headers = fgetcsv($handle);
+        if ($this->format() === 'tsv') {
+            return "	";
+        }
+
+        $handle = fopen($this->filePath, 'r');
+
+        if ($handle === false) {
+            return ',';
+        }
+
+        $line = fgets($handle, 65536);
+        fclose($handle);
+
+        if ($line === false || $line === '') {
+            return ',';
+        }
+
+        // Quoted sections are stripped first, so a comma inside "Smith, John"
+        // cannot outvote the real separator.
+        $unquoted = (string) preg_replace('/"[^"]*"/', '', $line);
+
+        $best = ',';
+        $bestCount = 0;
+
+        foreach ([',', ';', "	", '|'] as $candidate) {
+            $count = substr_count($unquoted, $candidate);
+
+            if ($count > $bestCount) {
+                $best = $candidate;
+                $bestCount = $count;
+            }
+        }
+
+        return $best;
+    }
+
+    private function readHeaders($handle, string $delimiter = ','): array
+    {
+        $headers = fgetcsv($handle, 0, $delimiter);
 
         if ($headers === false || $headers === [null]) {
             throw new \RuntimeException('CSV has no header row.');
