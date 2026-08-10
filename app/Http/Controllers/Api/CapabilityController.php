@@ -59,6 +59,14 @@ final class CapabilityController extends Controller
             'orgId'          => ['nullable', 'string'],
             'description'    => ['nullable', 'string'],
             'category'       => ['nullable', 'string'],
+            'capabilityType' => ['nullable', 'string'],
+            'difficulty'     => ['nullable', 'string'],
+            'criticality'    => ['nullable', 'string'],
+            'knowledge'      => ['nullable', 'array'],
+            'ability'        => ['nullable', 'array'],
+            'skill'          => ['nullable', 'array'],
+            'behaviour'      => ['nullable', 'array'],
+            'attitude'       => ['nullable', 'array'],
         ]);
 
         return response()->json($this->repository->insert([
@@ -68,6 +76,14 @@ final class CapabilityController extends Controller
             'capability_code' => $data['capabilityCode'],
             'description'     => $data['description'] ?? null,
             'category'        => $data['category'] ?? null,
+            'capability_type' => $data['capabilityType'] ?? 'competency',
+            'difficulty'      => $data['difficulty'] ?? 'intermediate',
+            'criticality'     => $data['criticality'] ?? 'medium',
+            'knowledge'       => isset($data['knowledge']) ? json_encode($data['knowledge']) : null,
+            'ability'         => isset($data['ability']) ? json_encode($data['ability']) : null,
+            'skill'           => isset($data['skill']) ? json_encode($data['skill']) : null,
+            'behaviour'       => isset($data['behaviour']) ? json_encode($data['behaviour']) : null,
+            'attitude'        => isset($data['attitude']) ? json_encode($data['attitude']) : null,
             'status'          => 'active',
             'created_by'      => $this->actorId($request),
         ]), 201);
