@@ -27,9 +27,19 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *   /analytics/decision-intelligence  DecisionIntelligence reads pipeline.pending
  *                                   and Object.keys(categoryExecutorHeatmap).
  *
- * A rate over an empty set is reported as 0, not null, because the clients type
- * these as numbers and multiply them — and the `total` sitting beside each rate
- * is what distinguishes "nothing happened" from "everything was rejected".
+ * A RATE OVER AN EMPTY SET IS NULL, NOT ZERO. This was the other way round, on the
+ * reasoning that clients type these as numbers and multiply them, and that the
+ * `total` sitting beside each rate distinguishes "nothing happened" from "everything
+ * was rejected". The second half was true and no client ever did it: both consumers
+ * rendered `Math.round(recommendationAccuracy * 100)` straight into a KPI tile, so an
+ * organization that had never recorded an outcome was shown "Recommendation Accuracy:
+ * 0%" — asserting that every recommendation the Brain ever made was wrong. The same
+ * applied to `averageScore` over an empty risk register.
+ *
+ * Returning null forces the question at the call site instead of hiding it, which is
+ * the Product Bible's rule: UNDETERMINED is a valid, visible state, and zero is a
+ * measurement. `total` still ships beside every rate, and now it is the denominator a
+ * reader can check rather than the disclaimer nobody read.
  */
 final class AnalyticsController extends Controller
 {
@@ -99,7 +109,9 @@ final class AnalyticsController extends Controller
                 'total'          => $decisions->count(),
                 'approved'       => $approved,
                 'rejected'       => $rejected,
-                'acceptanceRate' => $decisions->isEmpty() ? 0.0 : round($approved / $decisions->count(), 4),
+                // null when nothing has been decided: there is no rate, as opposed
+                // to a rate of nothing.
+                'acceptanceRate' => $decisions->isEmpty() ? null : round($approved / $decisions->count(), 4),
             ],
             'recommendations' => [
                 'total'      => $recommendations->count(),
@@ -111,16 +123,27 @@ final class AnalyticsController extends Controller
                 // How often acting on a recommendation actually worked. Over
                 // outcomes, not over recommendations: a recommendation nobody
                 // acted on has proved nothing either way.
-                'recommendationAccuracy' => $outcomes->isEmpty() ? 0.0 : round($successful / $outcomes->count(), 4),
+                // THE FIGURE THIS CHANGE EXISTS FOR. Zero here reads as "every
+                // decision was wrong", which is a far stronger claim than the truth
+                // that nobody measured any of them.
+                'recommendationAccuracy' => $outcomes->isEmpty() ? null : round($successful / $outcomes->count(), 4),
             ],
             'risks' => [
                 'total'        => $risks->count(),
                 'open'         => $openRisks,
                 'byCategory'   => (object) $risksByCategory,
-                'averageScore' => $risks->isEmpty() ? 0.0 : round((float) $risks->avg('score'), 2),
+                'averageScore' => $risks->isEmpty() ? null : round((float) $risks->avg('score'), 2),
             ],
-            'evidenceQuality' => $evidenceConfidence === null ? 0.0 : round((float) $evidenceConfidence, 4),
+            // Already null-safe at the source: AVG over no rows is SQL NULL, and that
+            // is passed through rather than coalesced.
+            'evidenceQuality' => $evidenceConfidence === null ? null : round((float) $evidenceConfidence, 4),
         ];
+    }
+
+    /** A 0..1 rate as a 0..100 percentage, preserving null. */
+    private function asPercent(?float $rate): ?float
+    {
+        return $rate === null ? null : round($rate * 100, 1);
     }
 
     public function executiveSummary(Request $request): JsonResponse
@@ -183,14 +206,20 @@ final class AnalyticsController extends Controller
         // expressed 0-100. Publishing the breakdown alongside the score is the
         // point: a single number nobody can decompose is not intelligence, it
         // is a claim.
+        // Each component is null where its denominator is empty, and the composite is
+        // the mean of the ones that exist. Averaging in zeros for unmeasured components
+        // was what let an organization with no outcomes and no risk register be scored
+        // at half of what it had actually achieved.
         $breakdown = [
-            'decisionAcceptance'     => round($statistics['decisions']['acceptanceRate'] * 100, 1),
-            'recommendationAccuracy' => round($statistics['outcomes']['recommendationAccuracy'] * 100, 1),
-            'evidenceQuality'        => round($statistics['evidenceQuality'] * 100, 1),
+            'decisionAcceptance'     => $this->asPercent($statistics['decisions']['acceptanceRate']),
+            'recommendationAccuracy' => $this->asPercent($statistics['outcomes']['recommendationAccuracy']),
+            'evidenceQuality'        => $this->asPercent($statistics['evidenceQuality']),
             'riskCoverage'           => $statistics['risks']['total'] === 0
-                ? 0.0
+                ? null
                 : round((1 - $statistics['risks']['open'] / $statistics['risks']['total']) * 100, 1),
         ];
+
+        $measured = array_values(array_filter($breakdown, static fn ($v): bool => $v !== null));
 
         return response()->json([
             'statistics'              => $statistics,
@@ -200,14 +229,21 @@ final class AnalyticsController extends Controller
             'openDecisionsCount'      => DB::table('hpbrain_decisions')
                 ->where('tenant_id', $t)->whereRaw('LOWER(status) = ?', ['pending'])->count(),
             'intelligenceScore'       => [
-                'score'     => round(array_sum($breakdown) / count($breakdown), 1),
+                // null, not 0, when not one component could be measured.
+                'score'     => $measured === [] ? null : round(array_sum($measured) / count($measured), 1),
                 'breakdown' => (object) $breakdown,
+                'measuredComponents'   => count($measured),
+                'unmeasuredComponents' => count($breakdown) - count($measured),
+                'basis' => $measured === []
+                    ? 'No component of this score could be measured for this organization.'
+                    : 'Mean of the '.count($measured).' of '.count($breakdown).' components that have a denominator. Components with none are null and excluded, never scored zero.',
             ],
             // Retained from the previous shape — these are real figures and
             // removing them would break anything already reading them.
             'averageConfidence' => ($c = DB::table('hpbrain_reasoning_steps')->where('tenant_id', $t)->avg('confidence_score')) !== null
                 ? round((float) $c, 4) : null,
             'openCases'        => DB::table('hpbrain_cases')->where('tenant_id', $t)->whereNotIn('status', ['closed'])->count(),
+            // Mirrors recommendationAccuracy, so it mirrors its null too.
             'successRate'      => $statistics['outcomes']['recommendationAccuracy'],
         ]);
     }

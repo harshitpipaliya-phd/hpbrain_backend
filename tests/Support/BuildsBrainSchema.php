@@ -1426,5 +1426,35 @@ trait BuildsBrainSchema
             $t->timestamp('updated_date')->nullable();
             $t->unique(['tenant_id', 'dataset', 'natural_key'], 'operational_records_natural_key_unique');
         });
+
+        // ---- Recommendation evidence (2026_08_07_000100_recommendation_evidence) --
+        // The join Architecture Invariant 1 is enforced through: no recommendation
+        // without a traceable path to its evidence. The intelligence engine reports
+        // recommendations that have no row here as an invariant violation, so the
+        // table has to exist for that check to mean anything in the suite.
+        Schema::create('hpbrain_recommendation_evidence', function ($t) {
+            $t->string('tenant_id', 36);
+            $t->string('recommendation_id', 36);
+            $t->string('evidence_id', 36);
+            $t->timestamp('linked_date')->nullable();
+            $t->primary(['tenant_id', 'recommendation_id', 'evidence_id'], 'recommendation_evidence_pk');
+        });
+
+        // ---- ESO efficacy (2026_07_2x eso tables) ----------------------------
+        // An ESO's track record. The catalogue endpoint attaches these per
+        // definition, because a definition with no efficacy record has no track
+        // record — which is a different claim from having a poor one.
+        Schema::create('hpbrain_eso_efficacy_records', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('eso_definition_id', 36);
+            $t->string('gap_type', 100)->nullable();
+            $t->string('population', 191)->nullable();
+            $t->decimal('efficacy_score', 6, 4)->nullable();
+            $t->integer('sample_size')->nullable();
+            $t->timestamp('computed_date')->nullable();
+            $t->string('created_by')->nullable();
+            $t->timestamp('created_date')->nullable();
+        });
     }
 }

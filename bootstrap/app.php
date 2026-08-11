@@ -6,6 +6,7 @@ use App\Http\Middleware\AuthenticateJwt;
 use App\Http\Middleware\EnsureTenantScope;
 use App\Http\Middleware\RequirePermission;
 use App\Providers\AiServiceProvider;
+use App\Providers\IntelligenceServiceProvider;
 use App\Providers\UniversalServiceProvider;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -36,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
     // has no bootstrap/providers.php, so providers are registered here.
     ->withProviders([
         AiServiceProvider::class,
+        IntelligenceServiceProvider::class,
         UniversalServiceProvider::class,
     ])
     ->withRouting(

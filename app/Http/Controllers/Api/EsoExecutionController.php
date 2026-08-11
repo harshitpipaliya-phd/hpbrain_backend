@@ -37,6 +37,112 @@ final class EsoExecutionController extends Controller
     }
 
     /**
+     * The ESO catalogue: what this organization can actually run, and how well it
+     * has worked.
+     *
+     * ADDED BECAUSE THE SCREEN THAT NEEDS IT WAS SHIPPING FICTION. EsoLibraryScreen
+     * held two hardcoded definitions and one hardcoded efficacy record, with a
+     * comment saying the data layer would arrive later. Anybody opening the screen
+     * saw a populated library for an organization that had none — the worst kind of
+     * placeholder, because it is indistinguishable from real content.
+     *
+     * Read-only and deliberately so. Authoring ESOs is a governed write path with a
+     * trust model and an approval route behind it, and nothing here is a substitute
+     * for building that. This endpoint answers one question honestly: what is in the
+     * catalogue right now.
+     *
+     * Efficacy is attached per definition rather than fetched separately, because a
+     * definition's track record is the only thing that distinguishes a proven
+     * intervention from a plausible one, and a screen that has to ask twice will
+     * eventually show the first without the second.
+     */
+    public function definitions(Request $request): JsonResponse
+    {
+        $tenantId = $this->tenantId($request);
+
+        $definitions = DB::table('hpbrain_eso_definitions')
+            ->where('tenant_id', $tenantId)
+            ->orderBy('eso_code')
+            ->get();
+
+        $efficacy = DB::table('hpbrain_eso_efficacy_records')
+            ->where('tenant_id', $tenantId)
+            ->orderByDesc('computed_date')
+            ->get()
+            ->groupBy('eso_definition_id');
+
+        $runs = DB::table('hpbrain_eso_executions')
+            ->where('tenant_id', $tenantId)
+            ->selectRaw('eso_id, COUNT(*) AS runs, MAX(created_date) AS last_run')
+            ->groupBy('eso_id')
+            ->get()
+            ->keyBy('eso_id');
+
+        return response()->json([
+            'definitions' => $definitions->map(function ($d) use ($efficacy, $runs) {
+                $records = $efficacy->get($d->id, collect());
+                $run     = $runs->get($d->id);
+
+                return [
+                    'id'           => (string) $d->id,
+                    'esoCode'      => (string) ($d->eso_code ?? ''),
+                    'name'         => (string) ($d->name ?? 'unnamed'),
+                    'objective'    => $d->objective === null ? null : (string) $d->objective,
+                    'status'       => (string) ($d->status ?? 'unknown'),
+                    'version'      => (int) ($d->version ?? 1),
+                    'owner'        => $d->owner === null ? null : (string) $d->owner,
+                    'trustLevel'   => $d->trust_level === null ? null : (string) $d->trust_level,
+                    'allowedExecutorClasses' => $this->jsonList($d->allowed_executor_classes),
+                    'gapTypes'     => $this->jsonList($d->gap_types),
+                    'kasbaNodeType' => $d->kasba_node_type === null ? null : (string) $d->kasba_node_type,
+                    'runs'         => $run === null ? 0 : (int) $run->runs,
+                    'lastRun'      => $run?->last_run,
+                    // Empty is a real answer: an ESO with no efficacy record has no
+                    // track record, which is different from having a poor one.
+                    'efficacy'     => $records->map(fn ($e) => [
+                        'id'            => (string) $e->id,
+                        'gapType'       => $e->gap_type === null ? null : (string) $e->gap_type,
+                        'population'    => $e->population === null ? null : (string) $e->population,
+                        'efficacyScore' => $e->efficacy_score === null ? null : (float) $e->efficacy_score,
+                        'sampleSize'    => $e->sample_size === null ? null : (int) $e->sample_size,
+                        'computedDate'  => $e->computed_date,
+                    ])->values(),
+                ];
+            })->values(),
+            'totals' => [
+                'definitions' => $definitions->count(),
+                'active'      => $definitions->filter(fn ($d) => strtolower((string) ($d->status ?? '')) === 'active')->count(),
+                'withEfficacy' => $definitions->filter(fn ($d) => $efficacy->has($d->id))->count(),
+                'executions'  => (int) DB::table('hpbrain_eso_executions')->where('tenant_id', $tenantId)->count(),
+            ],
+        ]);
+    }
+
+    /**
+     * A JSON column read as a list of strings.
+     *
+     * Returns [] for null, malformed JSON, or a scalar. A catalogue screen rendering
+     * `allowedExecutorClasses.join()` must not be handed a string, and throwing here
+     * would blank a whole screen over one bad row written by an earlier build.
+     *
+     * @return array<int, string>
+     */
+    private function jsonList(mixed $value): array
+    {
+        if ($value === null) {
+            return [];
+        }
+
+        $decoded = json_decode((string) $value, true);
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        return array_values(array_map(static fn ($v): string => is_scalar($v) ? (string) $v : json_encode($v), $decoded));
+    }
+
+    /**
      * COLUMN MAPPING — read this before editing the insert below.
      *
      * This method previously wrote `executor_id`, `measurement_plan` and

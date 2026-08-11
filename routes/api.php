@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\MentalModelController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ObservabilityController;
 use App\Http\Controllers\Api\OrganizationController;
+use App\Http\Controllers\Api\OrganizationIntelligenceController;
 use App\Http\Controllers\Api\OutcomeController;
 use App\Http\Controllers\Api\PersonController;
 use App\Http\Controllers\Api\PolicyController;
@@ -197,6 +198,11 @@ Route::prefix('v1')->group(function () {
         Route::post('decisions', [DecisionController::class, 'store'])->middleware('permission:create');
         Route::post('decisions/{tenantId}/{id}/approve', [DecisionController::class, 'approve'])->middleware('permission:decision.approve');
 
+        // The catalogue behind the ESO Library screen. Must precede
+        // `eso-executions/{tenantId}` only in spirit — it is a distinct path — but is
+        // registered first so the two stay adjacent and legible.
+        Route::get('eso-definitions/{tenantId}', [EsoExecutionController::class, 'definitions']);
+
         Route::get('eso-executions/{tenantId}', [EsoExecutionController::class, 'index']);
         Route::post('eso-executions', [EsoExecutionController::class, 'store'])->middleware('permission:eso.execute');
         Route::patch('eso-executions/{tenantId}/{id}/transition', [EsoExecutionController::class, 'complete'])->middleware('permission:eso.execute');
@@ -287,6 +293,27 @@ Route::prefix('v1')->group(function () {
 
         Route::get('mental-models/{tenantId}', [MentalModelController::class, 'index']);
         Route::get('mental-models/{tenantId}/domain/{domain}', [MentalModelController::class, 'byDomain']);
+
+        // ---- Organization intelligence ---------------------------------------
+        // Derived on read from the organization's own rows. Registered under the
+        // plain `read` floor of this group: every one of these is a computed
+        // aggregate and none of them writes.
+        //
+        // ORDER MATTERS. The named sub-routes must precede
+        // `organization-intelligence/{tenantId}`, or that pattern captures
+        // 'state', 'knowledge' and the rest as tenant ids — and because
+        // EnsureTenantScope compares a route tenant against the token's, the
+        // failure would surface as a 403 tenant_mismatch on a valid request
+        // rather than as a routing mistake.
+        Route::get('organization-intelligence/{tenantId}/state', [OrganizationIntelligenceController::class, 'state']);
+        Route::get('organization-intelligence/{tenantId}/knowledge', [OrganizationIntelligenceController::class, 'knowledge']);
+        Route::get('organization-intelligence/{tenantId}/decisions', [OrganizationIntelligenceController::class, 'decisions']);
+        Route::get('organization-intelligence/{tenantId}/risks', [OrganizationIntelligenceController::class, 'risks']);
+        Route::get('organization-intelligence/{tenantId}/capability', [OrganizationIntelligenceController::class, 'capability']);
+        Route::get('organization-intelligence/{tenantId}/gaps', [OrganizationIntelligenceController::class, 'gaps']);
+        Route::get('organization-intelligence/{tenantId}/recommendations', [OrganizationIntelligenceController::class, 'recommendations']);
+        Route::get('organization-intelligence/{tenantId}/profile', [OrganizationIntelligenceController::class, 'profile']);
+        Route::get('organization-intelligence/{tenantId}', [OrganizationIntelligenceController::class, 'index']);
 
         Route::get('knowledge-library/{tenantId}/search', [KnowledgeLibraryController::class, 'search']);
         Route::get('knowledge-library/{tenantId}', [KnowledgeLibraryController::class, 'index']);
