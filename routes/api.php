@@ -39,6 +39,7 @@ use App\Http\Controllers\Api\SignalController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\WorkspaceController;
 use App\Http\Controllers\Api\IndustryController;
+use App\Http\Controllers\Api\IntelligenceOverviewController;
 use App\Http\Controllers\Api\OrganizationConfigController;
 use App\Http\Controllers\Api\TerminologyController;
 use App\Http\Controllers\Api\EntityMappingController;
@@ -259,6 +260,9 @@ Route::prefix('v1')->group(function () {
         Route::get('analytics/{tenantId}/reports/organization', [AnalyticsController::class, 'organizationReport']);
         Route::get('analytics/{tenantId}/reports/people', [AnalyticsController::class, 'peopleReport']);
         Route::get('analytics/{tenantId}/reports/intelligence', [AnalyticsController::class, 'intelligenceReport']);
+        Route::get('analytics/{tenantId}/deliberation-overview', [IntelligenceOverviewController::class, 'deliberationOverview']);
+        Route::get('analytics/{tenantId}/enterprise-overview', [IntelligenceOverviewController::class, 'enterpriseOverview']);
+        Route::get('analytics/{tenantId}/execution-overview', [IntelligenceOverviewController::class, 'executionOverview']);
 
         // ---- Notifications and settings -------------------------------------
         // read-all / read are self-service: they flip read_date on the caller's
@@ -738,3 +742,4 @@ Route::prefix('v1')->group(function () {
         });
     });
 });
+
