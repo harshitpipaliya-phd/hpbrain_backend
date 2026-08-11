@@ -385,6 +385,384 @@ final class AnalyticsController extends Controller
         ]);
     }
 
+    public function deliberationOverview(Request $request): JsonResponse
+    {
+        $t = $this->tenantId($request);
+        $page = max(1, (int) $request->query('page', 1));
+        $pageSize = max(1, min(50, (int) $request->query('pageSize', 8)));
+        $offset = ($page - 1) * $pageSize;
+
+        $openCaseStatuses = ['open', 'triaged', 'investigating'];
+        $pendingStatuses = ['pending', 'proposed'];
+
+        $cases = DB::table('hpbrain_cases')
+            ->where('tenant_id', $t)
+            ->orderByDesc('updated_date')
+            ->orderByDesc('created_date')
+            ->offset($offset)
+            ->limit($pageSize)
+            ->get();
+
+        $caseIds = $cases->pluck('id')->map(fn ($id) => (string) $id)->all();
+        $evidenceCounts = $caseIds === [] ? collect() : DB::table('hpbrain_case_evidence')
+            ->where('tenant_id', $t)
+            ->whereIn('case_id', $caseIds)
+            ->select('case_id', DB::raw('COUNT(*) as count'))
+            ->groupBy('case_id')
+            ->pluck('count', 'case_id');
+
+        $hypotheses = $caseIds === [] ? collect() : DB::table('hpbrain_hypotheses')
+            ->where('tenant_id', $t)
+            ->whereIn('case_id', $caseIds)
+            ->orderByDesc('confidence')
+            ->orderByDesc('created_date')
+            ->get()
+            ->groupBy('case_id');
+
+        $detailsById = [];
+        $items = $cases->map(function ($case) use ($evidenceCounts, $hypotheses, &$detailsById) {
+            $id = (string) $case->id;
+            $caseHypotheses = $hypotheses->get($id, collect())->values();
+            $current = $caseHypotheses->first();
+            $confidence = $current?->confidence === null ? null : (float) $current->confidence;
+
+            $summary = [
+                'id' => $id,
+                'title' => (string) ($case->title ?? 'Untitled case'),
+                'status' => (string) ($case->status ?? 'open'),
+                'severity' => $this->caseSeverity((int) ($evidenceCounts[$id] ?? 0), $confidence),
+                'classification' => $current?->root_cause_family ? (string) $current->root_cause_family : 'Unclassified',
+                'evidenceCount' => (int) ($evidenceCounts[$id] ?? 0),
+                'ageDays' => $this->ageDays($case->created_date ?? null),
+                'confidence' => $confidence,
+                'currentHypothesis' => $current ? [
+                    'id' => (string) $current->id,
+                    'statement' => (string) $current->statement,
+                    'confidence' => (float) $current->confidence,
+                    'status' => (string) $current->status,
+                ] : null,
+                'nextAction' => $current ? 'Review the leading hypothesis and attached evidence.' : 'Create or attach a hypothesis for this case.',
+            ];
+
+            $timelineHypotheses = $caseHypotheses->map(fn ($h) => [
+                'id' => (string) $h->id,
+                'title' => (string) $h->statement,
+                'status' => (string) $h->status,
+                'confidence' => (float) $h->confidence,
+                'timestamp' => $h->created_date,
+            ])->all();
+
+            $detailsById[$id] = [
+                'summary' => $summary,
+                'timeline' => [
+                    [
+                        'stage' => 'Case opened',
+                        'items' => [[
+                            'id' => $id.':case',
+                            'title' => (string) ($case->description ?? $case->title ?? 'Case opened'),
+                            'status' => (string) ($case->status ?? 'open'),
+                            'confidence' => $confidence,
+                            'timestamp' => $case->created_date,
+                        ]],
+                    ],
+                    [
+                        'stage' => 'Hypotheses',
+                        'items' => $timelineHypotheses,
+                    ],
+                ],
+            ];
+
+            return $summary;
+        })->values();
+
+        $decisions = DB::table('hpbrain_decisions as d')
+            ->leftJoin('hpbrain_recommendations as r', function ($j) use ($t) {
+                $j->on('r.id', '=', 'd.recommendation_id')->where('r.tenant_id', '=', $t);
+            })
+            ->where('d.tenant_id', $t)
+            ->whereIn('d.status', $pendingStatuses)
+            ->select('d.id', 'd.status', 'd.rationale', 'd.confidence', 'd.decided_by', 'd.created_date', 'r.title as recommendation', 'r.priority')
+            ->orderByDesc('d.created_date')
+            ->limit(12)
+            ->get()
+            ->map(fn ($d) => [
+                'id' => (string) $d->id,
+                'decision' => (string) ($d->rationale ?? 'Decision pending'),
+                'caseId' => null,
+                'recommendation' => $d->recommendation ? (string) $d->recommendation : null,
+                'confidence' => $d->confidence === null ? null : (float) $d->confidence,
+                'priority' => $d->priority ? (string) $d->priority : null,
+                'owner' => $d->decided_by ? (string) $d->decided_by : null,
+                'ageDays' => $this->ageDays($d->created_date),
+                'status' => (string) $d->status,
+            ])->values();
+
+        $openCases = (int) DB::table('hpbrain_cases')->where('tenant_id', $t)->whereIn('status', $openCaseStatuses)->count();
+        $pendingRecommendations = (int) DB::table('hpbrain_recommendations')->where('tenant_id', $t)->whereIn('status', $pendingStatuses)->count();
+        $pendingDecisions = (int) DB::table('hpbrain_decisions')->where('tenant_id', $t)->whereIn('status', $pendingStatuses)->count();
+        $evidenceLinkedCases = (int) DB::table('hpbrain_case_evidence')->where('tenant_id', $t)->distinct('case_id')->count('case_id');
+        $totalCases = (int) DB::table('hpbrain_cases')->where('tenant_id', $t)->count();
+
+        return response()->json([
+            'tenantId' => $t,
+            'generatedAt' => now()->format('Y-m-d H:i:s'),
+            'organization' => ['id' => $t, 'name' => 'Fiber Valley'],
+            'summary' => [
+                'openCases' => $openCases,
+                'activeInvestigations' => (int) DB::table('hpbrain_hypotheses')->where('tenant_id', $t)->whereIn('status', ['proposed', 'supported'])->count(),
+                'pendingRecommendations' => $pendingRecommendations,
+                'pendingDecisions' => $pendingDecisions,
+                'averageDecisionAgeDays' => $this->averageAgeDays('hpbrain_decisions', $t, $pendingStatuses),
+                'evidenceCoverage' => $totalCases === 0 ? null : round($evidenceLinkedCases / $totalCases, 4),
+                'highCriticalRisks' => (int) DB::table('hpbrain_risks')->where('tenant_id', $t)->where('score', '>=', 0.5)->count(),
+                'overdueDecisions' => null,
+                'overdueDecisionNote' => 'No due-date model is currently stored for decisions.',
+            ],
+            'focus' => [
+                'selectedCaseId' => $items->first()['id'] ?? null,
+                'biggestBottleneck' => $this->weakestLoopStage($t),
+            ],
+            'cases' => [
+                'page' => $page,
+                'pageSize' => $pageSize,
+                'total' => $totalCases,
+                'items' => $items,
+                'detailsById' => (object) $detailsById,
+            ],
+            'decisionQueue' => ['items' => $decisions],
+        ]);
+    }
+
+    public function enterpriseOverview(Request $request): JsonResponse
+    {
+        $t = $this->tenantId($request);
+        $statistics = $this->statistics($t);
+        $summary = $this->executiveSummary($request)->getData(true);
+        $home = app(WorkspaceController::class)->homeMetrics($request)->getData(true);
+        $enterpriseScore = $summary['intelligenceScore'];
+        $enterpriseScore['score'] = $enterpriseScore['score'] === null ? null : round((float) $enterpriseScore['score'] / 100, 4);
+        foreach (($enterpriseScore['breakdown'] ?? []) as $key => $value) {
+            $enterpriseScore['breakdown'][$key] = $value === null ? null : round((float) $value / 100, 4);
+        }
+
+        $loop = [
+            ['key' => 'signals', 'label' => 'Signals', 'count' => (int) DB::table('hpbrain_signals')->where('tenant_id', $t)->count(), 'conversionRate' => null],
+            ['key' => 'evidence', 'label' => 'Evidence', 'count' => (int) DB::table('hpbrain_evidence')->where('tenant_id', $t)->count()],
+            ['key' => 'cases', 'label' => 'Cases', 'count' => (int) DB::table('hpbrain_cases')->where('tenant_id', $t)->count()],
+            ['key' => 'recommendations', 'label' => 'Recommendations', 'count' => (int) DB::table('hpbrain_recommendations')->where('tenant_id', $t)->count()],
+            ['key' => 'decisions', 'label' => 'Decisions', 'count' => (int) DB::table('hpbrain_decisions')->where('tenant_id', $t)->count()],
+            ['key' => 'outcomes', 'label' => 'Outcomes', 'count' => (int) DB::table('hpbrain_outcomes')->where('tenant_id', $t)->count()],
+        ];
+
+        for ($i = 1; $i < count($loop); $i++) {
+            $previous = max(0, (int) $loop[$i - 1]['count']);
+            $loop[$i]['conversionRate'] = $previous === 0 ? null : round(((int) $loop[$i]['count']) / $previous, 4);
+        }
+
+        $weakest = collect($loop)->filter(fn ($stage) => $stage['conversionRate'] !== null)->sortBy('conversionRate')->first();
+        $pending = DB::table('hpbrain_recommendations')->where('tenant_id', $t)->whereIn('status', ['pending', 'proposed'])->orderByDesc('confidence')->limit(8)->get();
+
+        return response()->json([
+            'tenantId' => $t,
+            'generatedAt' => now()->format('Y-m-d H:i:s'),
+            'organization' => ['id' => $t, 'name' => 'Fiber Valley', 'industry' => null],
+            'summary' => [
+                'healthScore' => $enterpriseScore['score'],
+                'dataConfidence' => $statistics['evidenceQuality'],
+                'whereToday' => $statistics['decisions']['total'].' decisions, '.$statistics['recommendations']['total'].' recommendations, '.$statistics['risks']['open'].' open risks.',
+                'whatCouldHappenNext' => $weakest ? $weakest['label'].' is the weakest visible conversion point.' : 'Not enough loop history to forecast a bottleneck.',
+                'methodology' => $summary['intelligenceScore']['basis'] ?? 'Computed from tenant-scoped Brain records.',
+            ],
+            'kpis' => [
+                ['label' => 'Open Risks', 'value' => $statistics['risks']['open'], 'detail' => 'Risks not marked mitigated'],
+                ['label' => 'Pending Decisions', 'value' => $summary['openDecisionsCount'] ?? 0, 'detail' => 'Governance items waiting'],
+                ['label' => 'Evidence Coverage', 'value' => $statistics['evidenceQuality'], 'detail' => 'Mean evidence confidence'],
+                ['label' => 'Pending Recommendations', 'value' => $statistics['recommendations']['total'], 'detail' => 'Actions requiring disposition'],
+            ],
+            'intelligenceScore' => $enterpriseScore,
+            'executiveSummary' => [
+                'strengths' => array_values(array_filter([
+                    $statistics['evidenceQuality'] !== null ? 'Evidence confidence is measured.' : null,
+                    $statistics['decisions']['total'] > 0 ? 'Decision records exist and can be audited.' : null,
+                ])),
+                'weaknesses' => array_values(array_filter([
+                    $statistics['outcomes']['recommendationAccuracy'] === null ? 'No outcomes are recorded, so recommendation accuracy is unmeasured.' : null,
+                    $statistics['risks']['open'] > 0 ? $statistics['risks']['open'].' risks remain open.' : null,
+                ])),
+            ],
+            'dimensions' => [
+                ['label' => 'Decision acceptance', 'score' => $statistics['decisions']['acceptanceRate'], 'methodology' => 'Approved decisions divided by all decisions.'],
+                ['label' => 'Recommendation accuracy', 'score' => $statistics['outcomes']['recommendationAccuracy'], 'methodology' => 'Successful outcomes divided by all measured outcomes.'],
+                ['label' => 'Evidence quality', 'score' => $statistics['evidenceQuality'], 'methodology' => 'Mean confidence across evidence records.'],
+            ],
+            'managementAttention' => $home['attention'] ?? [],
+            'predictedIssues' => $summary['topRisks'] ?? [],
+            'aiRecommendations' => $pending->map(fn ($r) => [
+                'id' => (string) $r->id,
+                'title' => (string) $r->title,
+                'priority' => (string) ($r->priority ?? 'medium'),
+                'why' => (string) ($r->description ?? 'Recommendation generated from current records.'),
+                'recommendedAction' => (string) ($r->impact ?? 'Review and decide whether to act.'),
+                'riskIfIgnored' => (string) ($r->risk ?? 'The condition may persist.'),
+                'confidence' => $r->confidence === null ? null : (float) $r->confidence,
+                'sourceType' => 'record',
+            ])->values(),
+            'loopContinuity' => [
+                'stages' => $loop,
+                'weakestStage' => $weakest,
+            ],
+            'signalsEvidence' => [
+                'signalsTotal' => $loop[0]['count'],
+                'evidenceTotal' => $loop[1]['count'],
+                'averageEvidenceConfidence' => $statistics['evidenceQuality'],
+                'staleEvidence' => 0,
+            ],
+            'decisionIntelligence' => [
+                'pendingDecisions' => $summary['openDecisionsCount'] ?? 0,
+                'approvedDecisions' => $statistics['decisions']['approved'],
+                'pendingRecommendations' => $statistics['recommendations']['total'],
+                'averageDecisionAgeDays' => $this->averageAgeDays('hpbrain_decisions', $t, ['pending', 'proposed']),
+            ],
+            'recentOutcomes' => DB::table('hpbrain_outcomes')->where('tenant_id', $t)->orderByDesc('created_date')->limit(5)->get()->map(fn ($o) => [
+                'id' => (string) $o->id,
+                'title' => 'Outcome '.$o->id,
+                'result' => (string) $o->result,
+                'confidence' => $o->confidence === null ? null : (float) $o->confidence,
+                'createdDate' => $o->created_date,
+            ])->values(),
+            'reusableLearnings' => DB::table('hpbrain_learnings')->where('tenant_id', $t)->where('reusable', 1)->orderByDesc('created_date')->limit(5)->get(),
+            'boardAsk' => [
+                'headline' => ($summary['openDecisionsCount'] ?? 0) > 0 ? 'Resolve the pending decision queue.' : 'No board-level decision queue is visible.',
+                'decisionQueue' => $summary['openDecisionsCount'] ?? 0,
+                'continuityRisk' => $weakest,
+                'topActions' => $pending->take(3)->map(fn ($r) => [
+                    'id' => (string) $r->id,
+                    'title' => (string) $r->title,
+                    'priority' => (string) ($r->priority ?? 'medium'),
+                    'why' => (string) ($r->description ?? 'This action is pending review.'),
+                    'confidence' => $r->confidence === null ? null : (float) $r->confidence,
+                ])->values(),
+            ],
+            'dataTrust' => [
+                'completeness' => $statistics['evidenceQuality'],
+                'missingEmployeeDepartment' => $home['erp']['peopleWithoutDepartment'] ?? 0,
+                'missingDepartmentLeadership' => $home['erp']['departmentsWithoutManager'] ?? 0,
+                'missingCapabilityMapping' => null,
+                'staleEvidence' => 0,
+                'failedImports' => 0,
+                'rejectedRows' => 0,
+                'lastRefresh' => now()->format('Y-m-d H:i:s'),
+            ],
+            'valueRealization' => [
+                'pricedLeakage' => ['total' => null, 'items' => []],
+                'recovered' => ['total' => null, 'items' => []],
+                'unpriced' => $pending->take(4)->map(fn ($r) => ['id' => (string) $r->id, 'title' => (string) $r->title, 'why' => 'No defensible monetary value is recorded for this recommendation.'])->values(),
+            ],
+            'forecast' => ['status' => 'insufficient_data', 'continuation' => 'Insufficient historical data', 'actionPath' => null],
+            'trends' => (object) [],
+            'workforceDepartment' => [
+                'peopleWithoutDepartment' => $home['erp']['peopleWithoutDepartment'] ?? 0,
+                'departmentsWithoutLeaders' => $home['erp']['departmentsWithoutManager'] ?? 0,
+                'attention' => [],
+            ],
+            'capabilityWorkforce' => ['capabilityCoverage' => null, 'attention' => []],
+        ]);
+    }
+
+    public function executionOverview(Request $request): JsonResponse
+    {
+        $t = $this->tenantId($request);
+        $page = max(1, (int) $request->query('page', 1));
+        $pageSize = max(1, min(50, (int) $request->query('pageSize', 12)));
+        $status = strtolower((string) $request->query('status', 'active'));
+
+        $base = DB::table('hpbrain_eso_executions as e')
+            ->leftJoin('hpbrain_decisions as d', function ($j) use ($t) {
+                $j->on('d.id', '=', 'e.decision_id')->where('d.tenant_id', '=', $t);
+            })
+            ->where('e.tenant_id', $t);
+
+        if ($status !== 'all') {
+            $statuses = $status === 'active' ? ['queued', 'running', 'blocked', 'failed'] : [$status];
+            $base->whereIn('e.status', $statuses);
+        }
+
+        $executions = $base
+            ->select('e.id', 'e.eso_id', 'e.decision_id', 'e.status', 'e.executed_by', 'e.executor_type', 'e.started_date', 'e.completed_date', 'e.created_date', 'e.error', 'd.rationale as decision')
+            ->orderByDesc('e.created_date')
+            ->offset(($page - 1) * $pageSize)
+            ->limit($pageSize)
+            ->get();
+
+        $statusCounts = DB::table('hpbrain_eso_executions')
+            ->where('tenant_id', $t)
+            ->select('status', DB::raw('COUNT(*) as count'))
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
+        $completed = (int) ($statusCounts['completed'] ?? 0);
+        $failed = (int) ($statusCounts['failed'] ?? 0);
+        $outcomes = (int) DB::table('hpbrain_outcomes')->where('tenant_id', $t)->count();
+        $approvedDecisions = (int) DB::table('hpbrain_decisions')->where('tenant_id', $t)->whereIn('status', self::APPROVED)->count();
+
+        return response()->json([
+            'tenantId' => $t,
+            'generatedAt' => now()->format('Y-m-d H:i:s'),
+            'organization' => ['id' => $t, 'name' => 'Fiber Valley'],
+            'summary' => [
+                'approvedDecisions' => $approvedDecisions,
+                'queuedExecutions' => (int) ($statusCounts['queued'] ?? 0),
+                'runningExecutions' => (int) ($statusCounts['running'] ?? 0),
+                'completedExecutions' => $completed,
+                'failedExecutions' => $failed,
+                'rolledBackExecutions' => (int) ($statusCounts['rolled_back'] ?? 0),
+                'averageExecutionHours' => $this->averageExecutionHours($t),
+                'successRate' => ($completed + $failed) === 0 ? null : round($completed / ($completed + $failed), 4),
+                'outcomeMeasurementRate' => $completed === 0 ? null : round($outcomes / $completed, 4),
+            ],
+            'pipeline' => [
+                ['label' => 'Queued', 'count' => (int) ($statusCounts['queued'] ?? 0)],
+                ['label' => 'Running', 'count' => (int) ($statusCounts['running'] ?? 0)],
+                ['label' => 'Completed', 'count' => $completed],
+                ['label' => 'Failed', 'count' => $failed],
+            ],
+            'activeExecutions' => [
+                'page' => $page,
+                'pageSize' => $pageSize,
+                'items' => $executions->map(fn ($e) => [
+                    'id' => (string) $e->id,
+                    'execution' => (string) ($e->eso_id ?? $e->id),
+                    'decision' => (string) ($e->decision ?? $e->decision_id ?? 'Insufficient data'),
+                    'owner' => (string) ($e->executed_by ?? ''),
+                    'department' => null,
+                    'status' => (string) $e->status,
+                    'progress' => $this->executionProgress((string) $e->status),
+                    'started' => $e->started_date ?? $e->created_date,
+                    'durationDays' => $this->durationDays($e->started_date ?? $e->created_date, $e->completed_date),
+                    'risk' => $e->error ? 'high' : 'normal',
+                    'outcomeStatus' => null,
+                ])->values(),
+            ],
+            'bottlenecks' => [
+                'primary' => $this->primaryExecutionBottleneck($statusCounts),
+                'items' => [
+                    ['key' => 'queued', 'label' => 'Queued', 'count' => (int) ($statusCounts['queued'] ?? 0), 'detail' => 'Executions waiting to start.'],
+                    ['key' => 'running', 'label' => 'Running', 'count' => (int) ($statusCounts['running'] ?? 0), 'detail' => 'Executions in progress.'],
+                    ['key' => 'failed', 'label' => 'Failed', 'count' => $failed, 'detail' => 'Executions that ended with an error.'],
+                    ['key' => 'unmeasured', 'label' => 'Completed without outcome', 'count' => max(0, $completed - $outcomes), 'detail' => 'Completed executions that do not yet have outcome evidence.'],
+                ],
+            ],
+            'predictedVsRealized' => ['items' => []],
+            'funnel' => [
+                ['label' => 'Approved decisions', 'count' => $approvedDecisions],
+                ['label' => 'Executions', 'count' => (int) $statusCounts->sum()],
+                ['label' => 'Completed', 'count' => $completed],
+                ['label' => 'Outcomes', 'count' => $outcomes],
+            ],
+            'outcomeLoop' => [],
+        ]);
+    }
+
     /**
      * CSV of every decision, for the export button on the Decision Intelligence
      * screen. The button has always been there; the route it calls was never
@@ -768,5 +1146,149 @@ final class AnalyticsController extends Controller
             $groups[$value] = ($groups[$value] ?? 0) + 1;
         }
         return $groups;
+    }
+
+    private function ageDays(mixed $date): ?int
+    {
+        if ($date === null || (string) $date === '') {
+            return null;
+        }
+
+        try {
+            $then = new \DateTimeImmutable((string) $date);
+            $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+
+            return max(0, (int) floor(($now->getTimestamp() - $then->getTimestamp()) / 86400));
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param array<int, string> $statuses
+     */
+    private function averageAgeDays(string $table, string $tenantId, array $statuses): ?float
+    {
+        $rows = DB::table($table)
+            ->where('tenant_id', $tenantId)
+            ->whereIn('status', $statuses)
+            ->whereNotNull('created_date')
+            ->pluck('created_date');
+
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        $ages = $rows->map(fn ($date) => $this->ageDays($date))->filter(fn ($age) => $age !== null);
+
+        return $ages->isEmpty() ? null : round((float) $ages->avg(), 1);
+    }
+
+    private function caseSeverity(int $evidenceCount, ?float $confidence): string
+    {
+        if ($confidence !== null && $confidence >= 0.75) {
+            return 'high';
+        }
+
+        if ($evidenceCount >= 3) {
+            return 'medium';
+        }
+
+        return 'low';
+    }
+
+    /**
+     * @return array{key:string,label:string,conversionRate:?float,count:int}
+     */
+    private function weakestLoopStage(string $tenantId): array
+    {
+        $stages = [
+            ['key' => 'evidence', 'label' => 'Evidence', 'count' => (int) DB::table('hpbrain_evidence')->where('tenant_id', $tenantId)->count(), 'previous' => (int) DB::table('hpbrain_signals')->where('tenant_id', $tenantId)->count()],
+            ['key' => 'cases', 'label' => 'Cases', 'count' => (int) DB::table('hpbrain_cases')->where('tenant_id', $tenantId)->count(), 'previous' => (int) DB::table('hpbrain_evidence')->where('tenant_id', $tenantId)->count()],
+            ['key' => 'recommendations', 'label' => 'Recommendations', 'count' => (int) DB::table('hpbrain_recommendations')->where('tenant_id', $tenantId)->count(), 'previous' => (int) DB::table('hpbrain_cases')->where('tenant_id', $tenantId)->count()],
+            ['key' => 'decisions', 'label' => 'Decisions', 'count' => (int) DB::table('hpbrain_decisions')->where('tenant_id', $tenantId)->count(), 'previous' => (int) DB::table('hpbrain_recommendations')->where('tenant_id', $tenantId)->count()],
+            ['key' => 'outcomes', 'label' => 'Outcomes', 'count' => (int) DB::table('hpbrain_outcomes')->where('tenant_id', $tenantId)->count(), 'previous' => (int) DB::table('hpbrain_decisions')->where('tenant_id', $tenantId)->count()],
+        ];
+
+        $scored = array_map(static fn (array $stage): array => [
+            'key' => $stage['key'],
+            'label' => $stage['label'],
+            'count' => $stage['count'],
+            'conversionRate' => $stage['previous'] === 0 ? null : round($stage['count'] / $stage['previous'], 4),
+        ], $stages);
+
+        usort($scored, static fn (array $a, array $b): int => ($a['conversionRate'] ?? 1.1) <=> ($b['conversionRate'] ?? 1.1));
+
+        return $scored[0];
+    }
+
+    private function averageExecutionHours(string $tenantId): ?float
+    {
+        $rows = DB::table('hpbrain_eso_executions')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('started_date')
+            ->whereNotNull('completed_date')
+            ->get(['started_date', 'completed_date']);
+
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        $hours = [];
+        foreach ($rows as $row) {
+            try {
+                $start = new \DateTimeImmutable((string) $row->started_date);
+                $end = new \DateTimeImmutable((string) $row->completed_date);
+                $hours[] = max(0, ($end->getTimestamp() - $start->getTimestamp()) / 3600);
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return $hours === [] ? null : round(array_sum($hours) / count($hours), 2);
+    }
+
+    private function durationDays(mixed $start, mixed $end): ?int
+    {
+        if ($start === null || (string) $start === '') {
+            return null;
+        }
+
+        try {
+            $startDate = new \DateTimeImmutable((string) $start);
+            $endDate = $end === null || (string) $end === ''
+                ? new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+                : new \DateTimeImmutable((string) $end);
+
+            return max(0, (int) floor(($endDate->getTimestamp() - $startDate->getTimestamp()) / 86400));
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function executionProgress(string $status): ?float
+    {
+        return match (strtolower($status)) {
+            'queued' => 0.05,
+            'running' => 0.5,
+            'blocked', 'failed' => 0.65,
+            'completed' => 1.0,
+            'rolled_back' => 0.0,
+            default => null,
+        };
+    }
+
+    private function primaryExecutionBottleneck(\Illuminate\Support\Collection $statusCounts): array
+    {
+        $items = [
+            ['key' => 'failed', 'label' => 'Failed executions', 'count' => (int) ($statusCounts['failed'] ?? 0)],
+            ['key' => 'blocked', 'label' => 'Blocked executions', 'count' => (int) ($statusCounts['blocked'] ?? 0)],
+            ['key' => 'queued', 'label' => 'Queued executions', 'count' => (int) ($statusCounts['queued'] ?? 0)],
+            ['key' => 'running', 'label' => 'Running executions', 'count' => (int) ($statusCounts['running'] ?? 0)],
+        ];
+
+        usort($items, static fn (array $a, array $b): int => $b['count'] <=> $a['count']);
+
+        return $items[0];
     }
 }

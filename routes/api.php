@@ -249,6 +249,9 @@ Route::prefix('v1')->group(function () {
         Route::get('analytics/{tenantId}/signals', [AnalyticsController::class, 'signals']);
         Route::get('analytics/{tenantId}/executive-summary', [AnalyticsController::class, 'executiveSummary']);
         Route::get('analytics/{tenantId}/decision-intelligence', [AnalyticsController::class, 'decisionIntelligence']);
+        Route::get('analytics/{tenantId}/deliberation-overview', [AnalyticsController::class, 'deliberationOverview']);
+        Route::get('analytics/{tenantId}/enterprise-overview', [AnalyticsController::class, 'enterpriseOverview']);
+        Route::get('analytics/{tenantId}/execution-overview', [AnalyticsController::class, 'executionOverview']);
         Route::get('analytics/{tenantId}/trend', [AnalyticsController::class, 'trend']);
         // The Export CSV button on the Decision Intelligence screen has always
         // pointed here; the route did not exist, so it downloaded a 404.
