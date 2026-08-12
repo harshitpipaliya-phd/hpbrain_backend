@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Intelligence\IntelligenceEngine;
+use App\Domain\Intelligence\ExecutiveIntelligenceInterpreter;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,7 +32,10 @@ use Illuminate\Http\Request;
  */
 final class OrganizationIntelligenceController extends Controller
 {
-    public function __construct(private readonly IntelligenceEngine $engine)
+    public function __construct(
+        private readonly IntelligenceEngine $engine,
+        private readonly ExecutiveIntelligenceInterpreter $interpreter,
+    )
     {
     }
 
@@ -90,6 +94,7 @@ final class OrganizationIntelligenceController extends Controller
             'concentrations' => $all['patterns']['concentrations'],
             'method'         => $all['patterns']['method'],
             'derivation'     => $all['derivation'],
+            'interpretation'  => $this->interpretation($request, $all),
         ]);
     }
 
@@ -125,6 +130,7 @@ final class OrganizationIntelligenceController extends Controller
                 'method'      => $all['risks']['method'],
             ],
             'derivation' => $all['derivation'],
+            'interpretation' => $this->interpretation($request, $all),
         ]);
     }
 
@@ -165,7 +171,10 @@ final class OrganizationIntelligenceController extends Controller
     {
         $all = $this->intelligence($request);
 
-        return $this->respond($all, $all['recommendations'] + ['derivation' => $all['derivation']]);
+        return $this->respond($all, $all['recommendations'] + [
+            'derivation' => $all['derivation'],
+            'interpretation' => $this->interpretation($request, $all),
+        ]);
     }
 
     /**
@@ -212,5 +221,20 @@ final class OrganizationIntelligenceController extends Controller
             'computedAt'  => $all['computedAt'],
             'computeMs'   => $all['computeMs'],
         ]);
+    }
+
+    /**
+     * @param array<string, mixed> $all
+     *
+     * @return array<string, mixed>
+     */
+    private function interpretation(Request $request, array $all): array
+    {
+        return $this->interpreter->interpret(
+            tenantId: $this->tenantId($request),
+            actorId: $this->actorId($request),
+            intelligence: $all,
+            fresh: $request->boolean('fresh'),
+        );
     }
 }
