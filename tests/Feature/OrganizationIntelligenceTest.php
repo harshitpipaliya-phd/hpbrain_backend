@@ -728,6 +728,18 @@ final class OrganizationIntelligenceTest extends TestCase
         $this->assertStringContainsString(self::RICH, $body['derivation']['scope']);
     }
 
+    /** @test */
+    public function deepseek_interpretation_degrades_explicitly_when_no_model_output_is_available(): void
+    {
+        $body = $this->getJson('/api/v1/organization-intelligence/'.self::RICH.'/decisions', $this->auth(self::RICH))
+            ->assertStatus(200)->json();
+
+        $this->assertSame('unavailable', $body['interpretation']['status']);
+        $this->assertContains($body['interpretation']['reason'], ['ai_provider_not_configured', 'ai_call_failed']);
+        $this->assertStringContainsString('UNKNOWN', $body['interpretation']['executive_summary']);
+        $this->assertStringContainsString('deterministic backend output', $body['interpretation']['guardrails']['facts']);
+    }
+
     /* ─────────────────────────── caching ─────────────────────────── */
 
     /** @test */
