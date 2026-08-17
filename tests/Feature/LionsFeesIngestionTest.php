@@ -44,9 +44,15 @@ final class LionsFeesIngestionTest extends TestCase
             'owner' => '',
         ]);
 
-        self::assertSame('48550', $map->value($this->batch()->rows[1], 'measure'));
-        self::assertSame('10818', $map->value($this->batch()->rows[1], 'subject_ref'));
-        self::assertSame('General', $map->value($this->batch()->rows[1], 'category'));
+        // sample() rather than ->rows: delimited uploads are stream-backed now
+        // so a file larger than memory can be imported, and a stream-backed
+        // batch leaves ->rows empty by design. The row being asserted on is
+        // the same one.
+        $row = $this->batch()->sample(2)[1];
+
+        self::assertSame('48550', $map->value($row, 'measure'));
+        self::assertSame('10818', $map->value($row, 'subject_ref'));
+        self::assertSame('General', $map->value($row, 'category'));
         self::assertFalse($map->has('not_canonical'));
         self::assertFalse($map->has('owner'));
     }
