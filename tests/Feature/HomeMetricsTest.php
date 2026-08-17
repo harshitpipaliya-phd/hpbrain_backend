@@ -468,7 +468,10 @@ final class HomeMetricsTest extends TestCase
             'id' => 'u1', 'tenantId' => self::TENANT, 'role' => 'admin',
         ]);
 
-        $response = $this->getJson('/api/v1/workspace/'.self::TENANT.'/home-metrics', [
+        // Fee intelligence is opt-in: it dominated the endpoint at 15s of a 16s
+        // request, so it is computed only when a caller asks for it. This test
+        // asks, and still asserts the whole payload it always did.
+        $response = $this->getJson('/api/v1/workspace/'.self::TENANT.'/home-metrics?include=fees', [
             'Authorization' => 'Bearer '.$token,
         ]);
 
@@ -490,6 +493,32 @@ final class HomeMetricsTest extends TestCase
         $this->assertSame(1, $response->json('domainIntelligence.fees.analytics.riskLevelStudents.0.count'));
         $this->assertSame('S-1', $response->json('domainIntelligence.fees.priorityRecovery.0.studentRef'));
         $this->assertSame(0.4, $response->json('domainIntelligence.fees.priorityRecovery.0.collectionRate'));
+    }
+
+    /**
+     * The default response omits the expensive block.
+     *
+     * Guards the fix for the organization overview intermittently exceeding the
+     * 60-second execution limit: the screen issues this request with no
+     * `include`, and must not pay for a figure it does not display.
+     */
+    public function test_home_metrics_omits_fee_intelligence_unless_requested(): void
+    {
+        $token = \App\Support\Jwt::issueAccess([
+            'id' => 'u1', 'tenantId' => self::TENANT, 'role' => 'admin',
+        ]);
+
+        $response = $this->getJson('/api/v1/workspace/'.self::TENANT.'/home-metrics', [
+            'Authorization' => 'Bearer '.$token,
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertNull($response->json('domainIntelligence.fees'));
+
+        // The counts the overview actually renders are still all present.
+        $this->assertIsArray($response->json('erp'));
+        $this->assertIsArray($response->json('pipeline.counts'));
+        $this->assertArrayHasKey('evidence', $response->json('pipeline.counts'));
     }
 
     public function test_home_metrics_returns_empty_attention_when_all_clear(): void

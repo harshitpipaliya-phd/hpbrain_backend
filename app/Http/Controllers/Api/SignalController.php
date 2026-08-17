@@ -21,9 +21,25 @@ final class SignalController extends Controller
     ) {
     }
 
+    /**
+     * The response stays a bare JSON array, as web/src/api/signal.ts consumes it
+     * (ADR-007). `since` and `limit` narrow it; omitting both returns everything,
+     * exactly as before.
+     */
     public function index(Request $request): JsonResponse
     {
-        return response()->json($this->repository->list($this->tenantId($request), $request->query('status')));
+        $data = $request->validate([
+            'status' => ['nullable', 'string', 'max:190'],
+            'since'  => ['nullable', 'date'],
+            'limit'  => ['nullable', 'integer', 'min:1', 'max:5000'],
+        ]);
+
+        return response()->json($this->repository->list(
+            $this->tenantId($request),
+            $data['status'] ?? null,
+            isset($data['since']) ? date('Y-m-d H:i:s', strtotime((string) $data['since'])) : null,
+            isset($data['limit']) ? (int) $data['limit'] : null,
+        ));
     }
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse

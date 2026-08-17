@@ -26,7 +26,21 @@ final class SignalRepository extends BaseRepository
         return ['metadata'];
     }
 
-    public function list(string $tenantId, ?string $status = null): array
+    /**
+     * Signals for a screen, newest first.
+     *
+     * `$since` and `$limit` are both optional and both default to the previous
+     * unbounded behaviour, so every existing caller is unaffected. They exist
+     * because the Signals screen offers a date window and then applied it in the
+     * browser: on the school tenant that meant transferring all 15,002 rows to
+     * render a 90-day view, on every visit to the screen and again from the two
+     * other screens that also list signals. The window the user chose is a
+     * predicate, and predicates belong in SQL.
+     *
+     * `$limit` is applied AFTER `$since` and after the ordering, so a capped
+     * response is the newest N within the window rather than an arbitrary N.
+     */
+    public function list(string $tenantId, ?string $status = null, ?string $since = null, ?int $limit = null): array
     {
         $q = $this->scoped($tenantId);
 
@@ -34,7 +48,17 @@ final class SignalRepository extends BaseRepository
             $q->where('status', $status);
         }
 
-        return $q->orderByDesc('created_date')->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
+        if ($since !== null) {
+            $q->where('created_date', '>=', $since);
+        }
+
+        $q->orderByDesc('created_date');
+
+        if ($limit !== null) {
+            $q->limit(max(1, $limit));
+        }
+
+        return $q->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
     }
 
     /**
