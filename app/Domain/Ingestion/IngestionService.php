@@ -155,6 +155,10 @@ final class IngestionService
         $tenantId = $batch->tenantId;
         $fieldMap = FieldMap::fromConfig($map);
 
+        if ($source = $this->datasetSource($tenantId, $batch->sourceKey)) {
+            return $this->commitDataset($jobId, $batch, $fieldMap, $source);
+        }
+
         if (! $fieldMap->isCommittable()) {
             // Refused rather than defaulted. A Signal whose title and
             // classification were invented by this class would be indexed,
@@ -573,6 +577,218 @@ final class IngestionService
         ]);
 
         return Uuid::uuid5(self::ID_NAMESPACE, $name)->toString();
+    }
+
+    /**
+     * The configured dataset source for this batch, if it is one.
+     *
+     * `source_type = dataset` is deliberately explicit. Existing uploads and
+     * ERP sources continue to create signals exactly as before; only a stored
+     * source row can opt into operational-record ingestion.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function datasetSource(string $tenantId, string $sourceKey): ?array
+    {
+        $row = DB::table('hpbrain_data_sources')
+            ->where('tenant_id', $tenantId)
+            ->where('source_key', $sourceKey)
+            ->where('source_type', 'dataset')
+            ->where('is_active', 1)
+            ->first();
+
+        if ($row === null) {
+            return null;
+        }
+
+        $source = (array) $row;
+        $config = json_decode((string) ($source['config'] ?? '{}'), true);
+        $source['config'] = is_array($config) ? $config : [];
+
+        return $source;
+    }
+
+    /**
+     * Write a configured dataset source into hpbrain_operational_records.
+     *
+     * @return array{success: int, errors: int, skipped: int, signal_ids: array<int, string>}
+     */
+    private function commitDataset(string $jobId, IngestionBatch $batch, FieldMap $map, array $source): array
+    {
+        if (! $map->has('external_ref') || ! $map->has('measure') || ! $map->has('subject_ref')) {
+            throw new \InvalidArgumentException(
+                'Dataset field map must bind "external_ref", "measure", and "subject_ref" before commit.'
+            );
+        }
+
+        $tenantId = $batch->tenantId;
+        $config = $source['config'];
+        $dataset = (string) ($config['dataset'] ?? $batch->sourceKey);
+        $unit = (string) ($config['measure_unit'] ?? '');
+        $now = $this->timestamp();
+
+        $this->jobs->update($tenantId, $jobId, ['status' => 'processing']);
+
+        $created = [];
+        $success = 0;
+        $errors = 0;
+        $skipped = 0;
+        $rowNumber = 0;
+
+        foreach (array_chunk($batch->rows, self::CHUNK_ROWS, true) as $chunk) {
+            $records = [];
+
+            foreach ($chunk as $row) {
+                $rowNumber++;
+
+                $naturalKey = $map->value($row, 'external_ref');
+
+                if ($naturalKey === null) {
+                    $this->log($tenantId, $jobId, $rowNumber, 'skipped', null, 'Dataset row has no mapped external_ref.');
+                    $skipped++;
+                    continue;
+                }
+
+                $subjectRef = $map->value($row, 'subject_ref');
+                $metric = $this->decimal($map->value($row, 'measure'));
+
+                if ($subjectRef === null || $metric === null) {
+                    $this->log($tenantId, $jobId, $rowNumber, 'skipped', null, 'Dataset row has no mapped subject_ref or measure.');
+                    $skipped++;
+                    continue;
+                }
+
+                $payload = $row;
+                $record = [
+                    'id'               => $this->deterministicId($batch, $rowNumber, $row, 'operational-record'),
+                    'tenant_id'        => $tenantId,
+                    'org_id'           => $source['config']['org_id'] ?? null,
+                    'dataset'          => $dataset,
+                    'natural_key'      => $naturalKey,
+                    'source_file'      => $batch->sourceRef === null ? null : basename($batch->sourceRef),
+                    'source_row'       => $rowNumber,
+                    'occurred_at'      => $this->dateTime($map->value($row, 'evidence_timestamp')),
+                    'closed_at'        => null,
+                    'status'           => $this->clip($map->value($row, 'state'), 64),
+                    'category'         => $this->clip($map->value($row, 'category'), 191),
+                    'sub_category'     => null,
+                    'owner_name'       => $this->clip($map->value($row, 'owner'), 191),
+                    'supervisor_name'  => null,
+                    'zone'             => null,
+                    'area'             => null,
+                    'subject_ref'      => $this->clip($subjectRef, 191),
+                    'metric_value'     => $metric,
+                    'metric_unit'      => $this->clip($map->value($row, 'measure_unit') ?? ($unit !== '' ? $unit : null), 20),
+                    'quantity'         => null,
+                    'payload'          => json_encode($payload, JSON_UNESCAPED_UNICODE),
+                    'import_job_id'    => $jobId,
+                    'created_date'     => $now,
+                    'updated_date'     => $now,
+                ];
+
+                $hashable = $record;
+                unset($hashable['id'], $hashable['source_row'], $hashable['import_job_id'], $hashable['source_file'], $hashable['created_date'], $hashable['updated_date']);
+                $record['row_hash'] = hash('sha256', json_encode($hashable, JSON_UNESCAPED_UNICODE) ?: '');
+
+                $records[] = $record;
+                $created[] = $record['id'];
+            }
+
+            if ($records !== []) {
+                try {
+                    $written = DB::table('hpbrain_operational_records')->insertOrIgnore($records);
+                    $success += $written;
+                    $skipped += count($records) - $written;
+                } catch (\Throwable $e) {
+                    $errors += count($records);
+                    array_splice($created, -count($records));
+
+                    $this->log(
+                        $tenantId,
+                        $jobId,
+                        max(1, $rowNumber - count($records) + 1),
+                        'error',
+                        null,
+                        'Dataset chunk rolled back: '.$e->getMessage(),
+                    );
+                }
+            }
+
+            $this->jobs->update($tenantId, $jobId, [
+                'processed_rows'  => $rowNumber,
+                'success_count'   => $success,
+                'error_count'     => $errors,
+                'duplicate_count' => $skipped,
+            ]);
+
+            $this->flushLogs($tenantId);
+        }
+
+        $this->jobs->update($tenantId, $jobId, [
+            'status' => match (true) {
+                $success === 0 && $errors > 0 => 'failed',
+                $errors > 0                   => 'completed_with_errors',
+                default                       => 'completed',
+            },
+            'total_rows'      => count($batch->rows),
+            'processed_rows'  => count($batch->rows),
+            'success_count'   => $success,
+            'error_count'     => $errors,
+            'duplicate_count' => $skipped,
+            'rollback_data'   => ['created_ids' => ['operational_records' => $created]],
+            'completed_date'  => $now,
+        ]);
+
+        DB::table('hpbrain_data_sources')
+            ->where('tenant_id', $tenantId)
+            ->where('source_key', $batch->sourceKey)
+            ->update([
+                'last_synced_at' => $now,
+                'updated_date'   => $now,
+            ]);
+
+        return [
+            'success'    => $success,
+            'errors'     => $errors,
+            'skipped'    => $skipped,
+            'signal_ids' => [],
+        ];
+    }
+
+    private function decimal(?string $value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $clean = str_replace([',', '₹', 'Rs.', 'RS.', '/-'], '', $value);
+        $clean = trim($clean);
+
+        return is_numeric($clean) ? round((float) $clean, 4) : null;
+    }
+
+    private function dateTime(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $value, $m)) {
+            return sprintf('%s-%s-%s 00:00:00', $m[3], $m[2], $m[1]);
+        }
+
+        $timestamp = strtotime($value);
+
+        return $timestamp === false ? null : date('Y-m-d H:i:s', $timestamp);
+    }
+
+    private function clip(?string $value, int $length): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return mb_strlen($value) > $length ? mb_substr($value, 0, $length) : $value;
     }
 
     /**

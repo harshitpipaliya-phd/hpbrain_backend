@@ -2105,6 +2105,117 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         403:
           $ref: '#/components/responses/Forbidden'
+  '/analytics/{tenantId}/deliberation-overview':
+    get:
+      operationId: intelligenceOverviewDeliberationOverview_get_analytics_tenantId_deliberation_overview
+      summary: 'IntelligenceOverviewController::deliberationOverview'
+      tags:
+        - IntelligenceOverview
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\IntelligenceOverviewController@deliberationOverview
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/analytics/{tenantId}/enterprise-overview':
+    get:
+      operationId: intelligenceOverviewEnterpriseOverview_get_analytics_tenantId_enterprise_overview
+      summary: 'IntelligenceOverviewController::enterpriseOverview'
+      tags:
+        - IntelligenceOverview
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\IntelligenceOverviewController@enterpriseOverview
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/analytics/{tenantId}/execution-overview':
+    get:
+      operationId: intelligenceOverviewExecutionOverview_get_analytics_tenantId_execution_overview
+      summary: 'IntelligenceOverviewController::executionOverview'
+      tags:
+        - IntelligenceOverview
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\IntelligenceOverviewController@executionOverview
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
   '/analytics/{tenantId}/executive-summary':
     get:
       operationId: analyticsExecutiveSummary_get_analytics_tenantId_executive_summary
@@ -2233,6 +2344,43 @@ paths:
       x-permissions:
         - read
       x-controller: App\Http\Controllers\Api\AnalyticsController@peopleReport
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/analytics/{tenantId}/signals':
+    get:
+      operationId: analyticsSignals_get_analytics_tenantId_signals
+      summary: 'AnalyticsController::signals'
+      tags:
+        - Analytics
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\AnalyticsController@signals
       parameters:
         -
           name: tenantId
@@ -2547,6 +2695,67 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         403:
           $ref: '#/components/responses/Forbidden'
+  /auth/signup:
+    post:
+      operationId: authSignup_post_auth_signup
+      summary: 'AuthController::signup'
+      tags:
+        - Auth
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - 'throttle:5,10'
+      x-permissions: {  }
+      x-controller: App\Http\Controllers\Api\AuthController@signup
+      requestBody:
+        required: false
+        x-unverified: true
+        description: 'No validate() call found in the controller method; the accepted body could not be derived and is NOT described here.'
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        201:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        422:
+          description: 'Refused: signup_conflict'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - signup_conflict
+                required:
+                  - error
+        500:
+          description: 'Refused: signup_failed'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - signup_failed
+                required:
+                  - error
   /branding:
     post:
       operationId: brandingStore_post_branding
@@ -2923,6 +3132,30 @@ paths:
                   nullable: true
                 category:
                   type: string
+                  nullable: true
+                capabilityType:
+                  type: string
+                  nullable: true
+                difficulty:
+                  type: string
+                  nullable: true
+                criticality:
+                  type: string
+                  nullable: true
+                knowledge:
+                  type: array
+                  nullable: true
+                ability:
+                  type: array
+                  nullable: true
+                skill:
+                  type: array
+                  nullable: true
+                behaviour:
+                  type: array
+                  nullable: true
+                attitude:
+                  type: array
                   nullable: true
               required:
                 - name
@@ -3724,6 +3957,63 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         403:
           $ref: '#/components/responses/Forbidden'
+  '/cases/{tenantId}/{id}/signal-evidence':
+    get:
+      operationId: caseSignalEvidenceShow_get_cases_tenantId_id_signal_evidence
+      summary: 'CaseSignalEvidenceController::show'
+      tags:
+        - CaseSignalEvidence
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\CaseSignalEvidenceController@show
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ''
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        404:
+          description: 'Refused: case_not_found'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - case_not_found
+                required:
+                  - error
   '/cases/{tenantId}/{id}/transition':
     patch:
       operationId: caseTransition_patch_cases_tenantId_id_transition
@@ -5825,6 +6115,91 @@ paths:
                       - self_approval_forbidden
                 required:
                   - error
+  '/decisions/{tenantId}/{id}/reject':
+    post:
+      operationId: decisionReject_post_decisions_tenantId_id_reject
+      summary: 'DecisionController::reject'
+      tags:
+        - Decision
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+        - 'permission:decision.approve'
+      x-permissions:
+        - read
+        - decision.approve
+      x-controller: App\Http\Controllers\Api\DecisionController@reject
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ''
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  minLength: 10.0
+              required:
+                - note
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        404:
+          description: 'Refused: decision_not_found'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - decision_not_found
+                required:
+                  - error
+        409:
+          description: 'Refused: decision_not_rejectable, self_rejection_forbidden'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - decision_not_rejectable
+                      - self_rejection_forbidden
+                required:
+                  - error
   /departments:
     post:
       operationId: departmentStore_post_departments
@@ -6544,6 +6919,43 @@ paths:
                       - mapping_not_found
                 required:
                   - error
+  '/eso-definitions/{tenantId}':
+    get:
+      operationId: esoExecutionDefinitions_get_eso_definitions_tenantId_
+      summary: 'EsoExecutionController::definitions'
+      tags:
+        - EsoExecution
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\EsoExecutionController@definitions
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
   /eso-executions:
     post:
       operationId: esoExecutionStore_post_eso_executions
@@ -9764,6 +10176,314 @@ paths:
                     type: string
                     enum:
                       - industry_template_not_found
+                required:
+                  - error
+  /ingestion/internal:
+    post:
+      operationId: ingestionInternal_post_ingestion_internal
+      summary: 'IngestionController::internal'
+      tags:
+        - Ingestion
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+        - 'permission:settings.manage'
+      x-permissions:
+        - read
+        - settings.manage
+      x-controller: App\Http\Controllers\Api\IngestionController@internal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source_id:
+                  type: string
+                  maxLength: 191.0
+                universal_entity:
+                  type: string
+                  maxLength: 100.0
+                full_resync:
+                  type: boolean
+                  nullable: true
+                org_id:
+                  type: string
+                  nullable: true
+                  maxLength: 36.0
+              required:
+                - source_id
+                - universal_entity
+      responses:
+        201:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        422:
+          description: 'Refused: entity_not_mapped'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - entity_not_mapped
+                required:
+                  - error
+  '/ingestion/sources/{tenantId}':
+    get:
+      operationId: ingestionSources_get_ingestion_sources_tenantId_
+      summary: 'IngestionController::sources'
+      tags:
+        - Ingestion
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+        - 'permission:settings.manage'
+      x-permissions:
+        - read
+        - settings.manage
+      x-controller: App\Http\Controllers\Api\IngestionController@sources
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  /ingestion/upload:
+    post:
+      operationId: ingestionUpload_post_ingestion_upload
+      summary: 'IngestionController::upload'
+      tags:
+        - Ingestion
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+        - 'permission:settings.manage'
+      x-permissions:
+        - read
+        - settings.manage
+      x-controller: App\Http\Controllers\Api\IngestionController@upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  maxLength: 0.0
+                source_id:
+                  type: string
+                  maxLength: 191.0
+                org_id:
+                  type: string
+                  nullable: true
+                  maxLength: 36.0
+              required:
+                - file
+                - source_id
+      responses:
+        201:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        422:
+          description: 'Refused: unreadable_upload'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - unreadable_upload
+                required:
+                  - error
+        500:
+          description: 'Refused: storage_failed'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - storage_failed
+                required:
+                  - error
+        503:
+          description: 'Refused: database_unavailable'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - database_unavailable
+                required:
+                  - error
+  '/ingestion/{tenantId}/{jobId}/commit':
+    post:
+      operationId: ingestionCommit_post_ingestion_tenantId_jobId_commit
+      summary: 'IngestionController::commit'
+      tags:
+        - Ingestion
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+        - 'permission:settings.manage'
+      x-permissions:
+        - read
+        - settings.manage
+      x-controller: App\Http\Controllers\Api\IngestionController@commit
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+        -
+          name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ''
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                field_map:
+                  type: array
+                save_map:
+                  type: boolean
+                  nullable: true
+              required:
+                - field_map
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        404:
+          description: 'Refused: import_job_not_found'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - import_job_not_found
+                required:
+                  - error
+        409:
+          description: 'Refused: job_not_previewed'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - job_not_previewed
+                required:
+                  - error
+        410:
+          description: 'Refused: source_unavailable'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - source_unavailable
+                required:
+                  - error
+        422:
+          description: 'Refused: incomplete_field_map'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - incomplete_field_map
                 required:
                   - error
   '/kasba/assessment/{tenantId}/assignment/{assignmentId}/{capabilityId}':
@@ -13169,6 +13889,339 @@ paths:
                       - config_not_found
                 required:
                   - error
+  '/organization-intelligence/{tenantId}':
+    get:
+      operationId: organizationIntelligenceIndex_get_organization_intelligence_tenantId_
+      summary: 'OrganizationIntelligenceController::index'
+      tags:
+        - OrganizationIntelligence
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\OrganizationIntelligenceController@index
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/organization-intelligence/{tenantId}/capability':
+    get:
+      operationId: organizationIntelligenceCapability_get_organization_intelligence_tenantId_capability
+      summary: 'OrganizationIntelligenceController::capability'
+      tags:
+        - OrganizationIntelligence
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\OrganizationIntelligenceController@capability
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/organization-intelligence/{tenantId}/decisions':
+    get:
+      operationId: organizationIntelligenceDecisions_get_organization_intelligence_tenantId_decisions
+      summary: 'OrganizationIntelligenceController::decisions'
+      tags:
+        - OrganizationIntelligence
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\OrganizationIntelligenceController@decisions
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/organization-intelligence/{tenantId}/gaps':
+    get:
+      operationId: organizationIntelligenceGaps_get_organization_intelligence_tenantId_gaps
+      summary: 'OrganizationIntelligenceController::gaps'
+      tags:
+        - OrganizationIntelligence
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\OrganizationIntelligenceController@gaps
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/organization-intelligence/{tenantId}/knowledge':
+    get:
+      operationId: organizationIntelligenceKnowledge_get_organization_intelligence_tenantId_knowledge
+      summary: 'OrganizationIntelligenceController::knowledge'
+      tags:
+        - OrganizationIntelligence
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\OrganizationIntelligenceController@knowledge
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/organization-intelligence/{tenantId}/profile':
+    get:
+      operationId: organizationIntelligenceProfile_get_organization_intelligence_tenantId_profile
+      summary: 'OrganizationIntelligenceController::profile'
+      tags:
+        - OrganizationIntelligence
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\OrganizationIntelligenceController@profile
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/organization-intelligence/{tenantId}/recommendations':
+    get:
+      operationId: organizationIntelligenceRecommendations_get_organization_intelligence_tenantId_recommendations
+      summary: 'OrganizationIntelligenceController::recommendations'
+      tags:
+        - OrganizationIntelligence
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\OrganizationIntelligenceController@recommendations
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/organization-intelligence/{tenantId}/risks':
+    get:
+      operationId: organizationIntelligenceRisks_get_organization_intelligence_tenantId_risks
+      summary: 'OrganizationIntelligenceController::risks'
+      tags:
+        - OrganizationIntelligence
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\OrganizationIntelligenceController@risks
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+  '/organization-intelligence/{tenantId}/state':
+    get:
+      operationId: organizationIntelligenceState_get_organization_intelligence_tenantId_state
+      summary: 'OrganizationIntelligenceController::state'
+      tags:
+        - OrganizationIntelligence
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\OrganizationIntelligenceController@state
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
   /organization-modules:
     post:
       operationId: organizationModuleStore_post_organization_modules
@@ -13901,19 +14954,6 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         403:
           $ref: '#/components/responses/Forbidden'
-        422:
-          description: 'Refused: orgId_required'
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    enum:
-                      - orgId_required
-                required:
-                  - error
   '/organization-units/{tenantId}/tree':
     get:
       operationId: organizationUnitTree_get_organization_units_tenantId_tree
@@ -13953,19 +14993,6 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         403:
           $ref: '#/components/responses/Forbidden'
-        422:
-          description: 'Refused: orgId_required'
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    enum:
-                      - orgId_required
-                required:
-                  - error
   '/organization-units/{tenantId}/{id}':
     get:
       operationId: organizationUnitShow_get_organization_units_tenantId_id_
@@ -14815,6 +15842,13 @@ paths:
                 gender:
                   type: string
                   nullable: true
+                departmentId:
+                  type: integer
+                  nullable: true
+                joiningDate:
+                  type: string
+                  nullable: true
+                  format: date-time
               required:
                 - employeeId
                 - firstName
@@ -14832,6 +15866,19 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         403:
           $ref: '#/components/responses/Forbidden'
+        422:
+          description: 'Refused: department_not_found'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - department_not_found
+                required:
+                  - error
   '/people/{tenantId}':
     get:
       operationId: personIndex_get_people_tenantId_
@@ -17674,6 +18721,63 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         403:
           $ref: '#/components/responses/Forbidden'
+  '/recommendations/{tenantId}/{id}/case-context':
+    get:
+      operationId: recommendationCaseContextShow_get_recommendations_tenantId_id_case_context
+      summary: 'RecommendationCaseContextController::show'
+      tags:
+        - RecommendationCaseContext
+      security:
+        -
+          bearerAuth: {  }
+      x-middleware:
+        - api
+        - jwt
+        - tenant
+        - 'permission:read'
+      x-permissions:
+        - read
+      x-controller: App\Http\Controllers\Api\RecommendationCaseContextController@show
+      parameters:
+        -
+          name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Tenant segment. EnsureTenantScope resolves the effective tenant from the TOKEN; this segment must match it (admins may cross to an existing organization).'
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ''
+      responses:
+        200:
+          description: Success.
+          x-unverified: true
+          content:
+            application/json:
+              schema:
+                x-unverified: true
+        401:
+          $ref: '#/components/responses/Unauthenticated'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        404:
+          description: 'Refused: recommendation_not_found'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - recommendation_not_found
+                required:
+                  - error
   /reporting-structures:
     post:
       operationId: reportingStructureStore_post_reporting_structures

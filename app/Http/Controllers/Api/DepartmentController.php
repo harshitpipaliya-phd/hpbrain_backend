@@ -287,17 +287,102 @@ final class DepartmentController extends Controller
                 'createdAt' => $a->created_at,
             ])->values();
 
+        $departmentPayload = $this->map((array) $row, $unit);
+
         return response()->json([
-            'department'           => $this->map((array) $row, $unit),
+            'department'           => $departmentPayload,
             'personCount'          => count($personIds),
             'capabilityHeatmap'    => $capabilityHeatmap,
             'openRiskSignalCount'  => $openRiskSignals,
             'decisionCount'        => $decisions->count(),
             'decisionApprovalRate' => $decisions->isEmpty() ? null : round($approved / $decisions->count(), 4),
+            'feeIntelligence'      => $this->feeIntelligenceForDepartment($t, (string) $departmentPayload['name']),
             'timeline'             => $timeline,
             'openCasesTenantWide'  => DB::table('hpbrain_cases')
                 ->where('tenant_id', $t)->whereNotIn('status', ['closed'])->count(),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function feeIntelligenceForDepartment(string $tenantId, string $departmentName): ?array
+    {
+        if (! Schema::hasTable('hpbrain_operational_records')) {
+            return null;
+        }
+
+        $rows = DB::table('hpbrain_operational_records')
+            ->where('tenant_id', $tenantId)
+            ->where('dataset', 'school_fee')
+            ->where('area', $departmentName)
+            ->get(['subject_ref', 'metric_value', 'status', 'payload']);
+
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        $students = [];
+        $net = 0.0;
+        $paid = 0.0;
+        $outstanding = 0.0;
+        $overdue = 0.0;
+        $expected = 0.0;
+        $criticalStudents = [];
+        $highStudents = [];
+        $reminders = 0;
+        $failedTransactions = 0;
+
+        foreach ($rows as $row) {
+            $payload = json_decode((string) $row->payload, true);
+            $payload = is_array($payload) ? $payload : [];
+            $studentRef = (string) ($row->subject_ref ?? $payload['student_id'] ?? '');
+            if ($studentRef !== '') {
+                $students[$studentRef] = true;
+            }
+
+            $net += is_numeric($row->metric_value) ? (float) $row->metric_value : (float) ($payload['net_fee_amount'] ?? $payload['net_amount'] ?? 0);
+            $paid += is_numeric($payload['amount_paid'] ?? null) ? (float) $payload['amount_paid'] : 0.0;
+            $balance = is_numeric($payload['outstanding_amount'] ?? null)
+                ? (float) $payload['outstanding_amount']
+                : (is_numeric($payload['balance_amount'] ?? null) ? (float) $payload['balance_amount'] : 0.0);
+            $outstanding += $balance;
+
+            $daysOverdue = is_numeric($payload['days_overdue'] ?? null) ? (int) $payload['days_overdue'] : 0;
+            if ($daysOverdue > 0 || strtolower((string) ($row->status ?? '')) === 'overdue') {
+                $overdue += $balance;
+            }
+
+            $expected += is_numeric($payload['expected_collectable_amount'] ?? null) ? (float) $payload['expected_collectable_amount'] : 0.0;
+            $reminders += is_numeric($payload['reminder_count'] ?? null) ? (int) $payload['reminder_count'] : 0;
+
+            if (! in_array(strtolower((string) ($payload['transaction_status'] ?? '')), ['', 'success', 'successful'], true)) {
+                $failedTransactions++;
+            }
+
+            $risk = strtolower((string) ($payload['risk_band'] ?? $payload['risk_level'] ?? ''));
+            if ($studentRef !== '' && $risk === 'critical') {
+                $criticalStudents[$studentRef] = true;
+            } elseif ($studentRef !== '' && $risk === 'high') {
+                $highStudents[$studentRef] = true;
+            }
+        }
+
+        return [
+            'records' => $rows->count(),
+            'students' => count($students),
+            'net' => round($net, 2),
+            'collected' => round($paid, 2),
+            'outstanding' => round($outstanding, 2),
+            'overdue' => round($overdue, 2),
+            'expectedCollectable' => round($expected, 2),
+            'atRiskAmount' => round(max(0, $outstanding - $expected), 2),
+            'collectionRate' => $net > 0 ? round($paid / $net, 4) : null,
+            'criticalStudents' => count($criticalStudents),
+            'highStudents' => count($highStudents),
+            'reminders' => $reminders,
+            'failedTransactions' => $failedTransactions,
+        ];
     }
 
     private function applyDepartmentVisibilityScope(Builder $query, ResolvedSource $unit, string $tenantId): void

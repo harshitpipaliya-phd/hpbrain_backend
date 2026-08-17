@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Domain\Signals\OperationalSignalWriter;
 use App\Domain\Signals\RuleEvaluator;
+use App\Domain\Signals\SignalRuleRegistry;
 use App\Domain\Universal\EntityResolver;
 use Illuminate\Console\Command;
 
@@ -57,12 +59,26 @@ final class DetectSignals extends Command
                 $applicable = count($evaluator->rulesFor($tenantId));
                 $result = $evaluator->evaluate($tenantId);
 
+                // BOTH RULE FAMILIES, as ImportOrganizationData --generate-signals
+                // already runs them. Detection used to evaluate only the rules
+                // held as rows, so the operational aggregates — SLA breaches,
+                // zone concentration, help-desk call drops — were re-evaluated
+                // ONLY when somebody happened to re-import a workbook. A
+                // scheduled detector that refreshes half its findings makes the
+                // other half quietly stale, and staleness is indistinguishable
+                // from "the problem went away" on every screen that reads them.
+                //
+                // Safe to run every pass: OperationalSignalWriter::raise()
+                // refreshes the open signal for a rule rather than stacking a
+                // duplicate, exactly as RuleEvaluator does for its own.
+                $operational = $this->operationalRules($tenantId);
+
                 $rows[] = [
                     $tenantId,
-                    $applicable,
-                    $result['created'] ?? 0,
-                    $result['refreshed'] ?? 0,
-                    $result['skipped'] ?? 0,
+                    $applicable + $operational['applicable'],
+                    ($result['created'] ?? 0) + $operational['created'],
+                    ($result['refreshed'] ?? 0) + $operational['refreshed'],
+                    ($result['skipped'] ?? 0) + $operational['skipped'],
                 ];
             } catch (\Throwable $e) {
                 // One tenant's misconfiguration must not stop detection for the
@@ -83,5 +99,42 @@ final class DetectSignals extends Command
         $this->table(['Tenant', 'Rules in force', 'Raised', 'Refreshed', 'Not met'], $rows);
 
         return $failures === 0 ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * The dataset-attached aggregate rules, evaluated for one tenant.
+     *
+     * A tenant that has imported nothing gets an empty rule list and pays one
+     * indexed GROUP BY for the question — the registry's own stated contract.
+     *
+     * @return array{applicable: int, created: int, refreshed: int, skipped: int}
+     */
+    private function operationalRules(string $tenantId): array
+    {
+        $writer = app(OperationalSignalWriter::class);
+        $rules = app(SignalRuleRegistry::class)->extraRulesFor($writer, $tenantId);
+
+        $out = ['applicable' => count($rules), 'created' => 0, 'refreshed' => 0, 'skipped' => 0];
+
+        foreach ($rules as $rule) {
+            try {
+                $outcome = $rule();
+            } catch (\Throwable $e) {
+                // One malformed rule must not stop the rest — the same contract
+                // RuleEvaluator holds for its own family.
+                $out['skipped']++;
+                $this->warn("tenant {$tenantId}: rule failed — ".$e->getMessage());
+
+                continue;
+            }
+
+            match (true) {
+                ($outcome['created'] ?? false)   => $out['created']++,
+                ($outcome['refreshed'] ?? false) => $out['refreshed']++,
+                default                          => $out['skipped']++,
+            };
+        }
+
+        return $out;
     }
 }

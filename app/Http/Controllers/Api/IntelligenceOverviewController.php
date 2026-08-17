@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Cases\RecommendationCaseContext;
 use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
@@ -12,8 +13,18 @@ use Illuminate\Support\Facades\DB;
 
 final class IntelligenceOverviewController extends Controller
 {
-    public function __construct(private readonly EntityResolver $resolver)
-    {
+    /**
+     * Request-scoped memo for resolveCaseIdThroughCitation(): recommendation id
+     * (tenant-qualified) => case id, or '' for one that reaches no single case.
+     *
+     * @var array<string, string>
+     */
+    private array $caseIdByRecommendation = [];
+
+    public function __construct(
+        private readonly EntityResolver $resolver,
+        private readonly RecommendationCaseContext $recommendationCaseContext,
+    ) {
     }
 
     public function deliberationOverview(Request $request): JsonResponse
@@ -83,8 +94,8 @@ final class IntelligenceOverviewController extends Controller
                     'e.created_date',
                 ]));
 
-        $recommendationsByCase = $recommendations->groupBy(fn ($row) => (string) ($row->linked_case_id ?? ''));
-        $decisionsByCase = $decisions->groupBy(fn ($row) => (string) ($row->linked_case_id ?? ''));
+        $recommendationsByCase = $recommendations->groupBy(fn ($row) => $this->caseIdForRecommendation($tenant, $row));
+        $decisionsByCase = $decisions->groupBy(fn ($row) => $this->caseIdForDecision($tenant, $row));
         $hypothesesByCase = $hypotheses->groupBy(fn ($row) => (string) $row->case_id);
         $reasoningByCase = $reasoningSteps->groupBy(fn ($row) => (string) ($row->case_id ?? ''));
         $evidenceByCase = $evidenceRows->groupBy(fn ($row) => (string) $row->case_id);
@@ -211,6 +222,10 @@ final class IntelligenceOverviewController extends Controller
                     'id' => (string) $row->id,
                     'title' => (string) $row->title,
                     'description' => $row->description ? (string) $row->description : null,
+                    // The verb's own category — watch/investigate/intervene/
+                    // escalate — which is what says whether a recommendation is
+                    // asking to be read or asking to be acted on.
+                    'category' => $row->category ? (string) $row->category : null,
                     'priority' => (string) $row->priority,
                     'status' => (string) $row->status,
                     'confidence' => $row->confidence === null ? null : round((float) $row->confidence, 4),
@@ -220,6 +235,7 @@ final class IntelligenceOverviewController extends Controller
                 'decisions' => $decisionsByCase->get($caseId, collect())->map(fn ($row) => [
                     'id' => (string) $row->id,
                     'status' => (string) $row->status,
+                    'recommendationId' => $row->recommendation_id ? (string) $row->recommendation_id : null,
                     'recommendationTitle' => $row->recommendation_title ? (string) $row->recommendation_title : null,
                     'owner' => $row->approved_by ? (string) $row->approved_by : (string) $row->decided_by,
                     'ageDays' => $this->ageInDays($row->created_date),
@@ -229,10 +245,18 @@ final class IntelligenceOverviewController extends Controller
             ];
         }
 
+        // caseId goes through the SAME resolver the grouping above uses, and not
+        // through $row->linked_case_id. This row is the reason the fix is not a
+        // one-line change: the queue read the raw column directly, so correcting
+        // only the grouping would have produced a screen where a decision sits
+        // under a case in the timeline while the queue below it reports no case
+        // for that same decision. Two answers to one question is worse than the
+        // single wrong answer it replaced.
         $decisionQueueItems = $pendingDecisions->sortByDesc('created_date')->take(10)->map(fn ($row) => [
             'id' => (string) $row->id,
             'decision' => (string) ($row->recommendation_title ?: 'Decision'),
-            'caseId' => $row->linked_case_id ? (string) $row->linked_case_id : null,
+            'caseId' => $this->caseIdForDecision($tenant, $row) ?: null,
+            'recommendationId' => $row->recommendation_id ? (string) $row->recommendation_id : null,
             'recommendation' => $row->recommendation_title ? (string) $row->recommendation_title : null,
             'confidence' => $row->recommendation_confidence === null ? null : round((float) $row->recommendation_confidence, 4),
             'priority' => $row->recommendation_priority ? (string) $row->recommendation_priority : null,
@@ -281,6 +305,114 @@ final class IntelligenceOverviewController extends Controller
                 'total' => $pendingDecisions->count(),
             ],
         ]);
+    }
+
+    /**
+     * The case a recommendation belongs to, by whichever link actually exists.
+     *
+     * WHY TWO PATHS AND NOT ONE. The leftJoin above reaches a case through
+     * hpbrain_recommendations.reasoning_step_id, and for the recommendations
+     * SignalReasoner wrote that column is populated and the join is correct.
+     * For every recommendation RecommendVerb writes it is null — deliberately,
+     * see RecommendVerb::persist — so the join yields nothing and those rows
+     * grouped under the empty key, which is why no model-authored
+     * recommendation has ever appeared against its case on this screen. They
+     * were counted in the summary and invisible everywhere else.
+     *
+     * The second path is NOT a second implementation of that resolution.
+     * RecommendationCaseContext already owns the only link that works for the
+     * verb pipeline — dependencies -> hpbrain_evidence.signal_id ->
+     * hpbrain_case_signals -> the case — including its refusal to guess when
+     * cited evidence spans two cases. This calls that class and takes its
+     * answer. A copy of the join here would be a second thing to keep in step
+     * with a class whose whole documented purpose is to be the one place it
+     * lives.
+     *
+     * THE REASONING STEP STILL WINS WHEN IT EXISTS. It is the explicit,
+     * recorded link; the evidence path is an inference from what the
+     * recommendation cited. Preferring the explicit one also means nothing
+     * about the existing SignalReasoner rows changes.
+     *
+     * COST: the fallback runs only for rows with no reasoning step, and it
+     * queries per row. That is bounded by the number of model-authored
+     * recommendations in the tenant, not by the page size.
+     */
+    private function caseIdForRecommendation(string $tenant, object $row): string
+    {
+        $viaReasoningStep = (string) ($row->linked_case_id ?? '');
+
+        if ($viaReasoningStep !== '') {
+            return $viaReasoningStep;
+        }
+
+        return $this->resolveCaseIdThroughCitation($tenant, (string) $row->id);
+    }
+
+    /**
+     * The case a DECISION belongs to — the same gap, one hop further along.
+     *
+     * A decision reaches its case through the recommendation it approves:
+     * d.recommendation_id -> r.reasoning_step_id -> rs.case_id. That middle
+     * column is the same hardcoded null RecommendVerb writes, so a decision on
+     * a model-authored recommendation was orphaned exactly as the
+     * recommendation itself was — it simply had not bitten yet, because until
+     * now every decision in the installation hung off a SignalReasoner
+     * recommendation whose reasoning step was populated.
+     *
+     * THE NULL GUARD IS NOT DEFENSIVE PADDING. hpbrain_decisions.recommendation_id
+     * is nullable and the leftJoin above preserves decisions that have none.
+     * Passing that null on as a string would ask RecommendationCaseContext to
+     * look up the recommendation '' and get told, correctly, that no such
+     * recommendation exists — a wasted query whose answer was already known
+     * here. A decision with no recommendation has no citation to resolve
+     * through, and the empty key is the honest place for it.
+     */
+    private function caseIdForDecision(string $tenant, object $row): string
+    {
+        $viaReasoningStep = (string) ($row->linked_case_id ?? '');
+
+        if ($viaReasoningStep !== '') {
+            return $viaReasoningStep;
+        }
+
+        $recommendationId = $row->recommendation_id ?? null;
+
+        if ($recommendationId === null || $recommendationId === '') {
+            return '';
+        }
+
+        return $this->resolveCaseIdThroughCitation($tenant, (string) $recommendationId);
+    }
+
+    /**
+     * One recommendation's case, through what it cited — asked once per request.
+     *
+     * THE MEMO EXISTS BECAUSE THERE ARE NOW TWO CALLERS. A case's recommendation
+     * and the decision approving that same recommendation resolve the identical
+     * id, so without this the request pays for the same three-query walk twice
+     * for every decided case. Keyed by recommendation id and held on the
+     * controller, which Laravel builds fresh per request — so this is a
+     * request-scoped memo, not a cache with a staleness question attached.
+     *
+     * Nulls are memoised too. "This recommendation reaches no case" is an answer
+     * worth not recomputing, and it is the answer for every recommendation whose
+     * cited evidence spans two cases.
+     */
+    private function resolveCaseIdThroughCitation(string $tenant, string $recommendationId): string
+    {
+        $key = $tenant.'|'.$recommendationId;
+
+        if (! array_key_exists($key, $this->caseIdByRecommendation)) {
+            $context = $this->recommendationCaseContext->forRecommendation($tenant, $recommendationId);
+
+            // Null caseId is the honest answer for "no case links this" and for
+            // "the cited evidence spans several". Both stay under the empty key,
+            // exactly as before — this widens what can be resolved, it does not
+            // invent a case for what cannot be.
+            $this->caseIdByRecommendation[$key] = (string) ($context['caseId'] ?? '');
+        }
+
+        return $this->caseIdByRecommendation[$key];
     }
 
     public function enterpriseOverview(Request $request): JsonResponse
@@ -984,6 +1116,16 @@ final class IntelligenceOverviewController extends Controller
         $decisionsById = $decisions->keyBy('id');
         $outcomesByDecision = $outcomes->groupBy(fn ($row) => (string) $row->decision_id);
         $learningsByOutcome = $learnings->groupBy(fn ($row) => (string) $row->outcome_id);
+        $executedDecisionIds = $executions->pluck('decision_id')->filter()->map(fn ($id) => (string) $id)->unique()->values();
+        $measurementPlansByDecision = collect(DB::table('hpbrain_measurement_plans')
+            ->where('tenant_id', $tenant)
+            ->orderByDesc('created_date')
+            ->get())
+            ->groupBy(fn ($row) => (string) $row->decision_id);
+        $reasoningCaseByStep = collect(DB::table('hpbrain_reasoning_steps')
+            ->where('tenant_id', $tenant)
+            ->whereNotNull('case_id')
+            ->pluck('case_id', 'id'));
 
         $approvedDecisions = $decisions->filter(fn ($row) => strtolower((string) $row->status) === 'approved');
         $queued = $executions->filter(fn ($row) => strtolower((string) $row->status) === 'queued');
@@ -1010,6 +1152,7 @@ final class IntelligenceOverviewController extends Controller
             return [
                 'id' => (string) $execution->id,
                 'execution' => (string) $execution->id,
+                'esoDefinitionId' => $execution->eso_definition_id ? (string) $execution->eso_definition_id : ((string) ($execution->eso_id ?? '') ?: null),
                 'decisionId' => $execution->decision_id ? (string) $execution->decision_id : null,
                 'decision' => $recommendation?->title ? (string) $recommendation->title : 'Decision',
                 'owner' => $ownerId ? (string) $ownerId : null,
@@ -1026,7 +1169,9 @@ final class IntelligenceOverviewController extends Controller
                     'title' => (string) $recommendation->title,
                     'impact' => $recommendation->impact ? (string) $recommendation->impact : null,
                     'confidence' => $recommendation->confidence === null ? null : round((float) $recommendation->confidence, 4),
+                    'citationEvidenceIds' => $this->citationEvidenceIds($recommendation->dependencies ?? '[]'),
                 ] : null,
+                'citationEvidenceIds' => $recommendation ? $this->citationEvidenceIds($recommendation->dependencies ?? '[]') : [],
                 'outcome' => $outcome ? [
                     'id' => (string) $outcome->id,
                     'result' => (string) $outcome->result,
@@ -1036,6 +1181,48 @@ final class IntelligenceOverviewController extends Controller
                 ] : null,
             ];
         });
+
+        $executionQueue = $approvedDecisions
+            ->reject(fn ($decision) => $executedDecisionIds->contains((string) $decision->id))
+            ->sortByDesc(fn ($decision) => $decision->approved_date ?? $decision->created_date)
+            ->values()
+            ->map(function ($decision) use ($tenant, $recommendationsById, $measurementPlansByDecision, $reasoningCaseByStep) {
+                $recommendation = $decision->recommendation_id ? $recommendationsById->get((string) $decision->recommendation_id) : null;
+                $latestPlan = $measurementPlansByDecision->get((string) $decision->id, collect())->first();
+                $decisionForCase = (object) array_merge((array) $decision, [
+                    'linked_case_id' => $recommendation?->reasoning_step_id
+                        ? (string) ($reasoningCaseByStep->get((string) $recommendation->reasoning_step_id) ?? '')
+                        : '',
+                ]);
+
+                return [
+                    'id' => (string) $decision->id,
+                    'decision' => $recommendation?->title ? (string) $recommendation->title : 'Decision',
+                    'caseId' => $this->caseIdForDecision($tenant, $decisionForCase) ?: null,
+                    'recommendationId' => $decision->recommendation_id ? (string) $decision->recommendation_id : null,
+                    'owner' => $decision->approved_by ? (string) $decision->approved_by : (string) $decision->decided_by,
+                    'approvedDate' => $decision->approved_date ?? $decision->created_date,
+                    'hasMeasurementPlan' => $latestPlan !== null,
+                    'measurementPlan' => $latestPlan ? [
+                        'id' => (string) $latestPlan->id,
+                        'baselineMetric' => (string) $latestPlan->baseline_metric,
+                        'baselineValue' => $latestPlan->baseline_value === null ? null : (float) $latestPlan->baseline_value,
+                        'targetValue' => $latestPlan->target_value === null ? null : (float) $latestPlan->target_value,
+                        'metricUnit' => $latestPlan->metric_unit === null ? null : (string) $latestPlan->metric_unit,
+                        'measurementWindowDays' => $latestPlan->measurement_window_days === null ? null : (int) $latestPlan->measurement_window_days,
+                    ] : null,
+                    'recommendation' => $recommendation ? [
+                        'id' => (string) $recommendation->id,
+                        'title' => (string) $recommendation->title,
+                        'category' => $recommendation->category ? (string) $recommendation->category : null,
+                        'priority' => (string) $recommendation->priority,
+                        'confidence' => $recommendation->confidence === null ? null : round((float) $recommendation->confidence, 4),
+                        'impact' => $recommendation->impact ? (string) $recommendation->impact : null,
+                        'esoId' => $recommendation->eso_id ? (string) $recommendation->eso_id : null,
+                        'citationEvidenceIds' => $this->citationEvidenceIds($recommendation->dependencies ?? '[]'),
+                    ] : null,
+                ];
+            });
 
         $filteredExecutions = match ($status) {
             'all' => $executionRows,
@@ -1146,6 +1333,7 @@ final class IntelligenceOverviewController extends Controller
                 'outcomeMeasurementRate' => $outcomeMeasurementRate,
                 'successRate' => $successRate,
                 'blockedExecutions' => $blocked->count(),
+                'approvedDecisionsWithoutExecution' => $executionQueue->count(),
             ],
             'pipeline' => [
                 ['label' => 'Approved', 'count' => $approvedDecisions->count()],
@@ -1169,6 +1357,10 @@ final class IntelligenceOverviewController extends Controller
                 'page' => $page,
                 'pageSize' => $pageSize,
                 'filter' => $status,
+            ],
+            'executionQueue' => [
+                'items' => $executionQueue->take(10)->values()->all(),
+                'total' => $executionQueue->count(),
             ],
             'health' => [
                 'successRate' => $successRate,
@@ -1416,6 +1608,27 @@ final class IntelligenceOverviewController extends Controller
         $decoded = json_decode($value, true);
 
         return json_last_error() === JSON_ERROR_NONE ? $decoded : null;
+    }
+
+    /** @return array<int, string> */
+    private function citationEvidenceIds(mixed $value): array
+    {
+        if (is_array($value)) {
+            $decoded = $value;
+        } elseif (is_string($value) && trim($value) !== '') {
+            $decoded = json_decode($value, true);
+        } else {
+            $decoded = [];
+        }
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(
+            $decoded,
+            fn ($candidate): bool => is_string($candidate) && $candidate !== ''
+        )));
     }
 
     private function numericMetricFromMixed(mixed $value): ?float

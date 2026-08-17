@@ -431,6 +431,36 @@
     "unverifiedResponse": true
   },
   {
+    "name": "IntelligenceOverviewDeliberationOverviewGetAnalyticsTenantIdDeliberationOverview",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/deliberation-overview",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IntelligenceOverviewController@deliberationOverview",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IntelligenceOverviewEnterpriseOverviewGetAnalyticsTenantIdEnterpriseOverview",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/enterprise-overview",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IntelligenceOverviewController@enterpriseOverview",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IntelligenceOverviewExecutionOverviewGetAnalyticsTenantIdExecutionOverview",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/execution-overview",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IntelligenceOverviewController@executionOverview",
+    "unverifiedResponse": true
+  },
+  {
     "name": "AnalyticsExecutiveSummaryGetAnalyticsTenantIdExecutiveSummary",
     "method": "GET",
     "path": "/analytics/{tenantId}/executive-summary",
@@ -468,6 +498,16 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@peopleReport",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AnalyticsSignalsGetAnalyticsTenantIdSignals",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/signals",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@signals",
     "unverifiedResponse": true
   },
   {
@@ -542,6 +582,14 @@
     "path": "/auth/refresh",
     "permissions": {},
     "controller": "App\\Http\\Controllers\\Api\\AuthController@refresh",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AuthSignupPostAuthSignup",
+    "method": "POST",
+    "path": "/auth/signup",
+    "permissions": {},
+    "controller": "App\\Http\\Controllers\\Api\\AuthController@signup",
     "unverifiedResponse": true
   },
   {
@@ -762,6 +810,16 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\CaseController@evidence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CaseSignalEvidenceShowGetCasesTenantIdIdSignalEvidence",
+    "method": "GET",
+    "path": "/cases/{tenantId}/{id}/signal-evidence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CaseSignalEvidenceController@show",
     "unverifiedResponse": true
   },
   {
@@ -1140,6 +1198,17 @@
     "unverifiedResponse": true
   },
   {
+    "name": "DecisionRejectPostDecisionsTenantIdIdReject",
+    "method": "POST",
+    "path": "/decisions/{tenantId}/{id}/reject",
+    "permissions": [
+      "read",
+      "decision.approve"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DecisionController@reject",
+    "unverifiedResponse": true
+  },
+  {
     "name": "DepartmentStorePostDepartments",
     "method": "POST",
     "path": "/departments",
@@ -1263,6 +1332,16 @@
       "tenant.manage"
     ],
     "controller": "App\\Http\\Controllers\\Api\\EntityMappingController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EsoExecutionDefinitionsGetEsoDefinitionsTenantId",
+    "method": "GET",
+    "path": "/eso-definitions/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EsoExecutionController@definitions",
     "unverifiedResponse": true
   },
   {
@@ -1870,6 +1949,50 @@
       "settings.manage"
     ],
     "controller": "App\\Http\\Controllers\\Api\\IndustryTemplateController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IngestionInternalPostIngestionInternal",
+    "method": "POST",
+    "path": "/ingestion/internal",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IngestionController@internal",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IngestionSourcesGetIngestionSourcesTenantId",
+    "method": "GET",
+    "path": "/ingestion/sources/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IngestionController@sources",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IngestionUploadPostIngestionUpload",
+    "method": "POST",
+    "path": "/ingestion/upload",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IngestionController@upload",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IngestionCommitPostIngestionTenantIdJobIdCommit",
+    "method": "POST",
+    "path": "/ingestion/{tenantId}/{jobId}/commit",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IngestionController@commit",
     "unverifiedResponse": true
   },
   {
@@ -2537,6 +2660,96 @@
       "settings.manage"
     ],
     "controller": "App\\Http\\Controllers\\Api\\OrganizationConfigController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceIndexGetOrganizationIntelligenceTenantId",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceCapabilityGetOrganizationIntelligenceTenantIdCapability",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/capability",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@capability",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceDecisionsGetOrganizationIntelligenceTenantIdDecisions",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/decisions",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@decisions",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceGapsGetOrganizationIntelligenceTenantIdGaps",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/gaps",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@gaps",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceKnowledgeGetOrganizationIntelligenceTenantIdKnowledge",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/knowledge",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@knowledge",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceProfileGetOrganizationIntelligenceTenantIdProfile",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/profile",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@profile",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceRecommendationsGetOrganizationIntelligenceTenantIdRecommendations",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/recommendations",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@recommendations",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceRisksGetOrganizationIntelligenceTenantIdRisks",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/risks",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@risks",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceStateGetOrganizationIntelligenceTenantIdState",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/state",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@state",
     "unverifiedResponse": true
   },
   {
@@ -3370,6 +3583,16 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\RecommendationController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RecommendationCaseContextShowGetRecommendationsTenantIdIdCaseContext",
+    "method": "GET",
+    "path": "/recommendations/{tenantId}/{id}/case-context",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RecommendationCaseContextController@show",
     "unverifiedResponse": true
   },
   {

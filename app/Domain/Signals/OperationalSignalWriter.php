@@ -52,7 +52,27 @@ final class OperationalSignalWriter
 
     public function __construct(
         private readonly EventPublisher $events,
+        private readonly SignalSubject $subject,
     ) {
+    }
+
+    /**
+     * Who these signals are about.
+     *
+     * NO universal entity and NO affected-id list is passed, and that is a
+     * statement about the rules rather than an omission. Every rule in
+     * OperationalSignalRules is an aggregate — a SHARE of closed complaints, a
+     * zone's proportion of the total, a ratio between two columns of a
+     * help-desk row. The affected unit is the group, not a row, and the subject
+     * of "68% of closed tickets record no root cause" is the operation itself.
+     * So SignalSubject answers with the organization and leaves
+     * related_entity_* null, which is the true shape of these findings.
+     *
+     * @return array{org_id: string|null, related_entity_type: string|null, related_entity_id: string|null}
+     */
+    private function subjectFor(string $tenantId): array
+    {
+        return $this->subject->columnsFor($tenantId);
     }
 
     /**
@@ -86,8 +106,10 @@ final class OperationalSignalWriter
         // signals are NOT matched — a problem that came back is real news.
         $open = $ruleKey !== '' ? $this->openSignalFor($tenantId, $ruleKey) : null;
 
+        $subject = $this->subjectFor($tenantId);
+
         if ($open !== null) {
-            $this->refreshSignal($tenantId, $open, $data['metadata']);
+            $this->refreshSignal($tenantId, $open, $data['metadata'], $subject);
             $this->discard($evidenceIds);
 
             return ['created' => false, 'refreshed' => true, 'signalId' => (string) $open->id];
@@ -109,8 +131,8 @@ final class OperationalSignalWriter
                 'severity'       => $data['severity'],
                 'evidenceIds'    => array_keys($rows),
             ],
-            function () use ($signalId, $tenantId, $data, $ruleKey, $rows) {
-                DB::table('hpbrain_signals')->insert([
+            function () use ($signalId, $tenantId, $data, $ruleKey, $rows, $subject) {
+                DB::table('hpbrain_signals')->insert($subject + [
                     'id'             => $signalId,
                     'tenant_id'      => $tenantId,
                     'source'         => $data['source'],
@@ -160,9 +182,13 @@ final class OperationalSignalWriter
      * created_date is left alone: how long a problem has been open is the most
      * useful fact about it.
      *
+     * The subject is rewritten on every refresh, which is also what backfills
+     * the signals raised before it was recorded at all.
+     *
      * @param  array<string, mixed>  $metadata
+     * @param  array{org_id: string|null, related_entity_type: string|null, related_entity_id: string|null}  $subject
      */
-    private function refreshSignal(string $tenantId, object $signal, array $metadata): void
+    private function refreshSignal(string $tenantId, object $signal, array $metadata, array $subject): void
     {
         $previous = json_decode((string) $signal->metadata, true);
         $previous = is_array($previous) ? $previous : [];
@@ -170,7 +196,7 @@ final class OperationalSignalWriter
         DB::table('hpbrain_signals')
             ->where('tenant_id', $tenantId)
             ->where('id', $signal->id)
-            ->update([
+            ->update($subject + [
                 'metadata'     => json_encode(array_merge($previous, $metadata, [
                     'firstCount' => $previous['firstCount'] ?? ($previous['affectedCount'] ?? null),
                     'lastSeenAt' => now()->format('Y-m-d H:i:s'),

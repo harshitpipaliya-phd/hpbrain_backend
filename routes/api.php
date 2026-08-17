@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\AuditController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CapabilityController;
 use App\Http\Controllers\Api\CaseController;
+use App\Http\Controllers\Api\CaseSignalEvidenceController;
+use App\Http\Controllers\Api\RecommendationCaseContextController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DecisionController;
 use App\Http\Controllers\Api\DepartmentController;
@@ -188,7 +190,6 @@ Route::prefix('v1')->group(function () {
         Route::get('hypotheses/{tenantId}/case/{caseId}', [HypothesisController::class, 'forCase']);
         Route::post('hypotheses', [HypothesisController::class, 'store'])->middleware('permission:create');
         Route::post('hypotheses/{tenantId}/{id}/status', [HypothesisController::class, 'setStatus'])->middleware('permission:update');
-
         Route::get('reasoning/{tenantId}/signal/{signalId}', [ReasoningController::class, 'forSignal']);
         Route::post('reasoning', [ReasoningController::class, 'store'])->middleware('permission:create');
 
@@ -198,6 +199,7 @@ Route::prefix('v1')->group(function () {
         Route::get('decisions/{tenantId}', [DecisionController::class, 'index']);
         Route::post('decisions', [DecisionController::class, 'store'])->middleware('permission:create');
         Route::post('decisions/{tenantId}/{id}/approve', [DecisionController::class, 'approve'])->middleware('permission:decision.approve');
+        Route::post('decisions/{tenantId}/{id}/reject', [DecisionController::class, 'reject'])->middleware('permission:decision.approve');
 
         // The catalogue behind the ESO Library screen. Must precede
         // `eso-executions/{tenantId}` only in spirit — it is a distinct path — but is
@@ -250,9 +252,6 @@ Route::prefix('v1')->group(function () {
         Route::get('analytics/{tenantId}/signals', [AnalyticsController::class, 'signals']);
         Route::get('analytics/{tenantId}/executive-summary', [AnalyticsController::class, 'executiveSummary']);
         Route::get('analytics/{tenantId}/decision-intelligence', [AnalyticsController::class, 'decisionIntelligence']);
-        Route::get('analytics/{tenantId}/deliberation-overview', [AnalyticsController::class, 'deliberationOverview']);
-        Route::get('analytics/{tenantId}/enterprise-overview', [AnalyticsController::class, 'enterpriseOverview']);
-        Route::get('analytics/{tenantId}/execution-overview', [AnalyticsController::class, 'executionOverview']);
         Route::get('analytics/{tenantId}/trend', [AnalyticsController::class, 'trend']);
         // The Export CSV button on the Decision Intelligence screen has always
         // pointed here; the route did not exist, so it downloaded a 404.
@@ -404,6 +403,18 @@ Route::prefix('v1')->group(function () {
 
         Route::get('cases/{tenantId}/{id}', [CaseController::class, 'show']);
         Route::get('cases/{tenantId}/{id}/evidence', [CaseController::class, 'evidence']);
+        // A DIFFERENT body of fact from the line above, which is why it is a
+        // different path and a different controller: `/evidence` returns
+        // hpbrain_case_evidence — what a person attached to the case — while
+        // this returns the detector-produced evidence under every signal linked
+        // to the case, primary and related. Read-only, and not consulted by
+        // EXPLAIN or RECOMMEND.
+        Route::get('cases/{tenantId}/{id}/signal-evidence', [CaseSignalEvidenceController::class, 'show']);
+        // What a recommendation actually cited, kept separate from what its
+        // case knows besides. Read-only, and consulted by no verb — see
+        // RecommendationCaseContext for why the path to the case runs through
+        // the cited evidence rather than through reasoning_step_id.
+        Route::get('recommendations/{tenantId}/{id}/case-context', [RecommendationCaseContextController::class, 'show']);
 
         Route::post('hypotheses/{tenantId}/case/{caseId}/{id}/reject', [HypothesisController::class, 'reject'])->middleware('permission:update');
         Route::post('hypotheses/{tenantId}/case/{caseId}/{id}/support', [HypothesisController::class, 'support'])->middleware('permission:update');

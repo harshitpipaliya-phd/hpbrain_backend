@@ -58,6 +58,7 @@ final class RuleEvaluator
     public function __construct(
         private readonly EventPublisher $events,
         private readonly EntityResolver $resolver,
+        private readonly SignalSubject $subject,
     ) {
     }
 
@@ -181,11 +182,21 @@ final class RuleEvaluator
             'sampleIds'     => $affected->take(5)->pluck($primaryKey)->all(),
         ];
 
+        // Who this is about, from the rows that just matched. The FULL affected
+        // set is passed, not the five-row sample: SignalSubject names a single
+        // entity only when exactly one row is affected, and a sample of five
+        // taken from fifty would make that test answer the wrong question.
+        $subject = $this->subject->columnsFor(
+            $tenantId,
+            (string) $rule->universal_entity,
+            $affected->pluck($primaryKey)->all(),
+        );
+
         // A condition that is still true is not a new observation.
         $open = $this->openSignalFor($tenantId, (string) $rule->rule_key);
 
         if ($open !== null) {
-            $this->refreshSignal($tenantId, $open, $metadata);
+            $this->refreshSignal($tenantId, $open, $metadata, $subject);
 
             return self::REFRESHED;
         }
@@ -200,6 +211,7 @@ final class RuleEvaluator
             'confidence'     => (float) $rule->confidence,
             'ruleKey'        => (string) $rule->rule_key,
             'metadata'       => $metadata,
+            'subject'        => $subject,
         ], $evidenceRows);
 
         return self::CREATED;
@@ -250,9 +262,18 @@ final class RuleEvaluator
      * original created_date is left alone, because how long a problem has been
      * open is the single most useful fact about it.
      *
+     * The subject is re-derived on every refresh rather than written once at
+     * creation. It is a fact about the CURRENT affected set, and that set moves:
+     * a rule down to its last unmanaged department has acquired a single
+     * subject, and one that has gained a second has lost it. Rewriting both
+     * columns each pass — including back to null — is what keeps the answer
+     * true rather than merely once-true. It is also what backfills the signals
+     * raised before this existed.
+     *
      * @param  array<string, mixed>  $metadata
+     * @param  array{org_id: string|null, related_entity_type: string|null, related_entity_id: string|null}  $subject
      */
-    private function refreshSignal(string $tenantId, object $signal, array $metadata): void
+    private function refreshSignal(string $tenantId, object $signal, array $metadata, array $subject): void
     {
         $previous = json_decode((string) $signal->metadata, true);
         $previous = is_array($previous) ? $previous : [];
@@ -260,7 +281,7 @@ final class RuleEvaluator
         DB::table('hpbrain_signals')
             ->where('tenant_id', $tenantId)
             ->where('id', $signal->id)
-            ->update([
+            ->update($subject + [
                 'metadata'     => json_encode(array_merge($previous, $metadata, [
                     // What the count was when the signal was first raised, so a
                     // screen can say whether it is getting better or worse.
@@ -558,7 +579,7 @@ final class RuleEvaluator
                 'evidenceIds'    => $evidenceIds,
             ],
             function () use ($signalId, $tenantId, $data, $evidenceRows) {
-                DB::table('hpbrain_signals')->insert([
+                DB::table('hpbrain_signals')->insert(($data['subject'] ?? []) + [
                     'id'             => $signalId,
                     'tenant_id'      => $tenantId,
                     'source'         => $data['source'],

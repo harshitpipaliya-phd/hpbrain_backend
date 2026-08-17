@@ -33,6 +33,10 @@ final class FieldMap
         'evidence_text',      // → Evidence.content.text
         'evidence_timestamp', // → Evidence.content.observedAt
         'external_ref',       // → Signal.metadata.externalRef (stable source id)
+        'measure',            // → OperationalRecord.metric_value
+        'measure_unit',       // → OperationalRecord.metric_unit
+        'subject_ref',        // → OperationalRecord.subject_ref
+        'category',           // → OperationalRecord.category
     ];
 
     /** @param array<string, string> $map canonical field => source column */
@@ -76,6 +80,9 @@ final class FieldMap
             'evidence_text'      => ['remark', 'comment', 'note', 'description'],
             'evidence_timestamp' => ['date', 'time', 'when'],
             'external_ref'       => ['id', 'ref', 'code', 'number'],
+            'measure'            => ['amount'],
+            'subject_ref'        => ['unique id', 'gr no'],
+            'category'           => ['student quota'],
         ];
 
         $map = [];

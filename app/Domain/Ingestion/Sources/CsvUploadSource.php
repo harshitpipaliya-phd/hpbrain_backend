@@ -129,7 +129,7 @@ final class CsvUploadSource implements DataSource
             $headers = $this->readHeaders($handle, $delimiter);
             $rows = [];
 
-            while (($record = fgetcsv($handle, 0, $delimiter)) !== false) {
+            while (($record = fgetcsv($handle, 0, $delimiter, '"', '\\')) !== false) {
                 // fgetcsv yields [null] for a blank line. Skipping it here
                 // keeps blank separator lines out of the row count, which is
                 // the number the reviewer checks the preview against.
@@ -418,7 +418,7 @@ final class CsvUploadSource implements DataSource
 
     private function readHeaders($handle, string $delimiter = ','): array
     {
-        $headers = fgetcsv($handle, 0, $delimiter);
+        $headers = fgetcsv($handle, 0, $delimiter, '"', '\\');
 
         if ($headers === false || $headers === [null]) {
             throw new \RuntimeException('CSV has no header row.');

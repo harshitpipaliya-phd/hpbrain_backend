@@ -73,6 +73,14 @@ final class HomeMetricsTest extends TestCase
         Schema::create('hpbrain_signals', function ($t) {
             $t->string('id', 36)->primary();
             $t->string('tenant_id', 36);
+            // Who the signal is about. Present on the real table and on the
+            // shared replica in Tests\Support\BuildsBrainSchema; this local
+            // copy had drifted without them, so a detector that writes the
+            // subject failed here and nowhere else.
+            $t->string('org_id', 36)->nullable();
+            $t->string('department_id', 36)->nullable();
+            $t->text('related_entity_type')->nullable();
+            $t->string('related_entity_id', 36)->nullable();
             $t->string('source');
             $t->string('classification');
             // Which rule raised the signal. Re-detection matches on it to
@@ -123,6 +131,26 @@ final class HomeMetricsTest extends TestCase
             $t->string('tenant_id', 36);
             $t->string('status')->default('proposed');
             $t->timestamp('created_date')->nullable();
+        });
+
+        Schema::create('hpbrain_operational_records', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('source_id', 36);
+            $t->string('dataset', 100);
+            $t->string('natural_key', 191);
+            $t->string('subject_ref', 191)->nullable();
+            $t->string('title')->nullable();
+            $t->string('state')->nullable();
+            $t->string('owner_name')->nullable();
+            $t->string('category')->nullable();
+            $t->decimal('metric_value', 18, 4)->nullable();
+            $t->string('metric_unit')->nullable();
+            $t->timestamp('occurred_at')->nullable();
+            $t->text('payload')->nullable();
+            $t->integer('source_row')->nullable();
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
         });
 
         Schema::create('hpbrain_evidence', function ($t) {
@@ -297,6 +325,171 @@ final class HomeMetricsTest extends TestCase
 
         $attention = collect($response->json('attention'));
         $this->assertTrue($attention->contains('id', 'high-signals'));
+    }
+
+    public function test_home_metrics_surfaces_pipeline_without_rule_cause_review_action(): void
+    {
+        DB::table('hpbrain_operational_records')->insert([
+            'id' => 'op-1',
+            'tenant_id' => self::TENANT,
+            'source_id' => 'source-1',
+            'dataset' => 'school_fee',
+            'natural_key' => 'receipt-1',
+            'subject_ref' => 'student-1',
+            'title' => 'Fee receipt',
+            'state' => 'Paid',
+            'owner_name' => 'Collector',
+            'category' => 'Tuition',
+            'metric_value' => 1000,
+            'metric_unit' => 'INR',
+            'occurred_at' => now()->format('Y-m-d H:i:s'),
+            'payload' => json_encode([]),
+            'source_row' => 1,
+            'created_date' => now()->format('Y-m-d H:i:s'),
+            'updated_date' => null,
+        ]);
+
+        DB::table('hpbrain_signals')->insert([
+            'id' => 'sig-review',
+            'tenant_id' => self::TENANT,
+            'source' => 'import.school_fee',
+            'classification' => 'fee_collection_concentration',
+            'priority' => 'medium',
+            'severity' => 'medium',
+            'status' => 'new',
+            'confidence' => 0.9,
+            'rule_key' => 'fee_collector_concentration',
+            'metadata' => json_encode(['rule' => 'fee_collector_concentration']),
+            'created_date' => now()->format('Y-m-d H:i:s'),
+        ]);
+
+        $token = \App\Support\Jwt::issueAccess([
+            'id' => 'u1', 'tenantId' => self::TENANT, 'role' => 'admin',
+        ]);
+
+        $response = $this->getJson('/api/v1/workspace/'.self::TENANT.'/home-metrics', [
+            'Authorization' => 'Bearer '.$token,
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertSame('signals_detected', $response->json('pipeline.stage'));
+        $this->assertSame(1, $response->json('pipeline.counts.operationalRecords'));
+        $this->assertSame(1, $response->json('pipeline.review.unclassifiedRuleKeys'));
+        $this->assertSame(['fee_collector_concentration'], $response->json('pipeline.review.unclassified'));
+
+        $attention = collect($response->json('attention'));
+        $this->assertFalse($attention->contains('id', 'root-cause-review'));
+    }
+
+    public function test_home_metrics_returns_data_driven_school_fee_intelligence(): void
+    {
+        $now = now()->format('Y-m-d H:i:s');
+
+        DB::table('hpbrain_operational_records')->insert([
+            [
+                'id' => 'fee-1',
+                'tenant_id' => self::TENANT,
+                'source_id' => 'source-1',
+                'dataset' => 'school_fee',
+                'natural_key' => 'R-1',
+                'subject_ref' => 'S-1',
+                'title' => 'Sunrise fee',
+                'state' => 'Overdue',
+                'owner_name' => 'Collector A',
+                'category' => 'Tuition Fee',
+                'metric_value' => 10000,
+                'metric_unit' => 'INR',
+                'occurred_at' => '2025-06-01 00:00:00',
+                'payload' => json_encode([
+                    'receipt_no' => 'R-1',
+                    'student_ref' => 'S-1',
+                    'class_name' => 'Grade 7',
+                    'section' => 'A',
+                    'department' => 'Secondary School',
+                    'fee_type' => 'Tuition Fee',
+                    'amount_due' => '10000',
+                    'concession_amount' => '0',
+                    'net_amount' => '10000',
+                    'amount_paid' => '4000',
+                    'balance_amount' => '6000',
+                    'payment_status' => 'Overdue',
+                    'payment_method' => 'UPI',
+                    'payment_date' => '2025-06-01',
+                    'scholarship_type' => 'Merit',
+                    'attendance_pct' => '70',
+                    'exam_average_pct' => '58',
+                    'risk_level' => 'Medium',
+                ]),
+                'source_row' => 1,
+                'created_date' => $now,
+                'updated_date' => null,
+            ],
+            [
+                'id' => 'fee-2',
+                'tenant_id' => self::TENANT,
+                'source_id' => 'source-1',
+                'dataset' => 'school_fee',
+                'natural_key' => 'R-2',
+                'subject_ref' => 'S-2',
+                'title' => 'Sunrise fee',
+                'state' => 'Paid',
+                'owner_name' => 'Collector B',
+                'category' => 'Exam Fee',
+                'metric_value' => 2000,
+                'metric_unit' => 'INR',
+                'occurred_at' => '2025-06-03 00:00:00',
+                'payload' => json_encode([
+                    'receipt_no' => 'R-2',
+                    'student_ref' => 'S-2',
+                    'class_name' => 'Grade 8',
+                    'section' => 'B',
+                    'department' => 'Secondary School',
+                    'fee_type' => 'Exam Fee',
+                    'amount_due' => '2000',
+                    'concession_amount' => '0',
+                    'net_amount' => '2000',
+                    'amount_paid' => '2000',
+                    'balance_amount' => '0',
+                    'payment_status' => 'Paid',
+                    'payment_method' => 'Cash',
+                    'payment_date' => '2025-06-03',
+                    'scholarship_type' => 'None',
+                    'attendance_pct' => '88',
+                    'exam_average_pct' => '74',
+                    'risk_level' => 'Low',
+                ]),
+                'source_row' => 2,
+                'created_date' => $now,
+                'updated_date' => null,
+            ],
+        ]);
+
+        $token = \App\Support\Jwt::issueAccess([
+            'id' => 'u1', 'tenantId' => self::TENANT, 'role' => 'admin',
+        ]);
+
+        $response = $this->getJson('/api/v1/workspace/'.self::TENANT.'/home-metrics', [
+            'Authorization' => 'Bearer '.$token,
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertSame(2, $response->json('domainIntelligence.fees.overview.students'));
+        $this->assertSame(1, $response->json('domainIntelligence.fees.overview.departments'));
+        $this->assertSame(12000, $response->json('domainIntelligence.fees.overview.totalNet'));
+        $this->assertSame(6000, $response->json('domainIntelligence.fees.overview.totalCollected'));
+        $this->assertSame(6000, $response->json('domainIntelligence.fees.overview.totalOutstanding'));
+        $this->assertSame(0.5, $response->json('domainIntelligence.fees.overview.collectionRate'));
+        $this->assertSame(1, $response->json('domainIntelligence.fees.overview.defaulters'));
+        $this->assertFalse($response->json('domainIntelligence.fees.availability.dueDate'));
+        $this->assertFalse($response->json('domainIntelligence.fees.availability.reminderHistory'));
+        $this->assertSame('S-1', $response->json('domainIntelligence.fees.defaulters.0.studentRef'));
+        $this->assertContains('Attendance is below 75%.', $response->json('domainIntelligence.fees.defaulters.0.riskFactors'));
+        $this->assertSame('Secondary School', $response->json('domainIntelligence.fees.analytics.byDepartment.0.name'));
+        $this->assertSame('Merit', $response->json('domainIntelligence.fees.analytics.byScholarship.0.name'));
+        $this->assertSame('Medium', $response->json('domainIntelligence.fees.analytics.riskLevelRows.0.name'));
+        $this->assertSame(1, $response->json('domainIntelligence.fees.analytics.riskLevelStudents.0.count'));
+        $this->assertSame('S-1', $response->json('domainIntelligence.fees.priorityRecovery.0.studentRef'));
+        $this->assertSame(0.4, $response->json('domainIntelligence.fees.priorityRecovery.0.collectionRate'));
     }
 
     public function test_home_metrics_returns_empty_attention_when_all_clear(): void

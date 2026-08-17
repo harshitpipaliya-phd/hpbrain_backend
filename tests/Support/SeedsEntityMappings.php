@@ -73,6 +73,8 @@ trait SeedsEntityMappings
                 $t->decimal('confidence', 6, 4);
                 $t->text('evidence_fields');
                 $t->text('recommended_action');
+                $t->string('root_cause_family')->nullable();
+                $t->decimal('hypothesis_confidence', 6, 4)->nullable();
                 $t->string('owner_role')->nullable();
                 $t->string('threshold_op')->nullable();
                 $t->decimal('threshold_value', 18, 4)->nullable();

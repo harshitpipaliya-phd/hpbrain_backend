@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Domain\Events\EventPublisher;
 use App\Domain\Signals\OperationalSignalWriter;
+use App\Domain\Signals\SignalSubject;
 use App\Domain\Signals\SignalRuleRegistry;
 use App\Services\Import\ImportConfigurationException;
 use App\Services\Import\ImportProfile;
@@ -312,7 +313,7 @@ final class FiberValleyImportTest extends TestCase
         // and write through OperationalSignalWriter. RuleEvaluator is not
         // exercised here — it evaluates the rules held as rows, which is a
         // separate family with its own tests.
-        $writer = new OperationalSignalWriter(app(EventPublisher::class));
+        $writer = new OperationalSignalWriter(app(EventPublisher::class), app(SignalSubject::class));
         $created = 0;
 
         foreach (app(SignalRuleRegistry::class)->extraRulesFor($writer, self::TENANT) as $rule) {
@@ -346,7 +347,7 @@ final class FiberValleyImportTest extends TestCase
             'parent_id' => 0, 'status' => 1, 'is_calculated' => 0,
         ]);
 
-        $writer = new OperationalSignalWriter(app(EventPublisher::class));
+        $writer = new OperationalSignalWriter(app(EventPublisher::class), app(SignalSubject::class));
         $extra = app(SignalRuleRegistry::class)->extraRulesFor($writer, self::OTHER_TENANT);
 
         // The registry contributes NOTHING for a tenant that has imported no

@@ -123,6 +123,24 @@ return [
             'claude-opus-5'   => ['input' => 15.00, 'output' => 75.00],
             'claude-sonnet-5' => ['input' => 3.00,  'output' => 15.00],
             'claude-haiku-4-5-20251001' => ['input' => 1.00, 'output' => 5.00],
+
+            /*
+             | deepseek-v4-flash, the model this installation actually runs
+             | RECOMMEND on. Rates read from DeepSeek's own published table
+             | (api-docs.deepseek.com/quick_start/pricing) on 2026-08-13.
+             |
+             | THE INPUT RATE IS THE CACHE-MISS ONE, DELIBERATELY. DeepSeek bills
+             | cached input an order of magnitude cheaper ($0.014), and nothing
+             | in AiResponse tells us which tokens hit the cache. Estimating at
+             | the miss rate can only ever OVERSTATE spend; using the hit rate
+             | would understate it, and a governance figure that reads low is
+             | the more dangerous of the two errors.
+             |
+             | DeepSeek's page carries a notice that overall pricing will rise
+             | "in the near future, with a significant increase expected", so
+             | this pair is a snapshot with a date on it, not a constant.
+             */
+            'deepseek-v4-flash' => ['input' => 0.14, 'output' => 0.28],
         ],
     ],
 

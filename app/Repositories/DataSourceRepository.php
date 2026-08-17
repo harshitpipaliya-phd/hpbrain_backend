@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repositories;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * The registry of places the Brain can read from.
@@ -51,13 +52,12 @@ final class DataSourceRepository extends BaseRepository
         $id = $this->newId();
         $now = $this->now();
 
-        DB::table($this->table())->insert([
+        $row = [
             'id'               => $id,
             'tenant_id'        => $tenantId,
             'source_key'       => $data['source_key'],
             'source_type'      => $data['source_type'],
             'display_name'     => $data['display_name'],
-            'universal_entity' => $data['universal_entity'] ?? null,
             'field_map'        => isset($data['field_map']) ? json_encode($data['field_map']) : null,
             'checkpoint'       => $data['checkpoint'] ?? null,
             'last_synced_at'   => $data['last_synced_at'] ?? null,
@@ -65,7 +65,13 @@ final class DataSourceRepository extends BaseRepository
             'created_by'       => $data['created_by'],
             'created_date'     => $now,
             'updated_date'     => $now,
-        ]);
+        ];
+
+        if (Schema::hasColumn($this->table(), 'universal_entity')) {
+            $row['universal_entity'] = $data['universal_entity'] ?? null;
+        }
+
+        DB::table($this->table())->insert($row);
 
         return $this->findByKey($tenantId, $data['source_key']);
     }

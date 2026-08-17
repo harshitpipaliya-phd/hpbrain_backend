@@ -117,6 +117,47 @@ final class IngestionUploadTest extends TestCase
         self::assertSame(['Student ID', 'Student Name', 'Fee Status', 'Amount Due'], $response->json('preview.headers'));
     }
 
+    public function test_a_filename_sized_source_key_is_recorded_on_the_preview_job(): void
+    {
+        $sourceKey = 'sunrise-school-enterprise-brain-dataset';
+
+        $response = $this->postJson('/api/v1/ingestion/upload', [
+            'file' => $this->csv('sunrise_school_enterprise_brain_dataset.csv', [
+                ['Student ID', 'Name', 'Amount Due'],
+                ['STU001', 'Ada', '12000'],
+            ]),
+            'source_id' => $sourceKey,
+        ], ['Authorization' => 'Bearer '.$this->token()]);
+
+        $response->assertStatus(201);
+
+        self::assertDatabaseHas('hpbrain_import_jobs', [
+            'tenant_id' => self::TENANT,
+            'id'        => $response->json('job_id'),
+            'source_id' => $sourceKey,
+        ]);
+    }
+
+    public function test_upload_preview_registers_a_tenant_scoped_source_when_missing(): void
+    {
+        $sourceKey = 'sunrise-school-enterprise-brain-dataset';
+
+        $this->postJson('/api/v1/ingestion/upload', [
+            'file' => $this->csv('sunrise_school_enterprise_brain_dataset.csv', [
+                ['Student ID', 'Name', 'Amount Due'],
+                ['STU001', 'Ada', '12000'],
+            ]),
+            'source_id' => $sourceKey,
+        ], ['Authorization' => 'Bearer '.$this->token()])->assertStatus(201);
+
+        self::assertDatabaseHas('hpbrain_data_sources', [
+            'tenant_id'    => self::TENANT,
+            'source_key'   => $sourceKey,
+            'source_type'  => 'csv_upload',
+            'display_name' => 'sunrise_school_enterprise_brain_dataset.csv',
+        ]);
+    }
+
     /**
      * The file on disk keeps the extension the user actually uploaded.
      *
