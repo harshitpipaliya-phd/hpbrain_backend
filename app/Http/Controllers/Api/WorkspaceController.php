@@ -222,12 +222,31 @@ final class WorkspaceController extends Controller
         }
 
         if ($departmentsWithoutManager > 0) {
+            /*
+             * SAY WHAT THIS ACTUALLY COUNTS. The predicate above is
+             * `parent_id IS NULL OR parent_id = 0` — units with no parent, which
+             * is to say top-level units. It was published as "N without a
+             * manager", described as "no assigned leadership", and shown on the
+             * organization overview as a leadership gap.
+             *
+             * It has never measured leadership. This ERP has no department-head
+             * column at all — DepartmentController::map() returns `headId => null`
+             * unconditionally, with a comment saying the universal 'head' field
+             * has nothing behind it here — so no query in this codebase could
+             * report on managers even if one tried. The overview was therefore
+             * publishing a leadership finding derived from a hierarchy column,
+             * about a field the source system does not have.
+             *
+             * The field name is left alone; renaming it would ripple through
+             * every consumer to no benefit. Only the claim is corrected.
+             */
             $attention[] = [
                 'id' => 'depts-without-manager',
-                'title' => $vocab->countOf($tenantId, 'OrganizationUnit', $departmentsWithoutManager).' without a manager',
-                'description' => ucfirst($units).' with no assigned leadership have nobody accountable for the '
-                    .'decisions this system will recommend.',
-                'severity' => 'medium',
+                'title' => $vocab->countOf($tenantId, 'OrganizationUnit', $departmentsWithoutManager).' not under a parent unit',
+                'description' => ucfirst($units).' with no parent sit at the top of the structure, so they do not '
+                    .'roll up into anything wider. That is expected for a handful and a sign of a flat or '
+                    .'unfinished hierarchy when it is most of them.',
+                'severity' => 'low',
                 'link' => 'departments',
                 'metric' => $departmentsWithoutManager,
                 'confidence' => 1.0,
@@ -311,8 +330,36 @@ final class WorkspaceController extends Controller
                 'openDecisions' => $openDecisions,
             ],
             'pipeline' => $pipeline,
+            /*
+             * FEE INTELLIGENCE IS OPT-IN, because computing it dominated this
+             * endpoint and no mounted screen read it.
+             *
+             * MEASURED, on the school tenant (27,000 school_fee records):
+             *   tbluser aggregate ............ 39 ms
+             *   department count .............. 4 ms
+             *   open-signal count ............. 6 ms
+             *   ten loop COUNT(*) queries .... 52 ms
+             *   distinct rule_key ............. 4 ms
+             *   FeeIntelligenceService ... 15,286 ms   <-- 99% of the request
+             *
+             * forTenant() SELECTs every school_fee row including its `payload`
+             * JSON blob, then json_decode()s each one in PHP. The whole endpoint
+             * measured 16-25 s wall clock, and intermittently blew the 60-second
+             * limit outright and returned a FatalError — for the ONE request the
+             * organization overview cannot render without. That is the landing
+             * screen after login failing, at random, on the largest tenant.
+             *
+             * The only consumer of this field is OrganizationIntelligenceHome,
+             * which App.tsx documents as no longer mounted anywhere. So every
+             * visit paid fifteen seconds for a figure nothing displayed.
+             *
+             * The capability is kept, not deleted — ask for it with
+             * `?include=fees` and the payload is identical to before. Callers
+             * that need it say so; the overview, which does not, gets its ~105 ms
+             * of counts.
+             */
             'domainIntelligence' => [
-                'fees' => $this->feeIntelligence->forTenant($tenantId),
+                'fees' => $this->wantsFees($request) ? $this->feeIntelligence->forTenant($tenantId) : null,
             ],
             'attention' => array_slice($attention, 0, 8),
             'dataFreshness' => [
@@ -320,6 +367,25 @@ final class WorkspaceController extends Controller
                 'brain' => now()->format('Y-m-d H:i:s'),
             ],
         ]);
+    }
+
+    /**
+     * Whether the caller asked for the expensive school-fee block.
+     *
+     * `?include=fees`, or a comma-separated list containing it. Absent means no,
+     * which is what every mounted screen wants.
+     */
+    private function wantsFees(Request $request): bool
+    {
+        $include = $request->query('include');
+
+        if (! is_string($include) || $include === '') {
+            return false;
+        }
+
+        $requested = array_map('trim', explode(',', strtolower($include)));
+
+        return in_array('fees', $requested, true);
     }
 
     /**
@@ -344,6 +410,10 @@ final class WorkspaceController extends Controller
         $counts = [
             'operationalRecords' => $this->countTenantRows('hpbrain_operational_records', $tenantId),
             'signals' => $this->countTenantRows('hpbrain_signals', $tenantId),
+            // Evidence belongs with the rest of the loop counts. It was the one
+            // stage the Organization screen had to reconstruct for itself, which
+            // it did by listing every evidence row and taking the array length.
+            'evidence' => $this->countTenantRows('hpbrain_evidence', $tenantId),
             'firedRuleKeys' => count($firedRuleKeys),
             'cases' => $this->countTenantRows('hpbrain_cases', $tenantId),
             'hypotheses' => $this->countTenantRows('hpbrain_hypotheses', $tenantId),
