@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Industry\Vocabulary;
+use App\Domain\School\FeeIntelligenceService;
+use App\Domain\Signals\RuleCauseMetadata;
 use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use App\Repositories\DecisionRepository;
@@ -15,6 +17,7 @@ use App\Repositories\SignalRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Intelligence Workspace summary — the composite the SPA's landing screen
@@ -42,6 +45,8 @@ final class WorkspaceController extends Controller
         private readonly LearningRepository $learnings,
         private readonly DecisionRepository $decisions,
         private readonly OutcomeRepository $outcomes,
+        private readonly RuleCauseMetadata $ruleCauseMetadata,
+        private readonly FeeIntelligenceService $feeIntelligence,
     ) {
     }
 
@@ -191,6 +196,7 @@ final class WorkspaceController extends Controller
             ->whereIn('status', ['pending', 'proposed'])
             ->count();
 
+        $pipeline = $this->pipelineStatus($tenantId);
         $attention = [];
 
         // The tenant's own words. A hospital calls them wards and a bank calls
@@ -304,11 +310,123 @@ final class WorkspaceController extends Controller
                 'pendingRecommendations' => $pendingRecommendations,
                 'openDecisions' => $openDecisions,
             ],
+            'pipeline' => $pipeline,
+            'domainIntelligence' => [
+                'fees' => $this->feeIntelligence->forTenant($tenantId),
+            ],
             'attention' => array_slice($attention, 0, 8),
             'dataFreshness' => [
                 'erp' => 'live',
                 'brain' => now()->format('Y-m-d H:i:s'),
             ],
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function pipelineStatus(string $tenantId): array
+    {
+        $firedRuleKeys = Schema::hasColumn('hpbrain_signals', 'rule_key')
+            ? DB::table('hpbrain_signals')
+                ->where('tenant_id', $tenantId)
+                ->whereNotNull('rule_key')
+                ->distinct()
+                ->pluck('rule_key')
+                ->map(fn ($key) => (string) $key)
+                ->values()
+                ->all()
+            : [];
+
+        $approvedRuleKeys = $this->ruleCauseMetadata->approvedRuleKeys($tenantId);
+        $unclassifiedRuleKeys = array_values(array_diff($firedRuleKeys, $approvedRuleKeys));
+
+        $counts = [
+            'operationalRecords' => $this->countTenantRows('hpbrain_operational_records', $tenantId),
+            'signals' => $this->countTenantRows('hpbrain_signals', $tenantId),
+            'firedRuleKeys' => count($firedRuleKeys),
+            'cases' => $this->countTenantRows('hpbrain_cases', $tenantId),
+            'hypotheses' => $this->countTenantRows('hpbrain_hypotheses', $tenantId),
+            'recommendations' => $this->countTenantRows('hpbrain_recommendations', $tenantId),
+            'decisions' => $this->countTenantRows('hpbrain_decisions', $tenantId),
+            'executions' => $this->countTenantRows('hpbrain_eso_executions', $tenantId),
+            'outcomes' => $this->countTenantRows('hpbrain_outcomes', $tenantId),
+            'learnings' => $this->countTenantRows('hpbrain_learnings', $tenantId),
+        ];
+
+        $stage = 'configuration';
+        $blocker = 'No tenant-scoped operational records are available yet.';
+        $nextAction = 'Configure and ingest a real dataset.';
+
+        if ($counts['operationalRecords'] > 0) {
+            $stage = 'records_ingested';
+            $blocker = 'Operational records exist, but no rule-derived signals have fired yet.';
+            $nextAction = 'Run the configured row and operational rules for this tenant.';
+        }
+        if ($counts['signals'] > 0) {
+            $stage = 'signals_detected';
+            $blocker = 'Signals exist, but no case has been opened yet.';
+            $nextAction = 'Open cases for the real fired signals.';
+        }
+        if ($counts['cases'] > 0) {
+            $stage = 'cases_opened';
+            $blocker = 'Cases exist; hypothesis and recommendation generation are intentionally not started from this product workflow.';
+            $nextAction = 'Review the cases and cited evidence in the Deliberation workspace.';
+        }
+        if ($counts['cases'] > 0 && count($unclassifiedRuleKeys) === 0 && count($firedRuleKeys) > 0) {
+            $stage = 'eligible_for_hypotheses';
+            $blocker = 'Rules are approved, but no hypothesis has been proposed yet.';
+            $nextAction = 'Run the existing hypothesis proposal pipeline.';
+        }
+        if ($counts['hypotheses'] > 0) {
+            $stage = 'hypotheses_available';
+            $blocker = 'Hypotheses exist, but no recommendation has been produced yet.';
+            $nextAction = 'Run the existing EXPLAIN to RECOMMEND path for eligible cases.';
+        }
+        if ($counts['recommendations'] > 0) {
+            $stage = 'recommendations_available';
+            $blocker = 'Recommendations exist and are waiting for governance decisions.';
+            $nextAction = 'Review recommendations in the deliberation workspace.';
+        }
+        if ($counts['decisions'] > 0) {
+            $stage = 'decisions_available';
+            $blocker = 'Decisions exist; execution and outcome tracking are the next observable loop steps.';
+            $nextAction = 'Create or monitor governed executions for approved decisions.';
+        }
+        if ($counts['executions'] > 0) {
+            $stage = 'execution_active';
+            $blocker = 'Executions exist; outcomes have not been recorded yet.';
+            $nextAction = 'Record real outcomes when the action has happened.';
+        }
+        if ($counts['outcomes'] > 0) {
+            $stage = 'outcomes_recorded';
+            $blocker = 'Outcomes exist; learnings are not yet available.';
+            $nextAction = 'Extract reusable learning from real outcomes.';
+        }
+        if ($counts['learnings'] > 0) {
+            $stage = 'learning_available';
+            $blocker = null;
+            $nextAction = 'Reuse learning in future grounded intelligence.';
+        }
+
+        return [
+            'stage' => $stage,
+            'blocker' => $blocker,
+            'nextAction' => $nextAction,
+            'counts' => $counts,
+            'review' => [
+                'firedRuleKeys' => count($firedRuleKeys),
+                'approvedRuleKeys' => count(array_intersect($firedRuleKeys, $approvedRuleKeys)),
+                'unclassifiedRuleKeys' => count($unclassifiedRuleKeys),
+                'unclassified' => array_slice($unclassifiedRuleKeys, 0, 8),
+            ],
+        ];
+    }
+
+    private function countTenantRows(string $table, string $tenantId): int
+    {
+        return Schema::hasTable($table)
+            ? (int) DB::table($table)->where('tenant_id', $tenantId)->count()
+            : 0;
     }
 }

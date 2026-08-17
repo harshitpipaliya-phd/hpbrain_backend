@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\People\PersonProfileService;
 use App\Domain\Universal\EntityResolver;
 use App\Domain\Universal\ResolvedSource;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /** People — Person in the Brain's vocabulary — come from the tenant's own source. */
 final class PersonController extends Controller
@@ -28,7 +30,7 @@ final class PersonController extends Controller
      */
     private const LIST_FIELDS = [
         'id', 'externalRef', 'firstName', 'lastName', 'email', 'phone',
-        'gender', 'unit',
+        'gender', 'unit', 'profile',
     ];
 
     public function __construct(private readonly EntityResolver $resolver)
@@ -195,16 +197,31 @@ final class PersonController extends Controller
         };
 
         $unit = $value('unit');
+        $displayName = trim((string) (($value('firstName') ?? '').' '.($value('lastName') ?? '')));
+        $profileId = $value('profile');
+        $profileName = null;
+
+        if ($profileId !== null && Schema::hasTable('tbluserprofilemaster')) {
+            $profileName = DB::table('tbluserprofilemaster')
+                ->where('id', $profileId)
+                ->value('name');
+        }
+
+        $role = $profileName !== null && trim((string) $profileName) !== '' ? (string) $profileName : null;
 
         return [
             'id'           => (string) $r[$person->primaryKey],
             'employeeId'   => $value('externalRef'),
             'firstName'    => $value('firstName'),
             'lastName'     => $value('lastName'),
+            'displayName'  => $displayName !== '' ? $displayName : null,
             'email'        => $value('email'),
             'phone'        => $value('phone'),
             'gender'       => $value('gender'),
             'departmentId' => $unit !== null ? (string) $unit : null,
+            'designation'  => $role,
+            'employmentType' => $role !== null ? strtolower((string) $role) : null,
+            'employmentStatus' => 'active',
             'orgId'        => (string) ($r[$person->tenantKey] ?? ''),
             'status'       => 'active',
             'createdDate'  => $r['created_at'] ?? null,
@@ -274,184 +291,64 @@ final class PersonController extends Controller
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'person_not_found'], 404);
     }
 
-    /** The five KASBA dimensions, in the order the UI renders them. */
-    private const KASBA = ['knowledge', 'ability', 'skill', 'behaviour', 'attitude'];
-
-    public function twin(Request $request, string $tenantId, string $id): JsonResponse
+    /**
+     * Everything the installation knows about one person.
+     *
+     * WHAT CHANGED AND WHY. This used to compose the response inline from four
+     * loop tables — capability assignments, decisions, ESO executions, learnings
+     * — and nothing else. Those four are empty for every tenant onboarded so far,
+     * so the screen rendered five dashes and three "nothing recorded" panels
+     * while the rows that actually describe a person went unread: their ERP
+     * master row's mapped fields, their class-section unit, their profile, and
+     * the operational records their reference appears in (twelve fee invoices per
+     * student for the school tenant). The aggregation now lives in
+     * PersonProfileService, which reads all of it and returns null — never zero —
+     * for what genuinely is not there.
+     *
+     * THREE BUGS WENT WITH IT. The old response overrode the mapped firstName,
+     * lastName and email with `$person['first_name']`, `['last_name']` and
+     * `['email']` read literally, so a tenant whose source names those columns
+     * anything else got empty strings from an endpoint that had already resolved
+     * the right columns a few lines above. jobTitle was read from a hardcoded
+     * `hrms_job_titles`, which is the school ERP's table and not necessarily
+     * anyone else's. And the capability/decision/execution/learning queries named
+     * their tables unguarded, so the endpoint 500'd rather than degrading on an
+     * installation where a loop table has not been migrated.
+     *
+     * THE LEGACY KEYS ARE STILL HERE. capabilityScores, decisionParticipation,
+     * executionHistory, recentActivity, individualScore, guardians and
+     * capabilityCount are unchanged in name and shape, because they are what the
+     * shipped SPA reads. Removing them would have been a breaking change
+     * disguised as a refactor; they are now projections of the same service the
+     * new keys come from, so the two can never disagree.
+     */
+    public function twin(Request $request, string $tenantId, string $id, PersonProfileService $profiles): JsonResponse
     {
-        $t = $this->authTenantId($request);
-        $source = $this->resolver->resolve($t, 'Person');
+        $profile = $profiles->build($this->authTenantId($request), $id);
 
-        $row = DB::table($source->table)
-            ->where($source->primaryKey, $id)
-            ->where($source->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->where($source->field('status'), 1)
-            ->first();
-
-        if (! $row) {
+        if ($profile === null) {
             return response()->json(['error' => 'person_not_found'], 404);
         }
 
-        $person = (array) $row;
-        $pid = (string) $id;
+        $intelligence = $profile['intelligence'];
 
-        $assignments = DB::table('hpbrain_capability_assignments')
-            ->where('tenant_id', $t)
-            ->where('target_type', 'Person')
-            ->where('target_id', $pid)
-            ->orderBy('assigned_date')
-            ->get();
-
-        $proficiency = $assignments->isEmpty() ? collect() : DB::table('hpbrain_capability_proficiency')
-            ->where('tenant_id', $t)
-            ->whereIn('assignment_id', $assignments->pluck('id')->all())
-            ->orderByDesc('assessed_date')
-            ->get()
-            ->groupBy('assignment_id')
-            ->map(fn ($rows) => $rows->first());
-
-        $capabilityNames = $assignments->isEmpty() ? collect() : DB::table('hpbrain_capabilities')
-            ->where('tenant_id', $t)
-            ->whereIn('id', $assignments->pluck('capability_id')->all())
-            ->pluck('name', 'id');
-
-        // Person.position is the job role this person holds. A source that does
-        // not map it has no job role to compare against, so there are no
-        // requirements and therefore no gaps — null, not an empty target.
-        $positionColumn = $source->has('position') ? $source->field('position') : null;
-
-        $jobRoleId = $positionColumn !== null && ($person[$positionColumn] ?? null) !== null
-            ? (string) $person[$positionColumn]
-            : null;
-
-        $requirements = $jobRoleId === null ? collect() : DB::table('hpbrain_job_role_capability_requirements')
-            ->where('tenant_id', $t)->where('job_role_id', $jobRoleId)
-            ->get()->keyBy('capability_id');
-
-        $capabilityScores = $assignments->map(function ($a) use ($proficiency, $capabilityNames, $requirements) {
-            $p = $proficiency->get($a->id);
-
-            $scores = [];
-            $assessed = [];
-
-            foreach (self::KASBA as $dim) {
-                $raw = $p->{$dim.'_level'} ?? null;
-                $val = $raw === null ? null : (float) $raw;
-                $scores[$dim] = $val;
-                if ($val !== null) { $assessed[] = $val; }
-            }
-
-            $scores['overall'] = $assessed === []
-                ? null
-                : round(array_sum($assessed) / count($assessed), 2);
-
-            $req = $requirements->get($a->capability_id);
-            $target = $req ? (float) $req->required_level : null;
-            $gaps = [];
-
-            if ($target !== null) {
-                foreach (self::KASBA as $dim) {
-                    $current = $scores[$dim];
-                    if ($current === null || $current < $target) {
-                        $gaps[] = [
-                            'dimension'    => $dim,
-                            'currentLevel' => $current,
-                            'targetLevel'  => $target,
-                            'gap'          => round($target - ($current ?? 0.0), 2),
-                        ];
-                    }
-                }
-            }
-
-            return [
-                'capabilityId'    => (string) $a->capability_id,
-                'capabilityName'  => (string) ($capabilityNames[$a->capability_id] ?? $a->capability_id),
-                'assignmentId'    => (string) $a->id,
-                'capabilityState' => (string) ($p->capability_state ?? 'Unassessed'),
-                'scores'          => $scores,
-                'gaps'            => $gaps,
-                'assessedDate'    => $p->assessed_date ?? null,
-            ];
-        })->values();
-
-        $decisions = DB::table('hpbrain_decisions')
-            ->where('tenant_id', $t)->where('decided_by', $pid)->get();
-
-        $approved = $decisions->filter(
-            fn ($d) => in_array(strtolower((string) $d->status), ['approved', 'accepted'], true)
-        )->count();
-
-        $executions = DB::table('hpbrain_eso_executions')
-            ->where('tenant_id', $t)->where('executed_by', $pid)
-            ->orderByDesc('created_date')->limit(50)->get();
-
-        $completed = $executions->filter(
-            fn ($e) => in_array(strtolower((string) $e->status), ['completed', 'succeeded', 'success'], true)
-        )->count();
-
-        $recentActivity = DB::table('hpbrain_audit_logs')
-            ->where('tenant_id', $t)
-            ->where(function ($w) use ($pid) {
-                $w->where('actor_id', $pid)
-                  ->orWhere(fn ($q) => $q->where('entity_type', 'Person')->where('entity_id', $pid));
-            })
-            ->orderByDesc('created_at')->limit(25)->get()
-            ->map(fn ($a) => [
-                'type'       => (string) $a->action,
-                'entityType' => (string) $a->entity_type,
-                'createdAt'  => $a->created_at,
-            ])->values();
-
-        $guardians = DB::table('hpbrain_guardians')
-            ->where('tenant_id', $t)->where('student_person_id', $pid)->get()
-            ->map(fn ($g) => [
-                'firstName'        => (string) ($g->first_name ?? ''),
-                'lastName'         => (string) ($g->last_name ?? ''),
-                'relationship'     => (string) ($g->relationship ?? ''),
-                'email'            => $g->email ?? null,
-                'phone'            => $g->phone ?? null,
-                'isPrimaryContact' => (bool) $g->is_primary_contact,
-            ])->values();
-
-        $learningContributions = DB::table('hpbrain_learnings')
-            ->where('tenant_id', $t)->where('created_by', $pid)->count();
-
-        $overalls = $capabilityScores->pluck('scores.overall')->filter(fn ($v) => $v !== null);
-
-        $breakdown = [
-            'capabilityScore'  => $overalls->isEmpty() ? null : round(($overalls->avg() / 5) * 100, 1),
-            'decisionQuality'  => $decisions->isEmpty() ? null : round($approved / $decisions->count() * 100, 1),
-            'executionSuccess' => $executions->isEmpty() ? null : round($completed / $executions->count() * 100, 1),
-        ];
-
-        $present = array_values(array_filter($breakdown, fn ($v) => $v !== null));
-
-        return response()->json([
-            'person' => array_merge($this->map($person, $source), [
-                'firstName' => (string) ($person['first_name'] ?? ''),
-                'lastName'  => (string) ($person['last_name'] ?? ''),
-                'email'     => (string) ($person['email'] ?? ''),
-                'jobTitle'  => $jobRoleId === null ? null : DB::table('hrms_job_titles')
-                    ->where('id', $jobRoleId)->whereNull('deleted_at')->value('title'),
-            ]),
-            'capabilityCount'       => $assignments->count(),
-            'capabilityScores'      => $capabilityScores,
-            'decisionParticipation' => ['total' => $decisions->count(), 'approved' => $approved],
-            'learningContributions' => $learningContributions,
-            'recentActivity'        => $recentActivity,
-            'guardians'             => $guardians,
-            'executionHistory'      => $executions->map(fn ($e) => [
-                'id'            => (string) $e->id,
-                'esoId'         => (string) ($e->eso_id ?? ''),
-                'status'        => (string) ($e->status ?? 'unknown'),
-                'completedDate' => $e->completed_date ?? null,
-                'createdDate'   => $e->created_date ?? null,
-            ])->values(),
-            'individualScore' => [
-                'score'     => $present === [] ? null : round(array_sum($present) / count($present), 1),
-                'breakdown' => $breakdown,
+        return response()->json($profile + [
+            // ---- Compatibility projection (see the note above) ---------------
+            'capabilityCount'       => count($intelligence['capabilities']),
+            'capabilityScores'      => $intelligence['capabilities'],
+            'decisionParticipation' => [
+                'total'    => $intelligence['decisions']['total'],
+                'approved' => $intelligence['decisions']['approved'],
             ],
+            'learningContributions' => $intelligence['learnings'],
+            'recentActivity'        => array_map(static fn ($a) => [
+                'type'       => $a['action'],
+                'entityType' => $a['entityType'],
+                'createdAt'  => $a['createdAt'],
+            ], $profile['audit']),
+            'guardians'             => $profile['contacts']['guardians'],
+            'executionHistory'      => $intelligence['executions'],
+            'individualScore'       => $intelligence['score'],
         ]);
     }
 }

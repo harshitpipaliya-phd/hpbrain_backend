@@ -6,10 +6,12 @@ namespace Tests\Feature;
 
 use App\Domain\Ingestion\IngestionService;
 use App\Domain\Ingestion\Sources\CsvUploadSource;
+use App\Jobs\CommitIngestionJob;
 use App\Repositories\DataSourceRepository;
 use App\Support\Jwt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Tests\Support\BuildsBrainSchema;
 use Tests\TestCase;
 
@@ -168,6 +170,39 @@ final class IngestionTest extends TestCase
         // second row's remark is blank and the third has no remark column
         // value at all — neither may manufacture an empty Evidence record.
         $this->assertSame(1, DB::table('hpbrain_evidence')->where('tenant_id', self::TENANT)->count());
+    }
+
+    /** @test */
+    public function large_upload_commits_are_queued_instead_of_run_inside_the_request(): void
+    {
+        Queue::fake();
+
+        $rows = ["Subject,Assigned To,Status,Remarks,Start Date"];
+        for ($i = 1; $i <= 5001; $i++) {
+            $rows[] = "Task {$i},Priya,Open,Reviewed,2026-07-01";
+        }
+
+        $preview = $this->postJson('/api/v1/ingestion/upload', [
+            'file' => UploadedFile::fake()->createWithContent('large.csv', implode("\n", $rows)),
+            'source_id' => 'large-upload',
+        ], $this->auth());
+
+        $preview->assertCreated()->assertJsonPath('preview.row_count', 5001);
+
+        $response = $this->postJson('/api/v1/ingestion/'.self::TENANT.'/'.$preview->json('job_id').'/commit', [
+            'field_map' => $this->map(),
+            'save_map' => true,
+        ], $this->auth());
+
+        $response
+            ->assertAccepted()
+            ->assertJsonPath('status', 'queued')
+            ->assertJsonPath('total_rows', 5001);
+
+        $this->assertSame(0, DB::table('hpbrain_signals')->count());
+        $this->assertSame('queued', DB::table('hpbrain_import_jobs')->where('id', $preview->json('job_id'))->value('status'));
+
+        Queue::assertPushed(CommitIngestionJob::class);
     }
 
     /** @test */

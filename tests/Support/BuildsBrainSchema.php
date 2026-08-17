@@ -165,6 +165,21 @@ trait BuildsBrainSchema
             $t->primary(['case_id', 'evidence_id']);
         });
 
+        // The junction that lets a case carry more than the one signal
+        // hpbrain_cases.signal_id can hold. Mirrored here rather than left out
+        // because a local replica that has drifted from the real table fails in
+        // exactly one suite and nowhere else — which is how the missing
+        // org_id/related_entity_* columns in HomeMetricsTest were found.
+        Schema::create('hpbrain_case_signals', function ($t) {
+            $t->string('tenant_id', 36);
+            $t->string('case_id', 36);
+            $t->string('signal_id', 36);
+            $t->string('role', 32)->default('primary');
+            $t->string('linked_by', 191);
+            $t->timestamp('linked_date')->nullable();
+            $t->primary(['case_id', 'signal_id']);
+        });
+
         Schema::create('hpbrain_hypotheses', function ($t) {
             $t->string('id', 36)->primary();
             $t->string('tenant_id', 36);
@@ -404,6 +419,8 @@ trait BuildsBrainSchema
             $t->decimal('confidence', 6, 4);
             $t->text('evidence_fields');
             $t->text('recommended_action');
+            $t->string('root_cause_family')->nullable();
+            $t->decimal('hypothesis_confidence', 6, 4)->nullable();
             $t->string('owner_role')->nullable();
             $t->string('threshold_op')->nullable();
             $t->decimal('threshold_value', 18, 4)->nullable();
@@ -853,7 +870,7 @@ trait BuildsBrainSchema
             $t->timestamp('completed_date')->nullable();
             $t->timestamp('created_date')->nullable();
             $t->timestamp('updated_date')->nullable();
-            $t->string('source_id', 36)->nullable();
+            $t->string('source_id', 191)->nullable();
             $t->string('sync_type', 50)->nullable();
             $t->text('source_ref')->nullable();
         });
@@ -878,6 +895,7 @@ trait BuildsBrainSchema
             $t->string('source_type', 50);
             $t->string('display_name');
             $t->string('universal_entity', 100)->nullable();
+            $t->text('config')->nullable();
             $t->text('field_map')->nullable();
             $t->string('checkpoint')->nullable();
             $t->timestamp('last_synced_at')->nullable();
@@ -1425,6 +1443,21 @@ trait BuildsBrainSchema
             $t->timestamp('created_date')->nullable();
             $t->timestamp('updated_date')->nullable();
             $t->unique(['tenant_id', 'dataset', 'natural_key'], 'operational_records_natural_key_unique');
+        });
+
+        Schema::create('hpbrain_operational_rule_metadata', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('rule_key', 191);
+            $t->string('root_cause_family', 100)->nullable();
+            $t->decimal('hypothesis_confidence', 6, 4)->nullable();
+            $t->text('recommended_action')->nullable();
+            $t->text('reviewed_by')->nullable();
+            $t->timestamp('reviewed_at')->nullable();
+            $t->text('created_by');
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+            $t->unique(['tenant_id', 'rule_key'], 'operational_rule_metadata_tenant_rule_unique');
         });
 
         // ---- Recommendation evidence (2026_08_07_000100_recommendation_evidence) --

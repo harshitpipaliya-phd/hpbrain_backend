@@ -232,5 +232,44 @@ final class DemoLionsSeeder extends Seeder
                 }
             }
         }
+
+        // 8. Configured fee dataset source ------------------------------------
+        $sourceRow = [
+            'display_name' => 'Lions Fees Data',
+            'source_type'  => 'dataset',
+            'config'       => json_encode([
+                'dataset'      => 'school_fee',
+                'measure_unit' => 'INR',
+            ], JSON_UNESCAPED_SLASHES),
+            'field_map'    => json_encode([
+                'external_ref'       => 'Sr No.',
+                'subject_ref'        => 'GR NO.',
+                'title'              => 'Student Name',
+                'state'              => 'Payment Mode',
+                'owner'              => 'Collected By',
+                'category'           => 'Student Quota',
+                'measure'            => 'Amount',
+                'evidence_timestamp' => 'Receipt Date',
+            ], JSON_UNESCAPED_SLASHES),
+            'is_active'    => 1,
+            'created_by'   => 'system',
+            'updated_date' => $now,
+        ];
+
+        $sourceId = DB::table('hpbrain_data_sources')
+            ->where('tenant_id', self::TENANT_ID)
+            ->where('source_key', 'lions-fees-data')
+            ->value('id');
+
+        if ($sourceId === null) {
+            DB::table('hpbrain_data_sources')->insert($sourceRow + [
+                'id'           => Uuid::uuid4()->toString(),
+                'tenant_id'    => self::TENANT_ID,
+                'source_key'   => 'lions-fees-data',
+                'created_date' => $now,
+            ]);
+        } else {
+            DB::table('hpbrain_data_sources')->where('id', $sourceId)->update($sourceRow);
+        }
     }
 }

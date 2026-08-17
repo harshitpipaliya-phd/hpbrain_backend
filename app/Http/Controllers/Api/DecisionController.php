@@ -201,6 +201,69 @@ final class DecisionController extends Controller
         return response()->json($this->repository->findById($tenant, $id));
     }
 
+    /**
+     * The negative governance act. It is deliberately gated by the same
+     * decision.approve permission as approval: both actions decide the proposal.
+     *
+     * Rejection does not emit DecisionReached, because downstream executors use
+     * that event as the signal to start work.
+     */
+    public function reject(Request $request, string $tenantId, string $id): JsonResponse
+    {
+        $data = $request->validate([
+            'note' => ['required', 'string', 'min:10'],
+        ]);
+
+        $tenant   = $this->tenantId($request);
+        $actor    = $this->actorId($request);
+        $decision = $this->repository->findById($tenant, $id);
+
+        if ($decision === null) {
+            return response()->json(['error' => 'decision_not_found'], 404);
+        }
+
+        $status = (string) ($decision['status'] ?? '');
+
+        if ($status === 'rejected') {
+            return response()->json($decision);
+        }
+
+        if ($status !== 'proposed') {
+            return response()->json([
+                'error'  => 'decision_not_rejectable',
+                'status' => $status,
+            ], 409);
+        }
+
+        if (($decision['decided_by'] ?? null) === $actor) {
+            $this->writeAudit($request, $tenant, $id, 'decision.reject.denied', [
+                'reason'     => 'self_rejection_forbidden',
+                'decided_by' => $decision['decided_by'],
+            ]);
+
+            return response()->json(['error' => 'self_rejection_forbidden'], 409);
+        }
+
+        DB::transaction(function () use ($request, $tenant, $id, $actor, $data, $status) {
+            DB::table('hpbrain_decisions')
+                ->where('tenant_id', $tenant)
+                ->where('id', $id)
+                ->update([
+                    'status'        => 'rejected',
+                    'approved_by'   => $actor,
+                    'approved_date' => now()->format('Y-m-d H:i:s'),
+                    'approval_note' => $data['note'],
+                ]);
+
+            $this->writeAudit($request, $tenant, $id, 'decision.reject', [
+                'status'        => ['from' => $status, 'to' => 'rejected'],
+                'approval_note' => $data['note'],
+            ]);
+        });
+
+        return response()->json($this->repository->findById($tenant, $id));
+    }
+
     /** @param array<string, mixed> $changes */
     private function writeAudit(
         Request $request,

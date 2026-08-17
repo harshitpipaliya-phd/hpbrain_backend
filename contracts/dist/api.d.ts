@@ -217,6 +217,15 @@ export type AnalyticsDecisionIntelligenceGetAnalyticsTenantIdDecisionIntelligenc
 /** UNVERIFIED: App\Http\Controllers\Api\AnalyticsController@decisionsCsv returns a raw database row. */
 export type AnalyticsDecisionsCsvGetAnalyticsTenantIdDecisionsExportCsvResponse = unknown;
 
+/** UNVERIFIED: App\Http\Controllers\Api\IntelligenceOverviewController@deliberationOverview returns a raw database row. */
+export type IntelligenceOverviewDeliberationOverviewGetAnalyticsTenantIdDeliberationOverviewResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\IntelligenceOverviewController@enterpriseOverview returns a raw database row. */
+export type IntelligenceOverviewEnterpriseOverviewGetAnalyticsTenantIdEnterpriseOverviewResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\IntelligenceOverviewController@executionOverview returns a raw database row. */
+export type IntelligenceOverviewExecutionOverviewGetAnalyticsTenantIdExecutionOverviewResponse = unknown;
+
 /** UNVERIFIED: App\Http\Controllers\Api\AnalyticsController@executiveSummary returns a raw database row. */
 export type AnalyticsExecutiveSummaryGetAnalyticsTenantIdExecutiveSummaryResponse = unknown;
 
@@ -228,6 +237,9 @@ export type AnalyticsOrganizationReportGetAnalyticsTenantIdReportsOrganizationRe
 
 /** UNVERIFIED: App\Http\Controllers\Api\AnalyticsController@peopleReport returns a raw database row. */
 export type AnalyticsPeopleReportGetAnalyticsTenantIdReportsPeopleResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\AnalyticsController@signals returns a raw database row. */
+export type AnalyticsSignalsGetAnalyticsTenantIdSignalsResponse = unknown;
 
 /** UNVERIFIED: App\Http\Controllers\Api\AnalyticsController@trend returns a raw database row. */
 export type AnalyticsTrendGetAnalyticsTenantIdTrendResponse = unknown;
@@ -265,6 +277,12 @@ export type AuthLogoutPostAuthLogoutResponse = unknown;
 export type AuthRefreshPostAuthRefreshRequest = unknown;
 /** UNVERIFIED: App\Http\Controllers\Api\AuthController@refresh returns a raw database row. */
 export type AuthRefreshPostAuthRefreshResponse = unknown;
+
+/** UNVERIFIED: no validate() in App\Http\Controllers\Api\AuthController@signup; body shape not derivable. */
+export type AuthSignupPostAuthSignupRequest = unknown;
+/** UNVERIFIED: App\Http\Controllers\Api\AuthController@signup returns a raw database row. */
+export type AuthSignupPostAuthSignupResponse = unknown;
+export type AuthSignupPostAuthSignupError = 'signup_conflict' | 'signup_failed';
 
 export type BrandingStorePostBrandingRequest = {
   org_id: string;
@@ -317,6 +335,14 @@ export type CapabilityStorePostCapabilitiesRequest = {
   orgId?: string;
   description?: string;
   category?: string;
+  capabilityType?: string;
+  difficulty?: string;
+  criticality?: string;
+  knowledge?: Array<unknown>;
+  ability?: Array<unknown>;
+  skill?: Array<unknown>;
+  behaviour?: Array<unknown>;
+  attitude?: Array<unknown>;
 };
 /** UNVERIFIED: App\Http\Controllers\Api\CapabilityController@store returns a raw database row. */
 export type CapabilityStorePostCapabilitiesResponse = unknown;
@@ -390,6 +416,10 @@ export type CaseAttachEvidencePostCasesTenantIdIdEvidenceResponse = unknown;
 
 /** UNVERIFIED: App\Http\Controllers\Api\CaseController@evidence returns a raw database row. */
 export type CaseEvidenceGetCasesTenantIdIdEvidenceResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\CaseSignalEvidenceController@show returns a raw database row. */
+export type CaseSignalEvidenceShowGetCasesTenantIdIdSignalEvidenceResponse = unknown;
+export type CaseSignalEvidenceShowGetCasesTenantIdIdSignalEvidenceError = 'case_not_found';
 
 export type CaseTransitionPatchCasesTenantIdIdTransitionRequest = {
   status: string;
@@ -625,6 +655,13 @@ export type DecisionApprovePostDecisionsTenantIdIdApproveRequest = {
 export type DecisionApprovePostDecisionsTenantIdIdApproveResponse = unknown;
 export type DecisionApprovePostDecisionsTenantIdIdApproveError = 'decision_not_found' | 'decision_not_approvable' | 'self_approval_forbidden';
 
+export type DecisionRejectPostDecisionsTenantIdIdRejectRequest = {
+  note: string;
+};
+/** UNVERIFIED: App\Http\Controllers\Api\DecisionController@reject returns a raw database row. */
+export type DecisionRejectPostDecisionsTenantIdIdRejectResponse = unknown;
+export type DecisionRejectPostDecisionsTenantIdIdRejectError = 'decision_not_found' | 'decision_not_rejectable' | 'self_rejection_forbidden';
+
 export type DepartmentStorePostDepartmentsRequest = {
   name: string;
   description?: string;
@@ -701,6 +738,9 @@ export type EntityMappingUpdatePatchEntityMappingsTenantIdIdError = 'mapping_not
 /** UNVERIFIED: App\Http\Controllers\Api\EntityMappingController@destroy returns a raw database row. */
 export type EntityMappingDestroyDeleteEntityMappingsTenantIdIdResponse = unknown;
 export type EntityMappingDestroyDeleteEntityMappingsTenantIdIdError = 'mapping_not_found';
+
+/** UNVERIFIED: App\Http\Controllers\Api\EsoExecutionController@definitions returns a raw database row. */
+export type EsoExecutionDefinitionsGetEsoDefinitionsTenantIdResponse = unknown;
 
 export type EsoExecutionStorePostEsoExecutionsRequest = {
   decisionId: string;
@@ -1065,6 +1105,36 @@ export type IndustryTemplateUpdatePatchIndustryTemplatesTenantIdIdError = 'indus
 /** UNVERIFIED: App\Http\Controllers\Api\IndustryTemplateController@destroy returns a raw database row. */
 export type IndustryTemplateDestroyDeleteIndustryTemplatesTenantIdIdResponse = unknown;
 export type IndustryTemplateDestroyDeleteIndustryTemplatesTenantIdIdError = 'industry_template_not_found';
+
+export type IngestionInternalPostIngestionInternalRequest = {
+  source_id: string;
+  universal_entity: string;
+  full_resync?: boolean;
+  org_id?: string;
+};
+/** UNVERIFIED: App\Http\Controllers\Api\IngestionController@internal returns a raw database row. */
+export type IngestionInternalPostIngestionInternalResponse = unknown;
+export type IngestionInternalPostIngestionInternalError = 'entity_not_mapped';
+
+/** UNVERIFIED: App\Http\Controllers\Api\IngestionController@sources returns a raw database row. */
+export type IngestionSourcesGetIngestionSourcesTenantIdResponse = unknown;
+
+export type IngestionUploadPostIngestionUploadRequest = {
+  file: string;
+  source_id: string;
+  org_id?: string;
+};
+/** UNVERIFIED: App\Http\Controllers\Api\IngestionController@upload returns a raw database row. */
+export type IngestionUploadPostIngestionUploadResponse = unknown;
+export type IngestionUploadPostIngestionUploadError = 'unreadable_upload' | 'storage_failed' | 'database_unavailable';
+
+export type IngestionCommitPostIngestionTenantIdJobIdCommitRequest = {
+  field_map: Array<unknown>;
+  save_map?: boolean;
+};
+/** UNVERIFIED: App\Http\Controllers\Api\IngestionController@commit returns a raw database row. */
+export type IngestionCommitPostIngestionTenantIdJobIdCommitResponse = unknown;
+export type IngestionCommitPostIngestionTenantIdJobIdCommitError = 'import_job_not_found' | 'job_not_previewed' | 'source_unavailable' | 'incomplete_field_map';
 
 /** UNVERIFIED: App\Http\Controllers\Api\KasbaController@assessment returns a raw database row. */
 export type KasbaAssessmentGetKasbaAssessmentTenantIdAssignmentAssignmentIdCapabilityIdResponse = unknown;
@@ -1444,6 +1514,33 @@ export type OrganizationConfigUpdatePatchOrganizationConfigsTenantIdIdError = 'c
 export type OrganizationConfigDestroyDeleteOrganizationConfigsTenantIdIdResponse = unknown;
 export type OrganizationConfigDestroyDeleteOrganizationConfigsTenantIdIdError = 'config_not_found';
 
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationIntelligenceController@index returns a raw database row. */
+export type OrganizationIntelligenceIndexGetOrganizationIntelligenceTenantIdResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationIntelligenceController@capability returns a raw database row. */
+export type OrganizationIntelligenceCapabilityGetOrganizationIntelligenceTenantIdCapabilityResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationIntelligenceController@decisions returns a raw database row. */
+export type OrganizationIntelligenceDecisionsGetOrganizationIntelligenceTenantIdDecisionsResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationIntelligenceController@gaps returns a raw database row. */
+export type OrganizationIntelligenceGapsGetOrganizationIntelligenceTenantIdGapsResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationIntelligenceController@knowledge returns a raw database row. */
+export type OrganizationIntelligenceKnowledgeGetOrganizationIntelligenceTenantIdKnowledgeResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationIntelligenceController@profile returns a raw database row. */
+export type OrganizationIntelligenceProfileGetOrganizationIntelligenceTenantIdProfileResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationIntelligenceController@recommendations returns a raw database row. */
+export type OrganizationIntelligenceRecommendationsGetOrganizationIntelligenceTenantIdRecommendationsResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationIntelligenceController@risks returns a raw database row. */
+export type OrganizationIntelligenceRisksGetOrganizationIntelligenceTenantIdRisksResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationIntelligenceController@state returns a raw database row. */
+export type OrganizationIntelligenceStateGetOrganizationIntelligenceTenantIdStateResponse = unknown;
+
 export type OrganizationModuleStorePostOrganizationModulesRequest = {
   org_id: string;
   module_id: string;
@@ -1527,11 +1624,9 @@ export type OrganizationUnitIndexGetOrganizationUnitsTenantIdResponse = unknown;
 
 /** UNVERIFIED: App\Http\Controllers\Api\OrganizationUnitController@hierarchy returns a raw database row. */
 export type OrganizationUnitHierarchyGetOrganizationUnitsTenantIdHierarchyResponse = unknown;
-export type OrganizationUnitHierarchyGetOrganizationUnitsTenantIdHierarchyError = 'orgId_required';
 
 /** UNVERIFIED: App\Http\Controllers\Api\OrganizationUnitController@tree returns a raw database row. */
 export type OrganizationUnitTreeGetOrganizationUnitsTenantIdTreeResponse = unknown;
-export type OrganizationUnitTreeGetOrganizationUnitsTenantIdTreeError = 'orgId_required';
 
 /** UNVERIFIED: App\Http\Controllers\Api\OrganizationUnitController@show returns a raw database row. */
 export type OrganizationUnitShowGetOrganizationUnitsTenantIdIdResponse = unknown;
@@ -1625,9 +1720,12 @@ export type PersonStorePostPeopleRequest = {
   email: string;
   phone?: string;
   gender?: string;
+  departmentId?: number;
+  joiningDate?: string;
 };
 /** UNVERIFIED: App\Http\Controllers\Api\PersonController@store returns a raw database row. */
 export type PersonStorePostPeopleResponse = unknown;
+export type PersonStorePostPeopleError = 'department_not_found';
 
 /** UNVERIFIED: App\Http\Controllers\Api\PersonController@index returns a raw database row. */
 export type PersonIndexGetPeopleTenantIdResponse = unknown;
@@ -1941,6 +2039,10 @@ export type RecommendationStorePostRecommendationsError = 'reasoning_step_not_fo
 
 /** UNVERIFIED: App\Http\Controllers\Api\RecommendationController@index returns a raw database row. */
 export type RecommendationIndexGetRecommendationsTenantIdResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\RecommendationCaseContextController@show returns a raw database row. */
+export type RecommendationCaseContextShowGetRecommendationsTenantIdIdCaseContextResponse = unknown;
+export type RecommendationCaseContextShowGetRecommendationsTenantIdIdCaseContextError = 'recommendation_not_found';
 
 export type ReportingStructureStorePostReportingStructuresRequest = {
   org_id?: string;
@@ -2689,6 +2791,36 @@ export const OPERATIONS = [
     "unverifiedResponse": true
   },
   {
+    "name": "IntelligenceOverviewDeliberationOverviewGetAnalyticsTenantIdDeliberationOverview",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/deliberation-overview",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IntelligenceOverviewController@deliberationOverview",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IntelligenceOverviewEnterpriseOverviewGetAnalyticsTenantIdEnterpriseOverview",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/enterprise-overview",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IntelligenceOverviewController@enterpriseOverview",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IntelligenceOverviewExecutionOverviewGetAnalyticsTenantIdExecutionOverview",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/execution-overview",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IntelligenceOverviewController@executionOverview",
+    "unverifiedResponse": true
+  },
+  {
     "name": "AnalyticsExecutiveSummaryGetAnalyticsTenantIdExecutiveSummary",
     "method": "GET",
     "path": "/analytics/{tenantId}/executive-summary",
@@ -2726,6 +2858,16 @@ export const OPERATIONS = [
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@peopleReport",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AnalyticsSignalsGetAnalyticsTenantIdSignals",
+    "method": "GET",
+    "path": "/analytics/{tenantId}/signals",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\AnalyticsController@signals",
     "unverifiedResponse": true
   },
   {
@@ -2800,6 +2942,14 @@ export const OPERATIONS = [
     "path": "/auth/refresh",
     "permissions": {},
     "controller": "App\\Http\\Controllers\\Api\\AuthController@refresh",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "AuthSignupPostAuthSignup",
+    "method": "POST",
+    "path": "/auth/signup",
+    "permissions": {},
+    "controller": "App\\Http\\Controllers\\Api\\AuthController@signup",
     "unverifiedResponse": true
   },
   {
@@ -3020,6 +3170,16 @@ export const OPERATIONS = [
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\CaseController@evidence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "CaseSignalEvidenceShowGetCasesTenantIdIdSignalEvidence",
+    "method": "GET",
+    "path": "/cases/{tenantId}/{id}/signal-evidence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\CaseSignalEvidenceController@show",
     "unverifiedResponse": true
   },
   {
@@ -3398,6 +3558,17 @@ export const OPERATIONS = [
     "unverifiedResponse": true
   },
   {
+    "name": "DecisionRejectPostDecisionsTenantIdIdReject",
+    "method": "POST",
+    "path": "/decisions/{tenantId}/{id}/reject",
+    "permissions": [
+      "read",
+      "decision.approve"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DecisionController@reject",
+    "unverifiedResponse": true
+  },
+  {
     "name": "DepartmentStorePostDepartments",
     "method": "POST",
     "path": "/departments",
@@ -3521,6 +3692,16 @@ export const OPERATIONS = [
       "tenant.manage"
     ],
     "controller": "App\\Http\\Controllers\\Api\\EntityMappingController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "EsoExecutionDefinitionsGetEsoDefinitionsTenantId",
+    "method": "GET",
+    "path": "/eso-definitions/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\EsoExecutionController@definitions",
     "unverifiedResponse": true
   },
   {
@@ -4128,6 +4309,50 @@ export const OPERATIONS = [
       "settings.manage"
     ],
     "controller": "App\\Http\\Controllers\\Api\\IndustryTemplateController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IngestionInternalPostIngestionInternal",
+    "method": "POST",
+    "path": "/ingestion/internal",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IngestionController@internal",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IngestionSourcesGetIngestionSourcesTenantId",
+    "method": "GET",
+    "path": "/ingestion/sources/{tenantId}",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IngestionController@sources",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IngestionUploadPostIngestionUpload",
+    "method": "POST",
+    "path": "/ingestion/upload",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IngestionController@upload",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "IngestionCommitPostIngestionTenantIdJobIdCommit",
+    "method": "POST",
+    "path": "/ingestion/{tenantId}/{jobId}/commit",
+    "permissions": [
+      "read",
+      "settings.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\IngestionController@commit",
     "unverifiedResponse": true
   },
   {
@@ -4795,6 +5020,96 @@ export const OPERATIONS = [
       "settings.manage"
     ],
     "controller": "App\\Http\\Controllers\\Api\\OrganizationConfigController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceIndexGetOrganizationIntelligenceTenantId",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceCapabilityGetOrganizationIntelligenceTenantIdCapability",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/capability",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@capability",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceDecisionsGetOrganizationIntelligenceTenantIdDecisions",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/decisions",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@decisions",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceGapsGetOrganizationIntelligenceTenantIdGaps",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/gaps",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@gaps",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceKnowledgeGetOrganizationIntelligenceTenantIdKnowledge",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/knowledge",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@knowledge",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceProfileGetOrganizationIntelligenceTenantIdProfile",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/profile",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@profile",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceRecommendationsGetOrganizationIntelligenceTenantIdRecommendations",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/recommendations",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@recommendations",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceRisksGetOrganizationIntelligenceTenantIdRisks",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/risks",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@risks",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationIntelligenceStateGetOrganizationIntelligenceTenantIdState",
+    "method": "GET",
+    "path": "/organization-intelligence/{tenantId}/state",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationIntelligenceController@state",
     "unverifiedResponse": true
   },
   {
@@ -5628,6 +5943,16 @@ export const OPERATIONS = [
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\RecommendationController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "RecommendationCaseContextShowGetRecommendationsTenantIdIdCaseContext",
+    "method": "GET",
+    "path": "/recommendations/{tenantId}/{id}/case-context",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\RecommendationCaseContextController@show",
     "unverifiedResponse": true
   },
   {

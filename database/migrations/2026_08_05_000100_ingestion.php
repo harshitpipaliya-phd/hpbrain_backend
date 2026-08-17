@@ -73,7 +73,7 @@ return new class extends Migration
         // (an upload path on the local disk, or an ERP checkpoint), so commit
         // re-reads the same source rather than trusting a client to send the
         // rows back.
-        $this->addColumn('source_id', "VARCHAR(36) NULL");
+        $this->addColumn('source_id', "VARCHAR(191) NULL");
         $this->addColumn('sync_type', "VARCHAR(50) NULL");
         $this->addColumn('source_ref', "TEXT NULL");
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Signals;
 
 use App\Repositories\OperationalRecordRepository;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Signal rules over imported operational data.
@@ -59,7 +60,180 @@ final class OperationalSignalRules
             $rules[] = fn () => $this->callDropRate($generator, $tenantId);
         }
 
+        if (($datasets['school_fee'] ?? 0) > 0) {
+            $rules[] = fn () => $this->feeMissingCollector($generator, $tenantId);
+            $rules[] = fn () => $this->feeZeroAmountConcessions($generator, $tenantId);
+            $rules[] = fn () => $this->feeCollectorConcentration($generator, $tenantId);
+        }
+
         return $rules;
+    }
+
+    /**
+     * Rule: fee receipts whose collection owner is blank.
+     *
+     * Lions FY2025-26 CSV: 3,988 of 10,430 student fee rows have an empty
+     * 'Collected By'. Amounts are real receipts, but operational ownership is
+     * missing, so follow-up cannot be routed to a cashier or office user.
+     */
+    private function feeMissingCollector(OperationalSignalWriter $generator, string $tenantId): array
+    {
+        $total = $this->records->countFor($tenantId, 'school_fee');
+
+        if ($total === 0) {
+            return ['created' => false, 'reason' => 'no_data'];
+        }
+
+        $missing = $this->records->count($tenantId, 'school_fee', ['owner_name' => null]);
+        $share = $missing / $total;
+        $floor = (float) config('brain.operational_signals.fee_missing_collector_share', 0.30);
+
+        if ($share < $floor) {
+            return ['created' => false, 'reason' => 'below_threshold'];
+        }
+
+        $samples = $this->records->sample($tenantId, 'school_fee', ['owner_name' => null], null, 5);
+        $evidenceIds = [];
+
+        foreach ($samples as $record) {
+            $evidenceIds[] = $generator->recordEvidence($tenantId, [
+                'source'     => 'import.school_fee',
+                'recordId'   => (string) $record['natural_key'],
+                'sourceRow'  => (int) ($record['source_row'] ?? 0),
+                'studentRef' => (string) ($record['subject_ref'] ?? ''),
+                'amount'     => (float) ($record['metric_value'] ?? 0),
+                'unit'       => (string) ($record['metric_unit'] ?? 'INR'),
+                'issue'      => 'fee receipt has no collector recorded',
+            ]);
+        }
+
+        return $generator->raise($tenantId, [
+            'source'         => 'import.school_fee',
+            'classification' => 'fee_collection_provenance',
+            'severity'       => $share >= 0.40 ? 'high' : 'medium',
+            'priority'       => 'high',
+            'confidence'     => 1.0,
+            'metadata'       => [
+                'rule'         => 'fee_missing_collector',
+                'missingCount' => $missing,
+                'totalCount'   => $total,
+                'missingShare' => round($share, 4),
+            ],
+        ], $evidenceIds);
+    }
+
+    /**
+     * Rule: zero-amount fee rows that look like concessions/waivers.
+     *
+     * Lions FY2025-26 CSV has 28 zero-amount student fee rows; the most common
+     * remarks explicitly mention 50% fee maffi/discount. That is a real fee
+     * governance signal because waivers need review even when no cash moved.
+     */
+    private function feeZeroAmountConcessions(OperationalSignalWriter $generator, string $tenantId): array
+    {
+        $minimum = (int) config('brain.operational_signals.fee_zero_amount_minimum', 20);
+        $zero = $this->records->count($tenantId, 'school_fee', ['metric_value' => 0]);
+
+        if ($zero < $minimum) {
+            return ['created' => false, 'reason' => 'below_threshold'];
+        }
+
+        $samples = $this->records->sample($tenantId, 'school_fee', ['metric_value' => 0], null, 5);
+        $evidenceIds = [];
+
+        foreach ($samples as $record) {
+            $payload = $record['payload'] ?? [];
+
+            $evidenceIds[] = $generator->recordEvidence($tenantId, [
+                'source'     => 'import.school_fee',
+                'recordId'   => (string) $record['natural_key'],
+                'sourceRow'  => (int) ($record['source_row'] ?? 0),
+                'studentRef' => (string) ($record['subject_ref'] ?? ''),
+                'quota'      => (string) ($record['category'] ?? ''),
+                'remark'     => (string) ($payload['Remarks'] ?? ''),
+                'amount'     => 0,
+                'unit'       => (string) ($record['metric_unit'] ?? 'INR'),
+                'issue'      => 'zero-amount fee receipt requires concession review',
+            ]);
+        }
+
+        return $generator->raise($tenantId, [
+            'source'         => 'import.school_fee',
+            'classification' => 'fee_concession_review',
+            'severity'       => $zero >= 50 ? 'high' : 'medium',
+            'priority'       => 'medium',
+            'confidence'     => 1.0,
+            'metadata'       => [
+                'rule'            => 'fee_zero_amount_concessions',
+                'zeroAmountCount' => $zero,
+                'threshold'       => $minimum,
+            ],
+        ], $evidenceIds);
+    }
+
+    /**
+     * Rule: one named collector owns most named fee receipts.
+     *
+     * Lions FY2025-26 CSV: among rows with a non-empty collector, Raksha Raval
+     * appears on 4,488 of 6,442 receipts (69.7%). This is not a claim of
+     * wrongdoing; it is a concentration and continuity risk.
+     */
+    private function feeCollectorConcentration(OperationalSignalWriter $generator, string $tenantId): array
+    {
+        $rows = DB::table('hpbrain_operational_records')
+            ->where('tenant_id', $tenantId)
+            ->where('dataset', 'school_fee')
+            ->whereNotNull('owner_name')
+            ->select('owner_name', DB::raw('COUNT(*) as total'), DB::raw('SUM(metric_value) as amount'))
+            ->groupBy('owner_name')
+            ->orderByDesc(DB::raw('COUNT(*)'))
+            ->limit(5)
+            ->get();
+
+        if ($rows->count() < 2) {
+            return ['created' => false, 'reason' => 'insufficient_collectors'];
+        }
+
+        $namedTotal = (int) $rows->sum('total');
+        $top = $rows->first();
+        $share = $namedTotal === 0 ? 0.0 : ((int) $top->total / $namedTotal);
+        $floor = (float) config('brain.operational_signals.fee_collector_concentration_share', 0.65);
+
+        if ($share < $floor) {
+            return ['created' => false, 'reason' => 'below_threshold'];
+        }
+
+        $samples = $this->records->sample($tenantId, 'school_fee', ['owner_name' => (string) $top->owner_name], null, 5);
+        $evidenceIds = [];
+
+        foreach ($samples as $record) {
+            $evidenceIds[] = $generator->recordEvidence($tenantId, [
+                'source'     => 'import.school_fee',
+                'recordId'   => (string) $record['natural_key'],
+                'sourceRow'  => (int) ($record['source_row'] ?? 0),
+                'studentRef' => (string) ($record['subject_ref'] ?? ''),
+                'collector'  => (string) ($record['owner_name'] ?? ''),
+                'amount'     => (float) ($record['metric_value'] ?? 0),
+                'unit'       => (string) ($record['metric_unit'] ?? 'INR'),
+                'issue'      => "fee collection is concentrated with {$top->owner_name}",
+            ]);
+        }
+
+        return $generator->raise($tenantId, [
+            'source'         => 'import.school_fee',
+            'classification' => 'fee_collection_concentration',
+            'severity'       => $share >= 0.75 ? 'high' : 'medium',
+            'priority'       => 'medium',
+            'confidence'     => 0.9,
+            'metadata'       => [
+                'rule'           => 'fee_collector_concentration',
+                'collector'      => (string) $top->owner_name,
+                'collectorCount' => (int) $top->total,
+                'namedCount'     => $namedTotal,
+                'collectorShare' => round($share, 4),
+                'collectorAmount'=> round((float) $top->amount, 2),
+            ],
+        ], $evidenceIds);
     }
 
     /**

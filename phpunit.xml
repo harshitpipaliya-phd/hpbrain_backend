@@ -25,6 +25,7 @@
     <env name="CACHE_STORE" value="array"/>
     <env name="SESSION_DRIVER" value="array"/>
     <env name="QUEUE_CONNECTION" value="sync"/>
+    <env name="AI_PROVIDER" value=""/>
     <env name="JWT_SECRET" value="testing-only-secret-not-a-real-key"/>
   </php>
 </phpunit>

@@ -261,6 +261,47 @@ final class DecisionApprovalTest extends TestCase
             ->assertJson(['error' => 'decision_not_approvable', 'status' => 'rejected']);
     }
 
+    public function test_a_manager_can_reject_another_persons_decision(): void
+    {
+        $id = $this->propose();
+
+        $response = $this->postJson(
+            "/api/v1/decisions/".self::TENANT."/{$id}/reject",
+            ['note' => 'Evidence is not sufficient to act on this recommendation.'],
+            $this->auth('manager', self::MANAGER)
+        );
+
+        $response->assertStatus(200);
+        self::assertSame('rejected', $response->json('status'));
+        self::assertSame(self::MANAGER, $response->json('approved_by'));
+        self::assertSame('Evidence is not sufficient to act on this recommendation.', $response->json('approval_note'));
+    }
+
+    public function test_rejecting_requires_a_stated_note(): void
+    {
+        $id = $this->propose();
+
+        $this->postJson(
+            "/api/v1/decisions/".self::TENANT."/{$id}/reject",
+            ['note' => 'no'],
+            $this->auth('manager', self::MANAGER)
+        )->assertStatus(422)->assertJsonValidationErrors('note');
+    }
+
+    public function test_rejecting_does_not_emit_decision_reached(): void
+    {
+        $id = $this->propose();
+
+        $this->postJson(
+            "/api/v1/decisions/".self::TENANT."/{$id}/reject",
+            ['note' => 'The recommendation is understood and deliberately declined.'],
+            $this->auth('manager', self::MANAGER)
+        )->assertStatus(200);
+
+        self::assertSame(0, DB::table('hpbrain_event_store')
+            ->where('entity_id', $id)->where('type', 'DecisionReached')->count());
+    }
+
     // ---- Idempotency and the record ----------------------------------------
 
     public function test_approving_twice_appends_exactly_one_decision_reached_event(): void

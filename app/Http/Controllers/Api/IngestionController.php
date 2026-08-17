@@ -72,7 +72,7 @@ final class IngestionController extends Controller
      * synchronous path is kept, because dispatching a job and polling for a
      * 300-row import costs more than simply doing the work.
      */
-    private const QUEUE_ABOVE_ROWS = 200000;
+    private const QUEUE_ABOVE_ROWS = 5000;
 
     public function __construct(
         private readonly IngestionService $ingestion,
@@ -178,7 +178,12 @@ final class IngestionController extends Controller
         }
 
         try {
-            $stored = $this->sources->findByKey($tenantId, $data['source_id']);
+            $stored = $this->sourceForUpload(
+                tenantId: $tenantId,
+                sourceKey: $data['source_id'],
+                displayName: $upload->getClientOriginalName(),
+                actorId: $this->actorId($request),
+            );
 
             $result = $this->ingestion->preview(
                 $batch,
@@ -199,6 +204,46 @@ final class IngestionController extends Controller
             'job_id'  => $result['job']['id'],
             'preview' => $result['preview'],
         ], 201);
+    }
+
+    /**
+     * Ensure an uploaded source is visible to the tenant's source registry.
+     *
+     * Upload preview still writes nothing to the graph. This only records the
+     * reusable source key and display name so the same tenant can see and map
+     * the real source it just previewed.
+     *
+     * @return array<string, mixed>
+     */
+    private function sourceForUpload(string $tenantId, string $sourceKey, string $displayName, string $actorId): array
+    {
+        $stored = $this->sources->findByKey($tenantId, $sourceKey);
+
+        if ($stored !== null) {
+            return $stored;
+        }
+
+        try {
+            return $this->sources->create($tenantId, [
+                'source_key'   => $sourceKey,
+                'source_type'  => 'csv_upload',
+                'display_name' => $displayName,
+                'created_by'   => $actorId,
+            ]);
+        } catch (QueryException $e) {
+            // Another request may have registered the same source between the
+            // find and insert. Re-read it; if it still is not there, the outer
+            // upload handler will report the real database failure.
+            if (($e->errorInfo[1] ?? null) === 1062) {
+                $stored = $this->sources->findByKey($tenantId, $sourceKey);
+
+                if ($stored !== null) {
+                    return $stored;
+                }
+            }
+
+            throw $e;
+        }
     }
 
     /**
@@ -427,8 +472,18 @@ final class IngestionController extends Controller
         */
         try {
             $validatedMap = FieldMap::fromConfig($data['field_map']);
+            $storedSource = $this->sources->findByKey($tenant, (string) $job['source_id']);
+            $isDatasetSource = ($storedSource['source_type'] ?? null) === 'dataset';
 
-            if (! $validatedMap->isCommittable()) {
+            if ($isDatasetSource) {
+                foreach (['external_ref', 'measure', 'subject_ref'] as $required) {
+                    if (! $validatedMap->has($required)) {
+                        throw new \InvalidArgumentException(
+                            'Dataset field map must bind "external_ref", "measure", and "subject_ref" before commit.'
+                        );
+                    }
+                }
+            } elseif (! $validatedMap->isCommittable()) {
                 throw new \InvalidArgumentException(
                     'Field map must bind at least "title" and "state" before commit.'
                 );
