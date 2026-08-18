@@ -36,9 +36,45 @@ final class IntelligenceOverviewController extends Controller
 
         $organization = $this->organizationSummary($tenant);
         $allCases = collect(DB::table('hpbrain_cases')->where('tenant_id', $tenant)->orderByDesc('updated_date')->orderByDesc('created_date')->get());
-        $caseIds = $allCases->slice($offset, $pageSize)->pluck('id')->map(fn ($id) => (string) $id)->values()->all();
+        $pageCases = $allCases->slice($offset, $pageSize);
+        $caseIds = $pageCases->pluck('id')->map(fn ($id) => (string) $id)->values()->all();
 
-        $signalRows = DB::table('hpbrain_signals')->where('tenant_id', $tenant)->get()->keyBy('id');
+        /*
+          ONLY THE SIGNALS THIS PAGE RENDERS. This used to load every signal the
+          tenant had ever raised — 10,430 rows and ~10 MB of PHP memory on Lions,
+          2.4 seconds on the wire — to satisfy at most `$pageSize` lookups by id
+          plus a count and a max timestamp. The page never displayed the other
+          10,422.
+
+          The two whole-table figures it did legitimately need are now answered
+          by aggregation, which the (tenant_id, …) index serves without reading
+          the `metadata` LONGTEXT that made the full load so expensive.
+        */
+        $pageSignalIds = $pageCases->pluck('signal_id')
+            ->filter()
+            ->map(fn ($id) => (string) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $signalRows = ($pageSignalIds === []
+            ? collect()
+            : DB::table('hpbrain_signals')
+                ->where('tenant_id', $tenant)
+                ->whereIn('id', $pageSignalIds)
+                ->get(['id', 'severity', 'classification', 'confidence', 'updated_date', 'created_date']))
+            ->keyBy('id');
+
+        $signalTotals = DB::table('hpbrain_signals')
+            ->where('tenant_id', $tenant)
+            ->selectRaw('COUNT(*) AS total, MAX(updated_date) AS max_updated, MAX(created_date) AS max_created')
+            ->first();
+
+        $signalCount = (int) ($signalTotals->total ?? 0);
+        $signalLatestAt = $this->latestTimestamp(array_values(array_filter([
+            $signalTotals->max_updated ?? null,
+            $signalTotals->max_created ?? null,
+        ])));
         $evidenceCounts = DB::table('hpbrain_case_evidence')
             ->where('tenant_id', $tenant)
             ->select('case_id', DB::raw('COUNT(*) as aggregate_count'))
@@ -265,14 +301,14 @@ final class IntelligenceOverviewController extends Controller
             'status' => (string) $row->status,
         ])->values()->all();
 
-        $pipeline = $this->buildDeliberationPipeline($signalRows->count(), $evidenceCounts->sum(), $allCases->count(), $hypotheses->count(), $reasoningSteps->count(), $recommendations->count(), $decisions->count(), $pendingRecommendations->count(), $pendingDecisions->count());
+        $pipeline = $this->buildDeliberationPipeline($signalCount, $evidenceCounts->sum(), $allCases->count(), $hypotheses->count(), $reasoningSteps->count(), $recommendations->count(), $decisions->count(), $pendingRecommendations->count(), $pendingDecisions->count());
 
         return response()->json([
             'organization' => $organization,
             'generatedAt' => gmdate('Y-m-d H:i:s'),
             'freshness' => $this->latestTimestamp([
                 $organization['updatedDate'] ?? null,
-                $this->latestFromCollection($signalRows->all(), ['updated_date', 'created_date']),
+                $signalLatestAt,
                 $this->latestFromCollection($allCases->all(), ['updated_date', 'created_date']),
                 $this->latestFromCollection($recommendations->all(), ['updated_date', 'created_date']),
                 $this->latestFromCollection($decisions->all(), ['approved_date', 'created_date']),
@@ -429,9 +465,41 @@ final class IntelligenceOverviewController extends Controller
         $executions = collect(DB::table('hpbrain_eso_executions')->where('tenant_id', $tenant)->get());
         $outcomes = collect(DB::table('hpbrain_outcomes')->where('tenant_id', $tenant)->get());
         $learnings = collect(DB::table('hpbrain_learnings')->where('tenant_id', $tenant)->get());
-        $signals = collect(DB::table('hpbrain_signals')->where('tenant_id', $tenant)->get());
         $cases = collect(DB::table('hpbrain_cases')->where('tenant_id', $tenant)->get());
-        $evidence = collect(DB::table('hpbrain_evidence')->where('tenant_id', $tenant)->get());
+
+        /*
+          COUNTED IN SQL, NOT IN PHP. Signals and evidence were both loaded in
+          full — 10,430 rows each on Lions, ~20 MB of PHP memory and ~5 seconds
+          of wire time per request — and then used only to produce counts, a
+          mean and a staleness tally. Nothing here ever needed a row.
+
+          Grouped rather than a stack of SUM(LOWER(col) = '…') because a function
+          on the column stops the index from serving the aggregate; GROUP BY
+          returns a handful of rows and the normalisation costs nothing in PHP.
+        */
+        $signalSeverityRows = DB::table('hpbrain_signals')->where('tenant_id', $tenant)
+            ->selectRaw('severity, COUNT(*) AS n')->groupBy('severity')->get();
+        $signalStatusRows = DB::table('hpbrain_signals')->where('tenant_id', $tenant)
+            ->selectRaw('status, COUNT(*) AS n')->groupBy('status')->get();
+
+        $signalTotals = DB::table('hpbrain_signals')->where('tenant_id', $tenant)
+            ->selectRaw('COUNT(*) AS total, MAX(updated_date) AS max_updated, MAX(created_date) AS max_created')
+            ->first();
+
+        $signalCount = (int) ($signalTotals->total ?? 0);
+        $signalLatestAt = $this->latestTimestamp(array_values(array_filter([
+            $signalTotals->max_updated ?? null,
+            $signalTotals->max_created ?? null,
+        ])));
+
+        $evidenceAgg = DB::table('hpbrain_evidence')->where('tenant_id', $tenant)
+            ->selectRaw(
+                'COUNT(*) AS total, AVG(confidence) AS avg_confidence, SUM(CASE WHEN created_date < ? THEN 1 ELSE 0 END) AS stale',
+                [now()->subDays(30)->format('Y-m-d H:i:s')]
+            )
+            ->first();
+
+        $evidenceCount = (int) ($evidenceAgg->total ?? 0);
         $executiveSummary = app(AnalyticsController::class)->executiveSummary($request)->getData(true);
         $organizationReport = app(AnalyticsController::class)->organizationReport($request, $tenant)->getData(true);
 
@@ -451,15 +519,18 @@ final class IntelligenceOverviewController extends Controller
         $measuredOutcomes = $outcomes->filter(fn ($row) => !empty($row->decision_id));
         $dataCompleteness = $organizationReport['dataQuality']['score'] ?? null;
         $pendingRecommendations = $recommendations->filter(fn ($row) => in_array(strtolower((string) $row->status), ['pending', 'proposed', 'under_review'], true));
-        $staleEvidenceCount = $evidence->filter(fn ($row) => is_string($row->created_date ?? null) && strtotime((string) $row->created_date) < strtotime(now()->subDays(30)->format('Y-m-d H:i:s')))->count();
-        $averageEvidenceConfidence = $evidence->count() > 0 ? round((float) $evidence->avg('confidence'), 4) : null;
+        $staleEvidenceCount = (int) ($evidenceAgg->stale ?? 0);
+        $averageEvidenceConfidence = (int) ($evidenceAgg->total ?? 0) > 0
+            ? round((float) $evidenceAgg->avg_confidence, 4)
+            : null;
+        $severityByName = $this->groupedRowCounts($signalSeverityRows, 'severity');
         $signalSeverityCounts = [
-            'critical' => $signals->filter(fn ($row) => strtolower((string) ($row->severity ?? '')) === 'critical')->count(),
-            'high' => $signals->filter(fn ($row) => strtolower((string) ($row->severity ?? '')) === 'high')->count(),
-            'medium' => $signals->filter(fn ($row) => strtolower((string) ($row->severity ?? '')) === 'medium')->count(),
-            'low' => $signals->filter(fn ($row) => strtolower((string) ($row->severity ?? '')) === 'low')->count(),
+            'critical' => $severityByName['critical'] ?? 0,
+            'high' => $severityByName['high'] ?? 0,
+            'medium' => $severityByName['medium'] ?? 0,
+            'low' => $severityByName['low'] ?? 0,
         ];
-        $signalStatusCounts = $this->groupCollectionCounts($signals->all(), 'status');
+        $signalStatusCounts = $this->groupedRowCounts($signalStatusRows, 'status');
         $decisionAgeDays = $this->averageAgeDays($pendingDecisions->pluck('created_date')->all());
         $decisionVelocity = $approvedDecisions->count() > 0 ? round($approvedDecisions->count() / max(1, $decisions->count()), 4) : null;
         $executionCompletionRate = $executions->count() > 0 ? round($executions->filter(fn ($row) => strtolower((string) $row->status) === 'completed')->count() / $executions->count(), 4) : null;
@@ -471,7 +542,7 @@ final class IntelligenceOverviewController extends Controller
             $this->scoreDimension('Workforce', $people->count() > 0 ? max(0, 1 - ($peopleWithoutDepartment->count() / max(1, $people->count()))) : null, 'People mapped to departments.'),
             $this->scoreDimension('Departments', $activeDepartments->count() > 0 ? 1.0 : null, 'Active organization-unit coverage.'),
             $this->scoreDimension('Capabilities', $capabilityCoverage, 'Capabilities with at least one active assignment.'),
-            $this->scoreDimension('Operations', $signals->count() > 0 ? max(0, 1 - ($cases->filter(fn ($row) => strtolower((string) $row->status) === 'open')->count() / max(1, $signals->count()))) : null, 'Signals converted into active investigations.'),
+            $this->scoreDimension('Operations', $signalCount > 0 ? max(0, 1 - ($cases->filter(fn ($row) => strtolower((string) $row->status) === 'open')->count() / max(1, $signalCount))) : null, 'Signals converted into active investigations.'),
             $this->scoreDimension('Risk', $risks->count() > 0 ? max(0, 1 - ($openRisks->count() / max(1, $risks->count()))) : null, 'Share of risks not still open.'),
             $this->scoreDimension('Decisions', isset($executiveSummary['intelligenceScore']['breakdown']['decisionAcceptance']) ? ((float) $executiveSummary['intelligenceScore']['breakdown']['decisionAcceptance'] / 100) : null, 'Decision acceptance from existing analytics engine.'),
             $this->scoreDimension('Execution', $executions->count() > 0 ? ($executions->filter(fn ($row) => strtolower((string) $row->status) === 'completed')->count() / max(1, $executions->count())) : null, 'Completed execution share.'),
@@ -684,11 +755,11 @@ final class IntelligenceOverviewController extends Controller
             ])->values()->all();
 
         $emergingIssues = array_values(array_filter([
-            $signalSeverityCounts['high'] > 0 && $cases->count() < $signals->count() ? [
+            $signalSeverityCounts['high'] > 0 && $cases->count() < $signalCount ? [
                 'id' => 'emerging-signal-backlog',
                 'title' => 'Signal backlog may convert into case pressure',
-                'priority' => ($signals->count() - $cases->count()) > 10 ? 'high' : 'medium',
-                'evidence' => ($signals->count() - $cases->count()).' signal(s) are not yet represented as cases.',
+                'priority' => ($signalCount - $cases->count()) > 10 ? 'high' : 'medium',
+                'evidence' => ($signalCount - $cases->count()).' signal(s) are not yet represented as cases.',
                 'ifNoAction' => 'Untriaged signals can accumulate into hidden operational or risk debt.',
             ] : null,
             $staleEvidenceCount > 0 ? [
@@ -742,7 +813,7 @@ final class IntelligenceOverviewController extends Controller
             'lastRefresh' => $this->latestTimestamp([
                 $organization['updatedDate'] ?? null,
                 $this->latestFromCollection($people->all(), ['updatedDate', 'createdDate']),
-                $this->latestFromCollection($signals->all(), ['updated_date', 'created_date']),
+                $signalLatestAt,
             ]),
             'confidence' => isset($executiveSummary['statistics']['evidenceQuality']) ? round((float) $executiveSummary['statistics']['evidenceQuality'], 4) : null,
         ];
@@ -875,8 +946,8 @@ final class IntelligenceOverviewController extends Controller
         ];
 
         $loopStages = collect([
-            ['key' => 'signals', 'label' => 'Signals', 'count' => $signals->count()],
-            ['key' => 'evidence', 'label' => 'Evidence', 'count' => $evidence->count()],
+            ['key' => 'signals', 'label' => 'Signals', 'count' => $signalCount],
+            ['key' => 'evidence', 'label' => 'Evidence', 'count' => $evidenceCount],
             ['key' => 'cases', 'label' => 'Cases', 'count' => $cases->count()],
             ['key' => 'recommendations', 'label' => 'Recommendations', 'count' => $recommendations->count()],
             ['key' => 'decisions', 'label' => 'Decisions', 'count' => $decisions->count()],
@@ -1041,13 +1112,13 @@ final class IntelligenceOverviewController extends Controller
                 'attention' => $capabilityIntelligence,
             ],
             'signalsEvidence' => [
-                'signalsTotal' => $signals->count(),
-                'evidenceTotal' => $evidence->count(),
+                'signalsTotal' => $signalCount,
+                'evidenceTotal' => $evidenceCount,
                 'signalsByStatus' => $signalStatusCounts,
                 'signalsBySeverity' => $signalSeverityCounts,
                 'averageEvidenceConfidence' => $averageEvidenceConfidence,
                 'staleEvidence' => $staleEvidenceCount,
-                'evidencePerSignal' => $signals->count() > 0 ? round($evidence->count() / $signals->count(), 4) : null,
+                'evidencePerSignal' => $signalCount > 0 ? round($evidenceCount / $signalCount, 4) : null,
             ],
             'decisionIntelligence' => [
                 'decisionsTotal' => $decisions->count(),
@@ -1071,11 +1142,11 @@ final class IntelligenceOverviewController extends Controller
                         'description' => 'Only '.round($capabilityCoverage * 100, 1).'% of capabilities have active assignments.',
                         'supportingMetric' => $capabilityCoverage,
                     ] : null,
-                    $signals->count() > 0 && $cases->count() < $signals->count() ? [
+                    $signalCount > 0 && $cases->count() < $signalCount ? [
                         'id' => 'signal-triage',
                         'title' => 'Untapped signal backlog',
-                        'description' => ($signals->count() - $cases->count()).' signal(s) are not yet represented as cases.',
-                        'supportingMetric' => $signals->count() > 0 ? round(($signals->count() - $cases->count()) / $signals->count(), 4) : null,
+                        'description' => ($signalCount - $cases->count()).' signal(s) are not yet represented as cases.',
+                        'supportingMetric' => $signalCount > 0 ? round(($signalCount - $cases->count()) / $signalCount, 4) : null,
                     ] : null,
                 ])),
             ],
@@ -1650,6 +1721,32 @@ final class IntelligenceOverviewController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * The SQL-side twin of groupCollectionCounts().
+     *
+     * Deliberately reproduces its normalisation exactly — lowercased, empty and
+     * null folded to 'unknown', key-sorted — because these counts are rendered
+     * by the same components whichever path produced them, and a grouped query
+     * that spelled its keys differently would be a silent display bug rather
+     * than a failure.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $rows
+     * @return array<string, int>
+     */
+    private function groupedRowCounts($rows, string $field): array
+    {
+        $counts = [];
+
+        foreach ($rows as $row) {
+            $key = strtolower((string) (($row->{$field} ?? null) ?: 'unknown'));
+            $counts[$key] = ($counts[$key] ?? 0) + (int) $row->n;
+        }
+
+        ksort($counts);
+
+        return $counts;
     }
 
     private function groupCollectionCounts(array $rows, string $field): array
