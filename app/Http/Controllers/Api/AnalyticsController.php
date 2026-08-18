@@ -78,64 +78,83 @@ final class AnalyticsController extends Controller
      */
     private function statistics(string $t): array
     {
-        $decisions = DB::table('hpbrain_decisions')->where('tenant_id', $t)->get();
-        $approved  = $decisions->filter(fn ($d) => in_array(strtolower((string) $d->status), self::APPROVED, true))->count();
-        $rejected  = $decisions->filter(fn ($d) => in_array(strtolower((string) $d->status), self::REJECTED, true))->count();
+        $decisions = DB::table('hpbrain_decisions')
+            ->where('tenant_id', $t)
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN LOWER(status) IN ('approved', 'accepted') THEN 1 ELSE 0 END) as approved,
+                SUM(CASE WHEN LOWER(status) IN ('rejected', 'declined') THEN 1 ELSE 0 END) as rejected
+            ")
+            ->first();
 
-        $recommendations = DB::table('hpbrain_recommendations')->where('tenant_id', $t)->get();
-        $byCategory = [];
-        foreach ($recommendations as $r) {
-            $key = (string) ($r->category ?? 'uncategorised');
-            $byCategory[$key] = ($byCategory[$key] ?? 0) + 1;
-        }
+        $approved = (int) ($decisions->approved ?? 0);
+        $rejected = (int) ($decisions->rejected ?? 0);
+        $decisionTotal = (int) ($decisions->total ?? 0);
 
-        $outcomes   = DB::table('hpbrain_outcomes')->where('tenant_id', $t)->get();
-        $successful = $outcomes->filter(fn ($o) => strtolower((string) $o->result) === 'success')->count();
+        $byCategory = DB::table('hpbrain_recommendations')
+            ->where('tenant_id', $t)
+            ->select('category', DB::raw('COUNT(*) as count'))
+            ->groupBy('category')
+            ->pluck('count', 'category')
+            ->map(fn ($n) => (int) $n)
+            ->map(fn ($c, $k) => [(string) ($k ?? 'uncategorised') => $c])
+            ->reduce(fn (array $acc, array $row) => array_merge($acc, $row), []);
 
-        $risks = DB::table('hpbrain_risks')->where('tenant_id', $t)->get();
-        $openRisks = $risks->filter(fn ($r) => strtolower((string) $r->status) !== 'mitigated')->count();
-        $risksByCategory = [];
-        foreach ($risks as $r) {
-            $key = (string) ($r->category ?? 'uncategorised');
-            $risksByCategory[$key] = ($risksByCategory[$key] ?? 0) + 1;
-        }
+        $outcomes = DB::table('hpbrain_outcomes')
+            ->where('tenant_id', $t)
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN LOWER(result) = 'success' THEN 1 ELSE 0 END) as successful
+            ")
+            ->first();
 
-        // Evidence quality is the mean confidence of the evidence on file: how
-        // firmly the Brain's reasoning is grounded, expressed 0..1.
+        $outcomeTotal = (int) ($outcomes->total ?? 0);
+        $successful = (int) ($outcomes->successful ?? 0);
+
+        $risks = DB::table('hpbrain_risks')
+            ->where('tenant_id', $t)
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN LOWER(status) <> 'mitigated' THEN 1 ELSE 0 END) as open_count
+            ")
+            ->first();
+
+        $riskTotal = (int) ($risks->total ?? 0);
+        $openRisks = (int) ($risks->open_count ?? 0);
+
+        $risksByCategory = DB::table('hpbrain_risks')
+            ->where('tenant_id', $t)
+            ->select('category', DB::raw('COUNT(*) as count'))
+            ->groupBy('category')
+            ->pluck('count', 'category')
+            ->map(fn ($n) => (int) $n)
+            ->map(fn ($c, $k) => [(string) ($k ?? 'uncategorised') => $c])
+            ->reduce(fn (array $acc, array $row) => array_merge($acc, $row), []);
+
         $evidenceConfidence = DB::table('hpbrain_evidence')->where('tenant_id', $t)->avg('confidence');
 
         return [
             'decisions' => [
-                'total'          => $decisions->count(),
+                'total'          => $decisionTotal,
                 'approved'       => $approved,
                 'rejected'       => $rejected,
-                // null when nothing has been decided: there is no rate, as opposed
-                // to a rate of nothing.
-                'acceptanceRate' => $decisions->isEmpty() ? null : round($approved / $decisions->count(), 4),
+                'acceptanceRate' => $decisionTotal > 0 ? round($approved / $decisionTotal, 4) : null,
             ],
             'recommendations' => [
-                'total'      => $recommendations->count(),
+                'total'      => DB::table('hpbrain_recommendations')->where('tenant_id', $t)->count(),
                 'byCategory' => (object) $byCategory,
             ],
             'outcomes' => [
-                'total'      => $outcomes->count(),
+                'total'      => $outcomeTotal,
                 'successful' => $successful,
-                // How often acting on a recommendation actually worked. Over
-                // outcomes, not over recommendations: a recommendation nobody
-                // acted on has proved nothing either way.
-                // THE FIGURE THIS CHANGE EXISTS FOR. Zero here reads as "every
-                // decision was wrong", which is a far stronger claim than the truth
-                // that nobody measured any of them.
-                'recommendationAccuracy' => $outcomes->isEmpty() ? null : round($successful / $outcomes->count(), 4),
+                'recommendationAccuracy' => $outcomeTotal > 0 ? round($successful / $outcomeTotal, 4) : null,
             ],
             'risks' => [
-                'total'        => $risks->count(),
+                'total'        => $riskTotal,
                 'open'         => $openRisks,
                 'byCategory'   => (object) $risksByCategory,
-                'averageScore' => $risks->isEmpty() ? null : round((float) $risks->avg('score'), 2),
+                'averageScore' => $riskTotal > 0 ? round((float) DB::table('hpbrain_risks')->where('tenant_id', $t)->avg('score'), 2) : null,
             ],
-            // Already null-safe at the source: AVG over no rows is SQL NULL, and that
-            // is passed through rather than coalesced.
             'evidenceQuality' => $evidenceConfidence === null ? null : round((float) $evidenceConfidence, 4),
         ];
     }
@@ -1047,66 +1066,95 @@ final class AnalyticsController extends Controller
         $from = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))
             ->modify('-'.$days.' days')->format('Y-m-d');
 
-        $signals = DB::table('hpbrain_signals')->where('tenant_id', $t)->get();
-
         $openStatuses = ['new', 'triaged', 'investigating', 'evidenced'];
         $closedStatuses = ['resolved', 'closed', 'dismissed'];
 
-        $openSignals = $signals->filter(fn ($s) => in_array(strtolower((string) $s->status), $openStatuses, true))->count();
-        $closedSignals = $signals->filter(fn ($s) => in_array(strtolower((string) $s->status), $closedStatuses, true))->count();
+        $openSignals = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->whereIn('status', $openStatuses)
+            ->count();
 
-        $arrivalTrend = $signals
+        $closedSignals = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->whereIn('status', $closedStatuses)
+            ->count();
+
+        $arrivalTrend = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
             ->where('created_date', '>=', $from)
+            ->select('created_date', DB::raw('COUNT(*) as count'))
             ->groupBy('created_date')
-            ->map(fn ($rows) => $rows->count())
-            ->sortKeys()
-            ->map(fn ($count, $date) => ['date' => $date, 'count' => $count])
+            ->orderBy('created_date')
+            ->get()
+            ->map(fn ($row) => ['date' => $row->created_date, 'count' => (int) $row->count])
             ->values()
             ->all();
 
-        $resolvedSignals = $signals->filter(fn ($s) => in_array(strtolower((string) $s->status), ['resolved', 'closed'], true));
-        $resolutionTrend = $resolvedSignals
+        $resolvedBase = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->whereIn('status', ['resolved', 'closed']);
+
+        $resolutionTrend = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->whereIn('status', ['resolved', 'closed'])
             ->where('updated_date', '>=', $from)
+            ->select('updated_date', DB::raw('COUNT(*) as count'))
             ->groupBy('updated_date')
-            ->map(fn ($rows) => $rows->count())
-            ->sortKeys()
-            ->map(fn ($count, $date) => ['date' => $date, 'count' => $count])
+            ->orderBy('updated_date')
+            ->get()
+            ->map(fn ($row) => ['date' => $row->updated_date, 'count' => (int) $row->count])
             ->values()
             ->all();
 
-        $mttrSeconds = 0;
-        foreach ($resolvedSignals as $s) {
-            $created = new \DateTimeImmutable($s->created_date);
-            $updated = new \DateTimeImmutable($s->updated_date);
-            $mttrSeconds += max(0, $updated->getTimestamp() - $created->getTimestamp());
-        }
-        $mttrHours = $resolvedSignals->isEmpty() ? null : round($mttrSeconds / $resolvedSignals->count() / 3600, 2);
+        $mttrSeconds = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->whereIn('status', ['resolved', 'closed'])
+            ->whereNotNull('created_date')
+            ->whereNotNull('updated_date')
+            ->selectRaw('SUM(TIMESTAMPDIFF(SECOND, created_date, updated_date)) as total_seconds')
+            ->value('total_seconds');
 
-        $severityCounts = [];
-        foreach ($signals as $s) {
-            $key = strtolower((string) ($s->severity ?? 'unknown'));
-            $severityCounts[$key] = ($severityCounts[$key] ?? 0) + 1;
-        }
+        $resolvedCount = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->whereIn('status', ['resolved', 'closed'])
+            ->count();
 
-        $classificationCounts = [];
-        foreach ($signals as $s) {
-            $key = (string) ($s->classification ?? 'unclassified');
-            $classificationCounts[$key] = ($classificationCounts[$key] ?? 0) + 1;
-        }
+        $mttrHours = $resolvedCount > 0 && $mttrSeconds !== null
+            ? round((float) $mttrSeconds / $resolvedCount / 3600, 2)
+            : null;
 
-        $confidenceBands = ['high' => 0, 'medium' => 0, 'low' => 0];
-        foreach ($signals as $s) {
-            $c = (float) ($s->confidence ?? 0);
-            if ($c >= 0.7) $confidenceBands['high']++;
-            elseif ($c >= 0.4) $confidenceBands['medium']++;
-            else $confidenceBands['low']++;
-        }
+        $severityCounts = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->select(DB::raw("LOWER(COALESCE(severity, 'unknown')) as severity"), DB::raw('COUNT(*) as count'))
+            ->groupBy('severity')
+            ->pluck('count', 'severity')
+            ->map(fn ($n) => (int) $n)
+            ->map(fn ($c, $k) => [(string) ($k ?? 'unknown') => $c])
+            ->reduce(fn (array $acc, array $row) => array_merge($acc, $row), []);
+
+        $classificationCounts = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->select(DB::raw("COALESCE(classification, 'unclassified') as classification"), DB::raw('COUNT(*) as count'))
+            ->groupBy('classification')
+            ->pluck('count', 'classification')
+            ->map(fn ($n) => (int) $n)
+            ->map(fn ($c, $k) => [(string) ($k ?? 'unclassified') => $c])
+            ->reduce(fn (array $acc, array $row) => array_merge($acc, $row), []);
+
+        $confidenceBands = DB::table('hpbrain_signals')
+            ->where('tenant_id', $t)
+            ->selectRaw("
+                SUM(CASE WHEN COALESCE(confidence, 0) >= 0.7 THEN 1 ELSE 0 END) as high,
+                SUM(CASE WHEN COALESCE(confidence, 0) >= 0.4 AND COALESCE(confidence, 0) < 0.7 THEN 1 ELSE 0 END) as medium,
+                SUM(CASE WHEN COALESCE(confidence, 0) < 0.4 THEN 1 ELSE 0 END) as low
+            ")
+            ->first();
 
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $thisWeekStart = $now->modify('monday this week')->format('Y-m-d');
         $lastWeekStart = $now->modify('monday last week')->format('Y-m-d');
-        $thisWeekCount = $signals->where('created_date', '>=', $thisWeekStart)->count();
-        $lastWeekCount = $signals->where('created_date', '>=', $lastWeekStart)->where('created_date', '<', $thisWeekStart)->count();
+        $thisWeekCount = DB::table('hpbrain_signals')->where('tenant_id', $t)->where('created_date', '>=', $thisWeekStart)->count();
+        $lastWeekCount = DB::table('hpbrain_signals')->where('tenant_id', $t)->where('created_date', '>=', $lastWeekStart)->where('created_date', '<', $thisWeekStart)->count();
         $weeklyGrowth = $lastWeekCount === 0 ? null : round((($thisWeekCount - $lastWeekCount) / $lastWeekCount) * 100, 1);
 
         $trendComparison = [
@@ -1126,7 +1174,11 @@ final class AnalyticsController extends Controller
             'mttrHours' => $mttrHours,
             'severityCounts' => (object) $severityCounts,
             'classificationCounts' => (object) $classificationCounts,
-            'confidenceDistribution' => (object) $confidenceBands,
+            'confidenceDistribution' => (object) [
+                'high' => (int) ($confidenceBands->high ?? 0),
+                'medium' => (int) ($confidenceBands->medium ?? 0),
+                'low' => (int) ($confidenceBands->low ?? 0),
+            ],
             'weeklyGrowth' => $weeklyGrowth,
             'trendComparison' => $trendComparison,
         ]);

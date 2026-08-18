@@ -798,8 +798,29 @@ final class IngestionService
             return null;
         }
 
+        $value = trim($value);
+
         if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $value, $m)) {
             return sprintf('%s-%s-%s 00:00:00', $m[3], $m[2], $m[1]);
+        }
+
+        /*
+          A BARE YEAR IS A YEAR, NOT A TIME OF DAY.
+
+          The academic export's evidence_timestamp is `syear` — "2018", "2019".
+          strtotime() reads a bare four-digit string as HHMM, so "2018" became
+          20:18 TODAY and "2021" became 20:21 today. Every one of the 388,401
+          academic rows was stored with an occurred_at on the import date,
+          differing only in the minute, which silently destroyed year-wise
+          analysis and made the (tenant_id, dataset, occurred_at) index useless
+          for the one dataset that most needed it.
+
+          Anchored to 1 January so the value orders and filters correctly. The
+          exact year always remains available in `payload`, which is what the
+          year-wise aggregates read — this column is for range filters.
+        */
+        if (preg_match('/^(19|20)\d{2}$/', $value)) {
+            return $value.'-01-01 00:00:00';
         }
 
         $timestamp = strtotime($value);

@@ -620,9 +620,30 @@ final class OrganizationDataProfiler
      */
     public function dataVersion(string $tenantId): string
     {
-        // TWO ROUND TRIPS, and it matters that it is two rather than twenty: this
-        // runs on every request including cache hits, so its cost is the floor on
-        // every intelligence read in the application.
+        /*
+          TWO ROUND TRIPS, and it matters that it is two rather than twenty: this
+          runs on every request including cache hits, so its cost is the floor on
+          every intelligence read in the application.
+
+          THE INDEX IS WHAT MAKES THE FIRST OF THEM CHEAP. Every other index on
+          hpbrain_operational_records leads (tenant_id, dataset, …), and none
+          carries updated_date — so with `dataset` unconstrained this query read
+          the tenant's entire slice. On the live database that was observed as
+          six concurrent copies of this statement, each past 950 seconds, from
+          ordinary navigation. 2026_08_18_000400 adds (tenant_id, updated_date),
+          which turns MAX() into a single backward seek and COUNT(*) into an
+          index-only scan. If this query is ever slow again, check that index
+          before rewriting anything here.
+
+          MEMOISED PER INSTANCE, like loopCounts() directly below it and for the
+          same reason: several services resolve this profiler from the container
+          within one request and each asks for the version, so without the memo
+          the floor cost is paid several times over per page.
+        */
+        if (isset($this->dataVersionCache[$tenantId])) {
+            return $this->dataVersionCache[$tenantId];
+        }
+
         $operational = (array) DB::table(self::RECORDS)->where('tenant_id', $tenantId)
             ->selectRaw('COUNT(*) AS n, MAX(updated_date) AS t')->first();
 
@@ -632,8 +653,19 @@ final class OrganizationDataProfiler
             $parts[] = $table.':'.($counts['rows'] ?? 'unavailable').':'.($counts['lastAt'] ?? '-');
         }
 
-        return substr(hash('sha256', implode('|', $parts)), 0, 20);
+        return $this->dataVersionCache[$tenantId] = substr(hash('sha256', implode('|', $parts)), 0, 20);
     }
+
+    /**
+     * Per-request memo of the fingerprint, keyed by tenant.
+     *
+     * Safe because a profiler instance does not outlive the request that
+     * resolved it, so it cannot serve a version from before a write in a later
+     * request.
+     *
+     * @var array<string, string>
+     */
+    private array $dataVersionCache = [];
 
     /* ─────────────────────────── helpers ─────────────────────────── */
 
