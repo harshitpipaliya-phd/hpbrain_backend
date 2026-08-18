@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\MentalModelController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ObservabilityController;
 use App\Http\Controllers\Api\OrganizationController;
+use App\Http\Controllers\Api\OrganizationDeletionController;
 use App\Http\Controllers\Api\OrganizationIntelligenceController;
 use App\Http\Controllers\Api\OutcomeController;
 use App\Http\Controllers\Api\PersonController;
@@ -440,6 +441,19 @@ Route::prefix('v1')->group(function () {
         Route::get('organizations/{tenantId}/{id}/audit', [OrganizationController::class, 'audit']);
         Route::get('organizations/{tenantId}/{id}/structure', [OrganizationController::class, 'structure']);
         Route::get('organizations/{tenantId}/{id}/data-quality', [OrganizationController::class, 'dataQuality']);
+
+        // ---- Permanent organization deletion ---------------------------------
+        // A SEPARATE OPERATION FROM THE ARCHIVE ABOVE, which stays exactly as it
+        // was. Archive sets deleted_at on one row and needs permission:update;
+        // this destroys the tenant and everything it owns, is irreversible, and
+        // needs BOTH delete and tenant.manage — permissions only ADMIN and
+        // TENANT_ADMIN hold, so a manager, analyst or viewer is refused by
+        // RequirePermission before the controller runs. EnsureTenantScope has
+        // already refused any caller addressing a tenant that is not their own.
+        Route::get('organizations/{tenantId}/{id}/deletion-preview', [OrganizationDeletionController::class, 'preview'])
+            ->middleware('permission:delete,tenant.manage');
+        Route::delete('organizations/{tenantId}/{id}', [OrganizationDeletionController::class, 'destroy'])
+            ->middleware('permission:delete,tenant.manage');
 
         Route::patch('departments/{tenantId}/{id}', [DepartmentController::class, 'update'])->middleware('permission:update');
         Route::post('departments/{tenantId}/{id}/archive', [DepartmentController::class, 'archive'])->middleware('permission:update');

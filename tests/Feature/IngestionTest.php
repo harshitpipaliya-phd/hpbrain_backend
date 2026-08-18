@@ -138,7 +138,14 @@ final class IngestionTest extends TestCase
         // Three data rows: the blank separator line is dropped, the short row
         // is kept with its missing tail read as ''.
         $this->assertSame(3, $batch->count());
-        $this->assertSame('', $batch->rows[2]['Start Date']);
+
+        // Read through sample() rather than ->rows. Delimited uploads are now
+        // stream-backed so that a file larger than memory can still be
+        // imported, and a stream-backed batch leaves ->rows empty by design —
+        // sample(), chunks() and rows() are the accessors that work for both
+        // backings. The behaviour under test is unchanged: the short row keeps
+        // its position and its missing tail reads as ''.
+        $this->assertSame('', $batch->sample(3)[2]['Start Date']);
     }
 
     /** @test */

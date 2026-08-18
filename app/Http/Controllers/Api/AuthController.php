@@ -254,10 +254,26 @@ final class AuthController extends Controller
         $sources = $this->resolver->everyTenantWith('Person');
 
         if ($sources === []) {
-            throw new \RuntimeException(
-                'No tenant maps the Person entity, so no one can sign in. '
-                .'Seed hpbrain_entity_mappings (see EntityMappingSeeder).'
+            // THE DIAGNOSTIC GOES TO THE LOG; THE CALLER GETS 401.
+            //
+            // This used to throw, which surfaced as a 500 on the login endpoint.
+            // The intent was right — an installation where nothing maps Person
+            // is misconfigured and somebody needs to be told — but the channel
+            // was wrong, and permanent deletion made it reachable in ordinary
+            // use: deleting the LAST remaining organization empties the mapping
+            // table, and the next sign-in attempt answered "server error"
+            // instead of "incorrect email or password".
+            //
+            // 500 is also the wrong answer on its own terms. The question asked
+            // was "are these credentials valid", and when there is no tenant to
+            // check them against the answer is no. Returning null lets the
+            // caller's existing failure path produce that, unchanged.
+            Log::error(
+                'Login attempted but no tenant maps the Person entity, so no one can sign in. '
+                .'If this is not an empty installation, seed hpbrain_entity_mappings (see EntityMappingSeeder).'
             );
+
+            return [null, null];
         }
 
         /** @var array<string, array{source: ResolvedSource, tenants: array<int, string>}> $groups */
@@ -312,7 +328,16 @@ final class AuthController extends Controller
         if ($token !== '') {
             try {
                 $claims = Jwt::verify($token);
-                if (($claims['type'] ?? null) === 'refresh') {
+                // The tenant check keeps logout from RE-CREATING a row for a
+                // tenant that was just permanently deleted. updateOrInsert
+                // inserts when there is nothing to update, and after a deletion
+                // there never is — so signing out of a deleted organization
+                // wrote tenant rows straight back into a table the purge had
+                // just emptied. There is also nothing to revoke: the tenant's
+                // tokens were destroyed with it, and refresh() now refuses them
+                // on tenant existence regardless.
+                if (($claims['type'] ?? null) === 'refresh'
+                    && $this->tenantExists((string) ($claims['tenantId'] ?? ''))) {
                     DB::table('hpbrain_refresh_tokens')->updateOrInsert(
                         ['jti' => $claims['jti'] ?? ''],
                         [
@@ -343,6 +368,30 @@ final class AuthController extends Controller
 
         if (($claims['type'] ?? null) !== 'refresh') {
             return response()->json(['error' => 'wrong_token_type'], 401);
+        }
+
+        // A TOKEN FOR A TENANT THAT NO LONGER EXISTS IS NOT REFRESHABLE.
+        //
+        // This closed a real hole. The revocation check below asks whether the
+        // jti is recorded as revoked, and treats "no row" as "not revoked" —
+        // which it has to, because login() issues a refresh token WITHOUT
+        // writing a row, so the first refresh after every login has no row to
+        // find. Absence therefore meant "fine".
+        //
+        // After a tenant is permanently deleted its hpbrain_refresh_tokens rows
+        // are destroyed along with everything else, so absence meant "fine"
+        // there too: a refresh token minted before the deletion still verified
+        // (the signature is valid and the expiry has not passed), still passed
+        // the revocation check, and was handed a brand-new access token for a
+        // tenant that no longer existed — plus a fresh row in
+        // hpbrain_refresh_tokens, re-seeding data for the dead tenant. Measured
+        // on the live database: HTTP 200 and six recreated rows.
+        //
+        // The tenant's existence is the thing absence could not distinguish, so
+        // it is now checked directly. Nothing about authentication is relaxed:
+        // this only ever turns a 200 into a 401.
+        if (! $this->tenantExists((string) ($claims['tenantId'] ?? ''))) {
+            return response()->json(['error' => 'invalid_token'], 401);
         }
 
         $jti = (string) ($claims['jti'] ?? '');
@@ -561,7 +610,79 @@ final class AuthController extends Controller
     }
 
     /**
+     * Whether this tenant is still one the application can authenticate.
+     *
+     * THE TEST IS THE SAME ONE LOGIN ALREADY USES. findPersonByEmail searches
+     * the tenants returned by everyTenantWith('Person'), which is driven
+     * entirely by active rows in hpbrain_entity_mappings. A tenant with no
+     * Person mapping is not merely unauthorized, it is invisible to login — so
+     * "can this tenant still be signed into" and "does it still map Person" are
+     * the same question, and asking it this way keeps refresh exactly as
+     * permissive as login rather than more or less so.
+     *
+     * That matters concretely: an earlier version of this checked for a row in
+     * the Organization table instead, which refused a tenant whose people could
+     * still log in perfectly well, because refresh was applying a stricter rule
+     * than the endpoint that issued the token in the first place.
+     *
+     * It is false after a permanent deletion because TenantPurgeService sweeps
+     * hpbrain_entity_mappings along with everything else — 39 rows on the tenant
+     * this was verified against.
+     *
+     * It stays TRUE for an ARCHIVED organization, which is correct: archiving
+     * takes an organization out of the list, not out of the world, and its
+     * people can still sign in today.
+     *
+     * NOT called from AuthenticateJwt, and that is a deliberate trade rather
+     * than an oversight. Putting it there would cost a query on EVERY
+     * authenticated request — against this deployment's remote database, where
+     * a trivial SELECT averages 480ms, that is a tax on the whole application
+     * to catch a short-lived access token belonging to a deleted tenant. Those
+     * tokens already reach nothing: every tenant-scoped read resolves through
+     * EntityResolver, which fails closed and returns 404. The refresh path is
+     * different because it MINTS new credentials and can extend a session
+     * indefinitely, so it is worth the query.
+     */
+    private function tenantExists(string $tenantId): bool
+    {
+        if ($tenantId === '') {
+            return false;
+        }
+
+        try {
+            return $this->resolver->has($tenantId, 'Person');
+        } catch (\Throwable) {
+            // An unreadable mappings table cannot be distinguished from a
+            // tenant that is genuinely gone, and refusing to extend a session is
+            // the safe answer to that ambiguity.
+            return false;
+        }
+    }
+
+    /**
      * Load organization name and logo from the ERP tables.
+     *
+     * ARCHIVED ORGANIZATIONS RETURN THEIR REAL NAME, and that is a correction
+     * rather than a relaxation. This query used to carry
+     * `whereNull('d.deleted_at')`, so an archived organization matched no row
+     * and fell through to the placeholder below — a session for tenant 8 came
+     * back named "Organization 8" while the database plainly said "Lions".
+     *
+     * That placeholder then became the SPA's only name for the organization
+     * (OrganizationRepository::list() excludes archived rows, correctly, so the
+     * list offers no name to correct it with), and a manufactured name is
+     * indistinguishable from a real one once it is sitting in session state.
+     * The permanent-deletion dialog compared against it and refused every
+     * attempt, because the server was comparing against the real name.
+     *
+     * The filter is gone because the question this method answers is "what is
+     * this organization called", and archiving does not change the answer.
+     * Archiving governs whether an organization is LISTED — that filter stays
+     * exactly where it belongs, in OrganizationRepository::list().
+     *
+     * The placeholder is kept for the two cases where there genuinely is no
+     * name to report: no row at all, and no table at all. Those are honest
+     * fallbacks; the archived case never was.
      */
     private function loadOrganization(string $subInstituteId): array
     {
@@ -574,7 +695,6 @@ final class AuthController extends Controller
                     $j->on('o.'.$profile->tenantKey, '=', 'd.'.$org->tenantKey);
                 })
                 ->where('d.'.$org->tenantKey, $subInstituteId)
-                ->whereNull('d.deleted_at')
                 ->select(
                     'd.'.$org->field('id').' as id',
                     'd.'.$org->field('name').' as name',

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\Universal\UnsupportedEntityException;
 use App\Http\Middleware\AuthenticateJwt;
 use App\Http\Middleware\EnsureTenantScope;
 use App\Http\Middleware\RequirePermission;
@@ -61,5 +62,32 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) {
         // Every error leaves as JSON. The React SPA has no HTML error handling.
         $exceptions->shouldRenderJsonWhen(fn () => true);
+
+        // A tenant that resolves nothing is a tenant that does not exist.
+        //
+        // WHY THIS IS A 404 AND NOT A 500. After an organization is permanently
+        // deleted its hpbrain_entity_mappings rows are gone, so EntityResolver
+        // correctly refuses to resolve anything for it — that fail-closed
+        // behaviour is the whole point of the class and is not being softened
+        // here. What was wrong is only how it left the application: a request
+        // carrying a validly-signed token for a dissolved tenant produced a 500
+        // and a stack trace, which reads as "the server is broken" rather than
+        // "that organization is gone".
+        //
+        // THE DEPLOYMENT CASE IS DELIBERATELY EXCLUDED. notInstalled() is the
+        // one constructor that leaves tenantId empty, and it means the schema
+        // was never migrated onto this database. That must stay a 500: it is a
+        // fault in the installation, and answering 404 would tell an operator
+        // their tenant is missing when in fact every tenant is.
+        $exceptions->render(function (UnsupportedEntityException $e) {
+            if ($e->tenantId === '') {
+                return null;
+            }
+
+            return response()->json([
+                'error'   => 'organization_not_found',
+                'message' => 'This organization does not exist or has been permanently deleted.',
+            ], 404);
+        });
     })
     ->create();

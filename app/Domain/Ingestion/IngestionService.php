@@ -98,7 +98,7 @@ final class IngestionService
                 'source_ref' => $batch->sourceRef,
             ]);
 
-        $schema = (new SchemaDetector($batch->rows, $batch->headers()))->detect();
+        $schema = (new SchemaDetector($batch->sample(50), $batch->headers()))->detect();
 
         return [
             'job' => $this->jobs->find($batch->tenantId, $job['id']),
@@ -108,7 +108,7 @@ final class IngestionService
                 'suggested_map'    => $map->toArray(),
                 'unmapped_fields'  => $map->unmapped(),
                 'committable'      => $map->isCommittable(),
-                'sample_rows'      => array_slice($batch->rows, 0, 3),
+                'sample_rows'      => $batch->sample(3),
                 'sync_type'        => $batch->syncType,
                 'next_checkpoint'  => $batch->nextCheckpoint,
                 'fetched_at'       => $batch->fetchedAt->format(\DateTimeInterface::ATOM),
@@ -199,7 +199,10 @@ final class IngestionService
           says exactly how far it got — which is what makes the import
           resumable rather than merely restartable.
         */
-        $chunks = array_chunk($batch->rows, self::CHUNK_ROWS, true);
+        // chunks() rather than array_chunk(): a stream-backed batch never
+        // materialises the whole file, so peak memory here is one chunk
+        // regardless of how many rows the upload had.
+        $chunks = $batch->chunks(self::CHUNK_ROWS);
         $rowNumber = 0;
 
         foreach ($chunks as $chunk) {
@@ -340,7 +343,7 @@ final class IngestionService
             $this->flushLogs($tenantId);
         }
 
-        $this->jobs->update($tenantId, $jobId, ['processed_rows' => count($batch->rows)]);
+        $this->jobs->update($tenantId, $jobId, ['processed_rows' => $batch->count()]);
         $this->flushLogs($tenantId);
 
         $this->jobs->update($tenantId, $jobId, [
@@ -365,7 +368,7 @@ final class IngestionService
 
         if ($this->analysis !== null && $success > 0) {
             try {
-                $schema = (new SchemaDetector($batch->rows, $batch->headers()))->detect();
+                $schema = (new SchemaDetector($batch->sample(50), $batch->headers()))->detect();
                 $this->analysis->analyse($tenantId, $jobId, $schema, $success);
             } catch (\Throwable) {
                 // AI analysis is best-effort and must not break commit.
@@ -635,7 +638,7 @@ final class IngestionService
         $skipped = 0;
         $rowNumber = 0;
 
-        foreach (array_chunk($batch->rows, self::CHUNK_ROWS, true) as $chunk) {
+        foreach ($batch->chunks(self::CHUNK_ROWS) as $chunk) {
             $records = [];
 
             foreach ($chunk as $row) {
@@ -671,7 +674,7 @@ final class IngestionService
                     'closed_at'        => null,
                     'status'           => $this->clip($map->value($row, 'state'), 64),
                     'category'         => $this->clip($map->value($row, 'category'), 191),
-                    'sub_category'     => null,
+                    'sub_category'     => $this->clip($map->value($row, 'sub_category'), 191),
                     'owner_name'       => $this->clip($map->value($row, 'owner'), 191),
                     'supervisor_name'  => null,
                     'zone'             => null,
@@ -679,7 +682,13 @@ final class IngestionService
                     'subject_ref'      => $this->clip($subjectRef, 191),
                     'metric_value'     => $metric,
                     'metric_unit'      => $this->clip($map->value($row, 'measure_unit') ?? ($unit !== '' ? $unit : null), 20),
-                    'quantity'         => null,
+                    // The DENOMINATOR beside metric_value's numerator. For an
+                    // academic result that is the paper's total marks against
+                    // the marks obtained, which is what makes a percentage
+                    // computable per row — metric_value / quantity * 100 —
+                    // without storing a third derived number that could drift
+                    // out of step with the two it came from.
+                    'quantity'         => $this->wholeNumber($map->value($row, 'quantity')),
                     'payload'          => json_encode($payload, JSON_UNESCAPED_UNICODE),
                     'import_job_id'    => $jobId,
                     'created_date'     => $now,
@@ -730,8 +739,8 @@ final class IngestionService
                 $errors > 0                   => 'completed_with_errors',
                 default                       => 'completed',
             },
-            'total_rows'      => count($batch->rows),
-            'processed_rows'  => count($batch->rows),
+            'total_rows'      => $batch->count(),
+            'processed_rows'  => $batch->count(),
             'success_count'   => $success,
             'error_count'     => $errors,
             'duplicate_count' => $skipped,
@@ -753,6 +762,22 @@ final class IngestionService
             'skipped'    => $skipped,
             'signal_ids' => [],
         ];
+    }
+
+    /**
+     * A whole number for the `quantity` column, which is an INT.
+     *
+     * Reuses decimal() so the same currency and thousands-separator cleaning
+     * applies, then rounds. "120.00" — how the marks export writes a paper
+     * total — becomes 120 rather than being rejected as non-integral, and a
+     * genuinely unparseable value stays null rather than becoming a zero that
+     * would make every percentage built on it a division by nothing.
+     */
+    private function wholeNumber(?string $value): ?int
+    {
+        $decimal = $this->decimal($value);
+
+        return $decimal === null ? null : (int) round($decimal);
     }
 
     private function decimal(?string $value): ?float

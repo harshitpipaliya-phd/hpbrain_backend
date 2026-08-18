@@ -47,6 +47,30 @@ final class CsvUploadSource implements DataSource
     private const MAX_ROWS = 200000;
 
     /**
+     * The ceiling for the STREAMING delimited reader.
+     *
+     * Ten times MAX_ROWS, and it can be because memory no longer scales with
+     * the row count — readCsvStreaming() holds one chunk, a header list and a
+     * fifty-row sample, whatever the file. What this cap now bounds is TIME and
+     * the size of the resulting import, not memory: two million rows at the
+     * measured ~200 rows/second against the remote database is several hours of
+     * committing, which is a decision an operator should make deliberately with
+     * an incremental source rather than by dragging a file onto a form.
+     *
+     * Still throws rather than truncating, for the same reason MAX_ROWS does.
+     */
+    private const MAX_STREAM_ROWS = 2000000;
+
+    /**
+     * Rows kept in memory for preview and schema detection.
+     *
+     * SchemaDetector infers column types and entity hints from these, so it has
+     * to be enough rows for a type to be evident and few enough to be free. The
+     * preview endpoint shows three.
+     */
+    private const SAMPLE_ROWS = 50;
+
+    /**
      * @param  string|null  $originalName       the client filename, for provenance
      * @param  string|null  $originalExtension  the VALIDATED client extension; when
      *        null the extension is read off $filePath, which is only correct if the
@@ -117,17 +141,51 @@ final class CsvUploadSource implements DataSource
             return $this->fromRows($this->readBinaryMetadata($extension), "{$extension}_upload");
         }
 
+        return $this->readCsvStreaming($this->detectDelimiter());
+    }
+
+    /**
+     * Delimited files, read WITHOUT ever holding the whole file in memory.
+     *
+     * WHY THIS REPLACED THE ARRAY READ. The previous implementation appended
+     * every row to a PHP array and refused anything past MAX_ROWS, because
+     * ~240 MB of arrays against a 512 MB memory_limit was the real ceiling. A
+     * 388,401-row export was therefore rejected with `unreadable_upload` — the
+     * cap doing exactly what it was designed to do, and being useless anyway
+     * because the file was legitimate.
+     *
+     * ONE SCAN UP FRONT, then a fresh scan per read. The first pass counts rows
+     * and keeps a small sample, because the batch has to be able to answer
+     * count() and headers() without consuming anything — the preview, the queue
+     * threshold and the import job's total_rows all need the count before a
+     * single row is committed. Every later read reopens the file through the
+     * factory handed to IngestionBatch, so peak memory is one chunk regardless
+     * of file size.
+     *
+     * A COUNTING PASS IS CHEAP AND A GUESS IS NOT. Counting 388,401 rows costs
+     * well under a second of sequential I/O; estimating from file size would
+     * put a wrong total in front of the reviewer approving the import, and the
+     * whole point of the preview is that the number is real.
+     *
+     * MAX_ROWS STILL APPLIES, at a far higher streaming ceiling, and still
+     * throws rather than truncating. Silently keeping the first N rows would
+     * produce plausible wrong totals, which remains the one outcome this
+     * product cannot tolerate.
+     */
+    private function readCsvStreaming(string $delimiter): IngestionBatch
+    {
+        $headers = [];
+        $sample  = [];
+        $count   = 0;
+
         $handle = fopen($this->filePath, 'r');
 
         if ($handle === false) {
             throw new \RuntimeException("Cannot open upload at {$this->filePath}");
         }
 
-        $delimiter = $this->detectDelimiter();
-
         try {
             $headers = $this->readHeaders($handle, $delimiter);
-            $rows = [];
 
             while (($record = fgetcsv($handle, 0, $delimiter, '"', '\\')) !== false) {
                 // fgetcsv yields [null] for a blank line. Skipping it here
@@ -137,19 +195,67 @@ final class CsvUploadSource implements DataSource
                     continue;
                 }
 
-                if (count($rows) >= self::MAX_ROWS) {
+                if ($count >= self::MAX_STREAM_ROWS) {
                     throw new \RuntimeException(
-                        'CSV exceeds '.self::MAX_ROWS.' rows; split the file or use an incremental source.'
+                        'CSV exceeds '.self::MAX_STREAM_ROWS.' rows; split the file or use an incremental source.'
                     );
                 }
 
-                $rows[] = $this->combine($headers, $record);
+                if ($count < self::SAMPLE_ROWS) {
+                    $sample[] = $this->combine($headers, $record);
+                }
+
+                $count++;
             }
         } finally {
             fclose($handle);
         }
 
-        return $this->fromRows($rows, 'csv_upload');
+        $path = $this->filePath;
+        $combine = fn (array $record): array => $this->combine($headers, $record);
+
+        /**
+         * Reopens the file on every call. See the IngestionBatch docblock on
+         * why this is a factory rather than a Generator: the batch is read more
+         * than once, and a half-consumed iterator would commit a partial file.
+         */
+        $stream = static function () use ($path, $delimiter, $headers, $combine): \Generator {
+            $fh = fopen($path, 'r');
+
+            if ($fh === false) {
+                throw new \RuntimeException("Cannot reopen upload at {$path}");
+            }
+
+            try {
+                // Skip the header line the same way the counting pass did.
+                fgetcsv($fh, 0, $delimiter, '"', '\\');
+
+                while (($record = fgetcsv($fh, 0, $delimiter, '"', '\\')) !== false) {
+                    if ($record === [null] || $record === []) {
+                        continue;
+                    }
+
+                    yield $combine($record);
+                }
+            } finally {
+                fclose($fh);
+            }
+        };
+
+        return new IngestionBatch(
+            tenantId: $this->tenantId,
+            sourceKey: $this->sourceKey,
+            sourceType: 'csv_upload',
+            syncType: 'one_time_historical_import',
+            rows: [],
+            fetchedAt: new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
+            nextCheckpoint: null,
+            sourceRef: $this->filePath,
+            rowStream: $stream,
+            streamCount: $count,
+            streamHeaders: $headers,
+            streamSample: $sample,
+        );
     }
 
     /**

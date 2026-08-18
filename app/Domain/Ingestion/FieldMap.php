@@ -29,17 +29,46 @@ final class FieldMap
     public const CANONICAL = [
         'title',              // → Signal.metadata.title, and the dedupe key
         'owner',              // → Signal.metadata.owner
-        'state',              // → Signal.classification
+        'state',              // → Signal.classification / OperationalRecord.status
         'evidence_text',      // → Evidence.content.text
-        'evidence_timestamp', // → Evidence.content.observedAt
-        'external_ref',       // → Signal.metadata.externalRef (stable source id)
+        'evidence_timestamp', // → Evidence.content.observedAt / occurred_at
+        'external_ref',       // → Signal.metadata.externalRef / natural_key
         'measure',            // → OperationalRecord.metric_value
         'measure_unit',       // → OperationalRecord.metric_unit
         'subject_ref',        // → OperationalRecord.subject_ref
         'category',           // → OperationalRecord.category
+        'sub_category',       // → OperationalRecord.sub_category
+        'quantity',           // → OperationalRecord.quantity (the denominator)
     ];
 
-    /** @param array<string, string> $map canonical field => source column */
+    /**
+     * Canonical targets that may bind SEVERAL source columns at once.
+     *
+     * Only the identity field, and only because identity is the one thing a
+     * single column genuinely could not express for some real files. An
+     * academic result is unique per student per year per subject per exam:
+     * enrollment_no alone repeats 40-odd times per student, so binding it as
+     * the natural key would collapse a student's whole transcript into one row
+     * and report the rest as duplicates.
+     *
+     * Everything else stays single-column deliberately. A composite `measure`
+     * or `category` would be a concatenation pretending to be a value, and the
+     * aggregations downstream would have nothing to work with.
+     *
+     * @var array<int, string>
+     */
+    public const COMPOSITE_CAPABLE = ['external_ref'];
+
+    /**
+     * Joins the parts of a composite value.
+     *
+     * A character that cannot appear inside the source values being joined, so
+     * ('10818','2018','MATHS','Written') cannot collide with any other
+     * combination. Chosen over a comma because subject names contain those.
+     */
+    public const COMPOSITE_SEPARATOR = '|';
+
+    /** @param array<string, string|array<int, string>> $map canonical field => source column(s) */
     public function __construct(private readonly array $map)
     {
     }
@@ -52,8 +81,33 @@ final class FieldMap
         $clean = [];
 
         foreach ($raw ?? [] as $canonical => $column) {
-            if (in_array($canonical, self::CANONICAL, true) && is_string($column) && $column !== '') {
+            if (! in_array($canonical, self::CANONICAL, true)) {
+                continue;
+            }
+
+            if (is_string($column) && $column !== '') {
                 $clean[$canonical] = $column;
+
+                continue;
+            }
+
+            // A list of columns is accepted only where a composite is
+            // meaningful, and only after the entries are proved to be non-empty
+            // strings — a stray null in the JSON would otherwise produce an
+            // identity with a hole in it that still looked well-formed.
+            if (is_array($column) && in_array($canonical, self::COMPOSITE_CAPABLE, true)) {
+                $parts = array_values(array_filter(
+                    $column,
+                    static fn ($c): bool => is_string($c) && trim($c) !== '',
+                ));
+
+                if ($parts === []) {
+                    continue;
+                }
+
+                // One entry is a plain column, not a composite. Stored as a
+                // string so everything downstream sees the simpler shape.
+                $clean[$canonical] = count($parts) === 1 ? $parts[0] : $parts;
             }
         }
 
@@ -80,9 +134,11 @@ final class FieldMap
             'evidence_text'      => ['remark', 'comment', 'note', 'description'],
             'evidence_timestamp' => ['date', 'time', 'when'],
             'external_ref'       => ['id', 'ref', 'code', 'number'],
-            'measure'            => ['amount'],
-            'subject_ref'        => ['unique id', 'gr no'],
+            'measure'            => ['amount', 'obtain'],
+            'subject_ref'        => ['unique id', 'gr no', 'enrollment'],
             'category'           => ['student quota'],
+            'quantity'           => ['total'],
+            'sub_category'       => ['exam'],
         ];
 
         $map = [];
@@ -108,14 +164,46 @@ final class FieldMap
         return isset($this->map[$canonical]);
     }
 
-    /** @param array<string, mixed> $row */
+    /**
+     * The value a row carries for one canonical field.
+     *
+     * A COMPOSITE BINDING IS ALL-OR-NOTHING. When the field binds several
+     * columns and any one of them is blank on this row, the whole value is
+     * null rather than a shortened join. The alternative — joining whatever is
+     * present — produces keys of differing shape from the same file, so
+     * ('10818','2018','MATHS','') and ('10818','2018','MATHS') would be
+     * distinct strings describing the same result, and the dedupe that natural
+     * keys exist for would quietly stop working. Null makes the row skip and
+     * say why.
+     *
+     * @param array<string, mixed> $row
+     */
     public function value(array $row, string $canonical): ?string
     {
         if (! isset($this->map[$canonical])) {
             return null;
         }
 
-        $raw = $row[$this->map[$canonical]] ?? null;
+        $binding = $this->map[$canonical];
+
+        if (is_array($binding)) {
+            $parts = [];
+
+            foreach ($binding as $column) {
+                $raw = $row[$column] ?? null;
+                $part = $raw === null ? '' : trim((string) $raw);
+
+                if ($part === '') {
+                    return null;
+                }
+
+                $parts[] = $part;
+            }
+
+            return implode(self::COMPOSITE_SEPARATOR, $parts);
+        }
+
+        $raw = $row[$binding] ?? null;
 
         if ($raw === null) {
             return null;
@@ -124,6 +212,30 @@ final class FieldMap
         $value = trim((string) $raw);
 
         return $value === '' ? null : $value;
+    }
+
+    /**
+     * The source columns a canonical field binds, always as a list.
+     *
+     * For the preview, so a reviewer can see that an identity is built from
+     * four columns rather than guessing from a joined example value.
+     *
+     * @return array<int, string>
+     */
+    public function columnsFor(string $canonical): array
+    {
+        if (! isset($this->map[$canonical])) {
+            return [];
+        }
+
+        $binding = $this->map[$canonical];
+
+        return is_array($binding) ? array_values($binding) : [$binding];
+    }
+
+    public function isComposite(string $canonical): bool
+    {
+        return is_array($this->map[$canonical] ?? null);
     }
 
     /** @return array<string, string> */

@@ -492,10 +492,10 @@ final class IngestionController extends Controller
             return response()->json(['error' => 'incomplete_field_map', 'message' => $e->getMessage()], 422);
         }
 
-        if (count($batch->rows) > self::QUEUE_ABOVE_ROWS) {
+        if ($batch->count() > self::QUEUE_ABOVE_ROWS) {
             $this->jobs->update($tenant, $jobId, [
                 'status'     => 'queued',
-                'total_rows' => count($batch->rows),
+                'total_rows' => $batch->count(),
             ]);
 
             if ($data['save_map'] ?? false) {
@@ -516,7 +516,7 @@ final class IngestionController extends Controller
             return response()->json([
                 'job_id'     => $jobId,
                 'status'     => 'queued',
-                'total_rows' => count($batch->rows),
+                'total_rows' => $batch->count(),
                 'poll'       => "/api/v1/imports/{$tenant}/{$jobId}",
                 'message'    => 'Ingestion has been queued. Track progress on the job.',
             ], 202);
