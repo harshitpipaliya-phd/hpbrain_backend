@@ -55,3 +55,20 @@ Schedule::command('brain:detect')
     ->hourlyAt(10)
     ->withoutOverlapping()
     ->runInBackground();
+
+// Intelligence warming. The engine caches against a data fingerprint, so this
+// is a no-op for every organization whose records have not changed — but when
+// they have, the recomputation is a multi-minute scan and somebody has to pay
+// for it. Before this, that somebody was whichever reader opened a screen first
+// after an import.
+//
+// Twenty-five past the hour: after brain:detect at :10, whose signals are part
+// of what the fingerprint covers, so the warm computes over settled input
+// rather than racing detection and being invalidated by it minutes later.
+//
+// withoutOverlapping because a warm of a large tenant can outlast the hour, and
+// runInBackground so it never delays the scheduler's other work.
+Schedule::command('intelligence:warm')
+    ->hourlyAt(25)
+    ->withoutOverlapping()
+    ->runInBackground();

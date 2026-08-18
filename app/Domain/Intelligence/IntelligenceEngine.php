@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Intelligence;
 
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -41,6 +42,26 @@ final class IntelligenceEngine
      */
     private const TTL_SECONDS = 21600;
 
+    /**
+     * Ceiling on how long one holder may keep the compute lock.
+     *
+     * Above the slowest observed cold computation, so a legitimate scan is never
+     * evicted mid-flight, and finite so a killed worker cannot wedge a tenant.
+     */
+    private const LOCK_SECONDS = 900;
+
+    /**
+     * How long a reader with nothing cached waits for the in-flight holder
+     * before computing for itself.
+     */
+    private const WAIT_SECONDS = 120;
+
+    /**
+     * The last completed answer per tenant, held well beyond TTL_SECONDS so
+     * there is something to serve while a new version is being computed.
+     */
+    private const LAST_GOOD_TTL_SECONDS = 604800;
+
     public function __construct(
         private readonly OrganizationDataProfiler $profiler,
         private readonly KnowledgeAnalyzer $knowledge,
@@ -62,13 +83,134 @@ final class IntelligenceEngine
     public function forOrganization(string $tenantId, bool $fresh = false): array
     {
         $version = $this->profiler->dataVersion($tenantId);
-        $key     = 'brain:intel:v3:'.$tenantId.':'.$version;
+        $key     = $this->versionedKey($tenantId, $version);
+        $store   = Cache::store('file');
 
         if ($fresh) {
-            Cache::store('file')->forget($key);
+            $store->forget($key);
         }
 
-        return Cache::store('file')->remember($key, self::TTL_SECONDS, fn (): array => $this->compute($tenantId, $version));
+        // Fast path. Unchanged, and still the path almost every request takes.
+        $hit = $store->get($key);
+
+        if (is_array($hit)) {
+            return $hit;
+        }
+
+        /*
+          SINGLE FLIGHT. `remember()` gave no exclusion, so every request that
+          arrived on a cold key started its own full computation: on the live
+          database that was observed as a dozen concurrent copies of the same
+          388k-row scan, each past 300 seconds, all competing for the same I/O
+          and so all finishing later than one alone would have. Ordinary
+          navigation was enough to trigger it, because nothing served a reader
+          while the first computation was still running.
+
+          One holder computes. Everyone else takes the branch below.
+        */
+        $lock = $store->lock($this->lockKey($tenantId), self::LOCK_SECONDS);
+
+        if ($lock->get()) {
+            try {
+                return $this->computeAndStore($tenantId, $version, $key, $store);
+            } finally {
+                $lock->release();
+            }
+        }
+
+        /*
+          STALE BEATS SLOW, AND BOTH BEAT A SPINNER. A computation is already in
+          flight; the previous good answer for this tenant is a few minutes out
+          of date at worst and is returned immediately, flagged, rather than
+          making the reader wait for a scan someone else is already paying for.
+        */
+        $lastGood = $store->get($this->lastGoodKey($tenantId));
+
+        if (is_array($lastGood)) {
+            return $this->markStale($lastGood, $version);
+        }
+
+        /*
+          Nothing cached at all — the tenant's first ever read. Wait for the
+          holder rather than starting a second scan, then take whatever it
+          published. Only if that wait expires with still nothing do we compute
+          inline, which is the one case where a reader pays full price.
+        */
+        try {
+            $lock->block(self::WAIT_SECONDS);
+        } catch (LockTimeoutException) {
+            $hit = $store->get($key);
+
+            return is_array($hit) ? $hit : $this->computeAndStore($tenantId, $version, $key, $store);
+        }
+
+        try {
+            $hit = $store->get($key);
+
+            return is_array($hit) ? $hit : $this->computeAndStore($tenantId, $version, $key, $store);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Compute, publish under the versioned key, and keep a copy as this tenant's
+     * last known good answer.
+     *
+     * @return array<string, mixed>
+     */
+    private function computeAndStore(string $tenantId, string $version, string $key, \Illuminate\Contracts\Cache\Repository $store): array
+    {
+        // Another holder may have published while we were queuing for the lock.
+        $hit = $store->get($key);
+
+        if (is_array($hit)) {
+            return $hit;
+        }
+
+        $computed = $this->compute($tenantId, $version);
+
+        $store->put($key, $computed, self::TTL_SECONDS);
+        $store->put($this->lastGoodKey($tenantId), $computed, self::LAST_GOOD_TTL_SECONDS);
+
+        return $computed;
+    }
+
+    /**
+     * Say plainly that this is the previous answer, and which version the caller
+     * actually asked for. A stale figure presented as current is the one
+     * failure this cache must not have.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function markStale(array $payload, string $requestedVersion): array
+    {
+        $payload['stale'] = [
+            'isStale'           => true,
+            'servedVersion'     => $payload['dataVersion'] ?? null,
+            'requestedVersion'  => $requestedVersion,
+            'reason'            => 'The current version is being computed by another request; this is the previous completed answer for this organization.',
+        ];
+
+        return $payload;
+    }
+
+    private function versionedKey(string $tenantId, string $version): string
+    {
+        return 'brain:intel:v3:'.$tenantId.':'.$version;
+    }
+
+    /** Per tenant, so one organization's computation never blocks another's. */
+    private function lockKey(string $tenantId): string
+    {
+        return 'brain:intel:lock:'.$tenantId;
+    }
+
+    /** Per tenant, so a stale read can never serve another organization. */
+    private function lastGoodKey(string $tenantId): string
+    {
+        return 'brain:intel:v3:last:'.$tenantId;
     }
 
     /**
