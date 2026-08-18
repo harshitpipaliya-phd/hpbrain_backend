@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\OrganizationDeletionController;
 use App\Http\Controllers\Api\OrganizationIntelligenceController;
 use App\Http\Controllers\Api\OutcomeController;
 use App\Http\Controllers\Api\PersonController;
+use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\PolicyController;
 use App\Http\Controllers\Api\ReasoningController;
 use App\Http\Controllers\Api\ReasoningEngineController;
@@ -164,6 +165,25 @@ Route::prefix('v1')->group(function () {
         Route::get('people/{tenantId}', [PersonController::class, 'index']);
         Route::post('people', [PersonController::class, 'store'])->middleware('permission:create');
         Route::get('people/{tenantId}/{id}', [PersonController::class, 'show']);
+
+        /*
+          EVERY LITERAL SEGMENT BEFORE /{id}. Laravel matches in registration
+          order, so with `students/{tenantId}/{id}` registered first the literal
+          /search, /summary, /structure and /intelligence were all swallowed by
+          it — each one arrived at show() as an id, found no student, and
+          answered 404. This is the same ordering rule the capabilities block
+          below documents, and it was broken here in exactly the way that comment
+          warns about.
+        */
+        Route::get('students/{tenantId}', [StudentController::class, 'index']);
+        Route::get('students/{tenantId}/summary', [StudentController::class, 'summary']);
+        Route::get('students/{tenantId}/search', [StudentController::class, 'search']);
+        Route::get('students/{tenantId}/structure', [StudentController::class, 'structure']);
+        Route::get('students/{tenantId}/intelligence', [StudentController::class, 'intelligence']);
+        Route::get('students/{tenantId}/by-ref/{studentRef}', [StudentController::class, 'byRef']);
+        Route::get('students/{tenantId}/{id}', [StudentController::class, 'show']);
+        Route::get('students/{tenantId}/{id}/academic-records', [StudentController::class, 'academicRecords']);
+        Route::get('students/{tenantId}/{id}/fee-records', [StudentController::class, 'feeRecords']);
 
         // NOTE ON ORDERING: `capabilities/{tenantId}/search` MUST stay above
         // `capabilities/{tenantId}/{id}`. Laravel matches in registration

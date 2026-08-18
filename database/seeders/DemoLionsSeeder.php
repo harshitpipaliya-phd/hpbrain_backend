@@ -191,6 +191,39 @@ final class DemoLionsSeeder extends Seeder
                 'name'      => 'name',
                 'status'    => 'status',
             ]],
+            /*
+              Student — the derived projection, not an ERP table.
+
+              EVERY COLUMN NAMED HERE MUST EXIST ON hpbrain_students. An earlier
+              version mapped `status`, which the table does not have and never
+              had: EntityResolver builds its SELECT from these mappings, so the
+              first caller to resolve Student would have died with
+              "Unknown column 'status' in field list" — at runtime, on a screen,
+              rather than when the mapping was written. The mapping was never
+              seeded, so nothing broke; it is corrected here so that running the
+              seeder stays safe.
+
+              A student has no status because the source files record none. The
+              honest equivalents are `in_academic` / `in_fees` — which file
+              names this student — and they are mapped as themselves rather than
+              collapsed into a status word the data does not support.
+            */
+            'Student'             => ['hpbrain_students', [
+                'id'            => 'id',
+                'tenantKey'     => 'tenant_id',
+                'externalRef'   => 'student_ref',
+                'studentRef'    => 'student_ref',
+                'studentName'   => 'student_name',
+                'standard'      => 'standard',
+                'division'      => 'division',
+                'batch'         => 'batch',
+                'studentQuota'  => 'student_quota',
+                'uniqueId'      => 'unique_id',
+                'sourceDataset' => 'source_dataset',
+                'academicYear'  => 'academic_year',
+                'createdAt'     => 'created_date',
+                'updatedAt'     => 'updated_date',
+            ]],
         ];
 
         foreach ($entities as $universalEntity => [$sourceTable, $fields]) {

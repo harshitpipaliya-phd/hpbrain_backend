@@ -65,10 +65,10 @@ final class IntelligenceEngine
         $key     = 'brain:intel:v3:'.$tenantId.':'.$version;
 
         if ($fresh) {
-            Cache::forget($key);
+            Cache::store('file')->forget($key);
         }
 
-        return Cache::remember($key, self::TTL_SECONDS, fn (): array => $this->compute($tenantId, $version));
+        return Cache::store('file')->remember($key, self::TTL_SECONDS, fn (): array => $this->compute($tenantId, $version));
     }
 
     /**

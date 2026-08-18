@@ -40,9 +40,9 @@ final class ExecutiveIntelligenceInterpreter
         }
 
         if ($fresh) {
-            Cache::forget($key);
+            Cache::store('file')->forget($key);
         } else {
-            $cached = Cache::get($key);
+            $cached = Cache::store('file')->get($key);
             if (is_array($cached)) {
                 return $cached;
             }
@@ -77,7 +77,7 @@ final class ExecutiveIntelligenceInterpreter
         }
 
         $validated = $this->validated($json, $version, $response->model);
-        Cache::put($key, $validated, self::TTL_SECONDS);
+        Cache::store('file')->put($key, $validated, self::TTL_SECONDS);
 
         return $validated;
     }

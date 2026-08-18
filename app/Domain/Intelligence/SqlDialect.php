@@ -50,6 +50,23 @@ final class SqlDialect
             : "DATE_FORMAT(`{$column}`, '%Y-%m')";
     }
 
+    /**
+     * The calendar year of a datetime column, as an integer.
+     *
+     * Added for the academic datasets, where the school year is the primary axis
+     * of every rollup — year-wise performance, a student's first and last
+     * recorded year, the academic-structure dimension. Grouping on the DATETIME
+     * column rather than on the year inside `payload` is what keeps those
+     * aggregates off a JSON parse of every row in a 388,401-row dataset, and
+     * this is the one expression the two engines spell differently.
+     */
+    public static function year(string $column): string
+    {
+        return self::isSqlite()
+            ? "CAST(strftime('%Y', {$column}) AS INTEGER)"
+            : "YEAR({$column})";
+    }
+
     /** Whole seconds between two datetime columns, later minus earlier. */
     public static function secondsBetween(string $from, string $to): string
     {

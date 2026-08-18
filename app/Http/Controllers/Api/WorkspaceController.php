@@ -54,69 +54,105 @@ final class WorkspaceController extends Controller
     {
         $tenantId = $this->tenantId($request);
 
-        $signals         = $this->signals->list($tenantId);
-        $recommendations = $this->recommendations->list($tenantId);
-        $decisions       = $this->decisions->list($tenantId);
-        $outcomes        = $this->outcomes->list($tenantId);
-        $learnings       = $this->learnings->list($tenantId);
+        $pending = DB::table('hpbrain_recommendations')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('status', ['pending', 'proposed'])
+            ->orderByDesc('created_date')
+            ->limit(self::RECENT)
+            ->get();
 
-        $pending = array_values(array_filter(
-            $recommendations,
-            fn ($r) => in_array(strtolower((string) ($r['status'] ?? '')), ['pending', 'proposed'], true)
-        ));
+        $recentSignals = DB::table('hpbrain_signals')
+            ->where('tenant_id', $tenantId)
+            ->orderByDesc('created_date')
+            ->limit(self::RECENT)
+            ->get();
 
-        $reusable = array_values(array_filter($learnings, fn ($l) => (bool) ($l['reusable'] ?? false)));
+        $recentDecisions = DB::table('hpbrain_decisions')
+            ->where('tenant_id', $tenantId)
+            ->orderByDesc('created_date')
+            ->limit(self::RECENT)
+            ->get();
+
+        $recentOutcomes = DB::table('hpbrain_outcomes')
+            ->where('tenant_id', $tenantId)
+            ->orderByDesc('created_date')
+            ->limit(self::RECENT)
+            ->get();
+
+        $reusable = DB::table('hpbrain_learnings')
+            ->where('tenant_id', $tenantId)
+            ->where('reusable', 1)
+            ->orderByDesc('created_date')
+            ->limit(self::RECENT)
+            ->get();
+
+        $signalCount = DB::table('hpbrain_signals')->where('tenant_id', $tenantId)->count();
+        $recommendationCount = DB::table('hpbrain_recommendations')->where('tenant_id', $tenantId)->count();
+        $decisionCount = DB::table('hpbrain_decisions')->where('tenant_id', $tenantId)->count();
+        $outcomeCount = DB::table('hpbrain_outcomes')->where('tenant_id', $tenantId)->count();
+        $learningCount = DB::table('hpbrain_learnings')->where('tenant_id', $tenantId)->count();
 
         return response()->json([
             'tenantId' => $tenantId,
             'counts'   => [
-                'signals'         => count($signals),
-                'recommendations' => count($recommendations),
-                'decisions'       => count($decisions),
-                'outcomes'        => count($outcomes),
-                'learnings'       => count($learnings),
+                'signals'         => $signalCount,
+                'recommendations' => $recommendationCount,
+                'decisions'       => $decisionCount,
+                'outcomes'        => $outcomeCount,
+                'learnings'       => $learningCount,
             ],
-            'pendingRecommendations' => array_map(fn ($r) => [
-                'id'         => (string) $r['id'],
-                'title'      => (string) ($r['title'] ?? ''),
-                'category'   => (string) ($r['category'] ?? 'uncategorised'),
-                'confidence' => $r['confidence'] === null ? 0.0 : (float) $r['confidence'],
-                'priority'   => (string) ($r['priority'] ?? 'medium'),
-                'status'     => (string) ($r['status'] ?? 'pending'),
-            ], array_slice($pending, 0, self::RECENT)),
+            'pendingRecommendations' => $pending->map(fn ($r) => [
+                'id'         => (string) $r->id,
+                'title'      => (string) ($r->title ?? ''),
+                'category'   => (string) ($r->category ?? 'uncategorised'),
+                'confidence' => $r->confidence === null ? 0.0 : (float) $r->confidence,
+                'priority'   => (string) ($r->priority ?? 'medium'),
+                'status'     => (string) ($r->status ?? 'pending'),
+            ])->values(),
 
-            'recentSignals' => array_map(fn ($s) => [
-                'id'          => (string) $s['id'],
-                'source'      => (string) ($s['source'] ?? 'unknown'),
-                'severity'    => (string) ($s['severity'] ?? 'unknown'),
-                'status'      => (string) ($s['status'] ?? 'unknown'),
-                'createdDate' => $s['created_date'] ?? null,
-            ], array_slice($signals, 0, self::RECENT)),
+            'recentSignals' => $recentSignals->map(fn ($s) => [
+                'id'          => (string) $s->id,
+                'source'      => (string) ($s->source ?? 'unknown'),
+                'severity'    => (string) ($s->severity ?? 'unknown'),
+                'status'      => (string) ($s->status ?? 'unknown'),
+                'createdDate' => $s->created_date ?? null,
+            ])->values(),
 
-            'recentDecisions' => array_map(fn ($d) => [
-                'id'           => (string) $d['id'],
-                'executorType' => (string) ($d['executor_type'] ?? 'unassigned'),
-                'rationale'    => (string) ($d['rationale'] ?? ''),
-                'createdDate'  => $d['created_date'] ?? null,
-            ], array_slice($decisions, 0, self::RECENT)),
+            'recentDecisions' => $recentDecisions->map(fn ($d) => [
+                'id'           => (string) $d->id,
+                'executorType' => (string) ($d->executor_type ?? 'unassigned'),
+                'rationale'    => (string) ($d->rationale ?? ''),
+                'createdDate'  => $d->created_date ?? null,
+            ])->values(),
 
-            'recentOutcomes' => array_map(fn ($o) => [
-                'id'          => (string) $o['id'],
-                'result'      => (string) ($o['result'] ?? 'unknown'),
-                'confidence'  => $o['confidence'] === null ? 0.0 : (float) $o['confidence'],
-                'createdDate' => $o['created_date'] ?? null,
-            ], array_slice($outcomes, 0, self::RECENT)),
+            'recentOutcomes' => $recentOutcomes->map(fn ($o) => [
+                'id'          => (string) $o->id,
+                'result'      => (string) ($o->result ?? 'unknown'),
+                'confidence'  => $o->confidence === null ? 0.0 : (float) $o->confidence,
+                'createdDate' => $o->created_date ?? null,
+            ])->values(),
 
-            'reusableLearnings' => array_map(fn ($l) => [
-                'id'         => (string) $l['id'],
-                'pattern'    => (string) ($l['pattern'] ?? ''),
-                'confidence' => $l['confidence'] === null ? 0.0 : (float) $l['confidence'],
-            ], array_slice($reusable, 0, self::RECENT)),
+            'reusableLearnings' => $reusable->map(fn ($l) => [
+                'id'         => (string) $l->id,
+                'pattern'    => (string) ($l->pattern ?? ''),
+                'confidence' => $l->confidence === null ? 0.0 : (float) $l->confidence,
+            ])->values(),
 
-            // The raw lists the endpoint published before, kept so anything
-            // already reading them keeps working.
-            'signals'         => array_slice($signals, 0, self::RECENT),
-            'recommendations' => array_slice($recommendations, 0, self::RECENT),
+            'signals'         => $recentSignals->map(fn ($s) => [
+                'id'          => (string) $s->id,
+                'source'      => (string) ($s->source ?? 'unknown'),
+                'severity'    => (string) ($s->severity ?? 'unknown'),
+                'status'      => (string) ($s->status ?? 'unknown'),
+                'createdDate' => $s->created_date ?? null,
+            ])->values(),
+            'recommendations' => $pending->map(fn ($r) => [
+                'id'         => (string) $r->id,
+                'title'      => (string) ($r->title ?? ''),
+                'category'   => (string) ($r->category ?? 'uncategorised'),
+                'confidence' => $r->confidence === null ? 0.0 : (float) $r->confidence,
+                'priority'   => (string) ($r->priority ?? 'medium'),
+                'status'     => (string) ($r->status ?? 'pending'),
+            ])->values(),
         ]);
     }
 

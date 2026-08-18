@@ -4,36 +4,38 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Domain\Ai\AiResponse;
-use App\Domain\Ai\AiRequest;
-use App\Domain\Ai\AssembledContext;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
-
+/**
+ * Tenant-scoped caching of AI responses.
+ *
+ * The key shape — `hpbrain:ai:{tenant}:{key}` — and the file store are both
+ * unchanged. flushTenant() now forgets the tenant's tracked keys rather than
+ * scanning for filenames the file store never writes, and its failure path no
+ * longer falls back to a global flush: one tenant's cache operation must not be
+ * able to destroy another's. See TenantScopedCache.
+ */
 final class AiCacheService
 {
+    public function __construct(private readonly TenantScopedCache $cache)
+    {
+    }
+
     public function remember(string $tenantId, string $cacheKey, \Closure $callback, int $ttl = 3600): mixed
     {
-        $key = "hpbrain:ai:{$tenantId}:{$cacheKey}";
-
-        return Cache::remember($key, $ttl, $callback);
+        return $this->cache->remember($tenantId, $this->key($tenantId, $cacheKey), $ttl, $callback);
     }
 
     public function forget(string $tenantId, string $cacheKey): void
     {
-        Cache::forget("hpbrain:ai:{$tenantId}:{$cacheKey}");
+        $this->cache->forget($this->key($tenantId, $cacheKey));
     }
 
     public function flushTenant(string $tenantId): void
     {
-        try {
-            if (function_exists('redis') && class_exists(\Illuminate\Support\Facades\Redis::class)) {
-                redis()->deletePattern("hpbrain:ai:{$tenantId}:*");
-            } else {
-                Cache::flush();
-            }
-        } catch (\Throwable $e) {
-            Cache::flush();
-        }
+        $this->cache->forgetTenant($tenantId);
+    }
+
+    private function key(string $tenantId, string $cacheKey): string
+    {
+        return "hpbrain:ai:{$tenantId}:{$cacheKey}";
     }
 }

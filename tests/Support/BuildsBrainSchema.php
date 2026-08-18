@@ -1445,6 +1445,47 @@ trait BuildsBrainSchema
             $t->unique(['tenant_id', 'dataset', 'natural_key'], 'operational_records_natural_key_unique');
         });
 
+        /*
+          hpbrain_students — the one-row-per-student projection.
+
+          Mirrors 2026_08_18_000200_students plus 2026_08_18_000300's added
+          columns. The UNIQUE on (tenant_id, student_ref) is load-bearing: it is
+          what makes StudentProjectionBuilder's upsert idempotent, and a test
+          schema without it would let a rebuild duplicate every student while the
+          suite reported success.
+        */
+        Schema::create('hpbrain_students', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('student_ref', 191);
+            $t->string('student_name');
+            $t->string('standard', 191)->nullable();
+            $t->string('division', 191)->nullable();
+            $t->string('batch', 191)->nullable();
+            $t->string('student_quota', 191)->nullable();
+            $t->string('unique_id', 191)->nullable();
+            $t->string('source_dataset', 64)->nullable();
+            $t->string('academic_year', 64)->nullable();
+            $t->boolean('in_academic')->default(false);
+            $t->boolean('in_fees')->default(false);
+            $t->string('academic_standard', 191)->nullable();
+            $t->integer('academic_records')->default(0);
+            $t->integer('fee_records')->default(0);
+            $t->decimal('avg_percentage', 6, 2)->nullable();
+            $t->decimal('total_obtained', 14, 2)->nullable();
+            $t->decimal('total_marks', 14, 2)->nullable();
+            $t->integer('subjects_count')->default(0);
+            $t->string('first_academic_year', 8)->nullable();
+            $t->string('last_academic_year', 8)->nullable();
+            $t->decimal('total_paid', 14, 2)->nullable();
+            $t->date('first_receipt_date')->nullable();
+            $t->date('last_receipt_date')->nullable();
+            $t->timestamp('projected_at')->nullable();
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+            $t->unique(['tenant_id', 'student_ref'], 'uq_student_tenant_ref');
+        });
+
         Schema::create('hpbrain_operational_rule_metadata', function ($t) {
             $t->string('id', 36)->primary();
             $t->string('tenant_id', 36);
