@@ -60,15 +60,18 @@ final class PersonController extends Controller
         $t = $this->authTenantId($request);
         $person = $this->resolver->resolve($t, 'Person');
 
+        $rows = DB::table($person->table)
+            ->select($this->listColumns($person))
+            ->where($person->tenantKey, $t)
+            ->whereNull('deleted_at')
+            ->where($person->field('status'), 1)
+            ->get();
+
+        // One query for every role name on the page, before mapping begins.
+        $roles = $this->profileNames($rows, $person);
+
         return response()->json(
-            DB::table($person->table)
-                ->select($this->listColumns($person))
-                ->where($person->tenantKey, $t)
-                ->whereNull('deleted_at')
-                ->where($person->field('status'), 1)
-                ->get()
-                ->map(fn ($r) => $this->map((array) $r, $person))
-                ->all()
+            $rows->map(fn ($r) => $this->map((array) $r, $person, $roles))->all()
         );
     }
 
@@ -91,7 +94,9 @@ final class PersonController extends Controller
                 }
             })->limit(50)->get();
 
-        return response()->json($rows->map(fn ($r) => $this->map((array) $r, $person))->all());
+        $roles = $this->profileNames($rows, $person);
+
+        return response()->json($rows->map(fn ($r) => $this->map((array) $r, $person, $roles))->all());
     }
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse
@@ -181,7 +186,64 @@ final class PersonController extends Controller
         );
     }
 
-    private function map(array $r, ResolvedSource $person): array
+    /**
+     * Role names for a set of people, in ONE query.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $rows
+     * @return array<string, string> profile id => role name
+     */
+    private function profileNames($rows, ResolvedSource $person): array
+    {
+        if (! $person->has('profile') || ! Schema::hasTable('tbluserprofilemaster')) {
+            return [];
+        }
+
+        $column = $person->field('profile');
+
+        $ids = $rows
+            ->map(fn ($r) => ((array) $r)[$column] ?? null)
+            ->filter(fn ($v) => $v !== null && $v !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return DB::table('tbluserprofilemaster')
+            ->whereIn('id', $ids)
+            ->pluck('name', 'id')
+            ->map(fn ($n) => (string) $n)
+            ->all();
+    }
+
+    /**
+     * @param  array<string, string>|null  $roles  preloaded names, or null to look one up
+     */
+    private function roleFor(mixed $profileId, ?array $roles): ?string
+    {
+        if ($profileId === null || $profileId === '') {
+            return null;
+        }
+
+        $name = $roles !== null
+            ? ($roles[(string) $profileId] ?? null)
+            // Single-row callers resolve the one name they need. One query for
+            // one person is not an N+1.
+            : (Schema::hasTable('tbluserprofilemaster')
+                ? DB::table('tbluserprofilemaster')->where('id', $profileId)->value('name')
+                : null);
+
+        return $name !== null && trim((string) $name) !== '' ? (string) $name : null;
+    }
+
+    /**
+     * @param  array<string, string>|null  $roles  preloaded role names, keyed by
+     *         profile id. Null makes this row resolve its own, which is correct
+     *         for the single-row paths and wrong for a list — see profileNames.
+     */
+    private function map(array $r, ResolvedSource $person, ?array $roles = null): array
     {
         // An unmapped field reads as null rather than throwing: this is a
         // rendering path, and a source without a gender column has no gender to
@@ -199,15 +261,19 @@ final class PersonController extends Controller
         $unit = $value('unit');
         $displayName = trim((string) (($value('firstName') ?? '').' '.($value('lastName') ?? '')));
         $profileId = $value('profile');
-        $profileName = null;
 
-        if ($profileId !== null && Schema::hasTable('tbluserprofilemaster')) {
-            $profileName = DB::table('tbluserprofilemaster')
-                ->where('id', $profileId)
-                ->value('name');
-        }
-
-        $role = $profileName !== null && trim((string) $profileName) !== '' ? (string) $profileName : null;
+        // ROLE NAMES ARE RESOLVED IN ONE QUERY FOR THE WHOLE PAGE, NOT ONE PER
+        // PERSON. This block used to run Schema::hasTable() AND a SELECT against
+        // tbluserprofilemaster for every row it mapped — two round trips per
+        // person. Against this deployment's remote database that made a list of
+        // 81 people cost ~1.9 seconds while the same endpoint on a tenant with
+        // one person answered in 50ms; the work scaled with the row count, not
+        // the data. Measured before: 1392 / 1831 / 1932 ms.
+        //
+        // $roles is prepared once by the caller (see profileNames) and passed
+        // down. It is optional so the single-row callers — show(), store() —
+        // stay unchanged and simply resolve the one name they need.
+        $role = $this->roleFor($profileId, $roles);
 
         return [
             'id'           => (string) $r[$person->primaryKey],
