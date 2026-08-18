@@ -34,10 +34,29 @@ final class EvidenceController extends Controller
     ) {
     }
 
+    /**
+     * The response stays a bare JSON array, as web/src/api/evidence.ts consumes
+     * it. `since` and `limit` narrow it; omitting both returns everything,
+     * exactly as before. Mirrors SignalController::index deliberately — the two
+     * screens are siblings and a reviewer should not have to learn two
+     * different query vocabularies.
+     */
     public function index(Request $request): JsonResponse
     {
+        $data = $request->validate([
+            'status' => ['nullable', 'string', 'max:190'],
+            'since'  => ['nullable', 'date'],
+            'limit'  => ['nullable', 'integer', 'min:1', 'max:5000'],
+        ]);
+
         return response()->json(
-            $this->repository->list($this->tenantId($request), $request->query('status'))
+            $this->repository->list(
+                $this->tenantId($request),
+                $data['status'] ?? null,
+                null,
+                isset($data['since']) ? date('Y-m-d H:i:s', strtotime((string) $data['since'])) : null,
+                isset($data['limit']) ? (int) $data['limit'] : null,
+            )
         );
     }
 
