@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Industry\Vocabulary;
+use App\Domain\Organization\FoundationCounts;
 use App\Domain\School\FeeIntelligenceService;
 use App\Domain\Signals\RuleCauseMetadata;
 use App\Domain\Universal\EntityResolver;
@@ -47,6 +48,7 @@ final class WorkspaceController extends Controller
         private readonly OutcomeRepository $outcomes,
         private readonly RuleCauseMetadata $ruleCauseMetadata,
         private readonly FeeIntelligenceService $feeIntelligence,
+        private readonly FoundationCounts $foundation,
     ) {
     }
 
@@ -167,48 +169,27 @@ final class WorkspaceController extends Controller
     {
         $tenantId = $this->tenantId($request);
 
-        // THREE COUNTS OVER ONE SET OF ROWS, NOT THREE PASSES OVER THE TABLE.
-        //
-        // These were five separate COUNT queries — three of them scanning
-        // exactly the same employee rows under exactly the same predicate, then
-        // discarding all but one tally. On a tenant with a large workforce that
-        // is the dominant cost of loading the home screen, and it is paid three
-        // times over for no additional information.
-        //
-        // Conditional aggregation asks the same questions in one pass. SUM(CASE
-        // ...) rather than COUNT(CASE ...) because it reads the same on MySQL
-        // and SQLite, and the suite runs on the latter.
-        $person = $this->resolver->resolve($tenantId, 'Person');
-        $unit = $this->resolver->resolve($tenantId, 'OrganizationUnit');
+        /*
+          ONE DEFINITION, SHARED. These counts used to be computed here, in
+          IntelligenceOverviewController, and a third time in the browser from
+          the department list — three answers to what users read as one
+          question, and they disagreed. FoundationCounts owns the definition
+          now; this endpoint, the enterprise overview and the Departments screen
+          all publish its numbers. See App\Domain\Organization\FoundationCounts
+          for what each one means and why students are not among them.
 
-        $personUnit = $person->field('unit');
-        $personProfile = $person->field('profile');
+          Still one pass per table, still conditional aggregation, still no row
+          crossing the wire — that property moved into the service, it was not
+          given up.
+        */
+        $foundation = $this->foundation->forTenant($tenantId);
 
-        $people = DB::table($person->table)
-            ->where($person->tenantKey, $tenantId)
-            ->where($person->field('status'), 1)
-            ->whereNull('deleted_at')
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN {$personUnit} IS NULL OR {$personUnit} = 0 THEN 1 ELSE 0 END) as no_department")
-            ->selectRaw("SUM(CASE WHEN {$personProfile} IS NULL OR {$personProfile} = 0 THEN 1 ELSE 0 END) as no_profile")
-            ->first();
+        $activePeople            = $foundation['people']['total'];
+        $peopleWithoutDepartment = $foundation['people']['withoutUnit'];
+        $peopleWithoutProfile    = $foundation['people']['withoutProfile'];
 
-        $activePeople            = (int) ($people->total ?? 0);
-        $peopleWithoutDepartment = (int) ($people->no_department ?? 0);
-        $peopleWithoutProfile    = (int) ($people->no_profile ?? 0);
-
-        $unitParent = $unit->field('parent');
-
-        $departments = DB::table($unit->table)
-            ->where($unit->tenantKey, $tenantId)
-            ->where($unit->field('status'), 1)
-            ->whereNull('deleted_at')
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN {$unitParent} IS NULL OR {$unitParent} = 0 THEN 1 ELSE 0 END) as no_manager")
-            ->first();
-
-        $activeDepartments         = (int) ($departments->total ?? 0);
-        $departmentsWithoutManager = (int) ($departments->no_manager ?? 0);
+        $activeDepartments         = $foundation['departments']['active'];
+        $departmentsWithoutManager = $foundation['departments']['withoutParent'];
 
         // High-severity signals are a subset of open ones, so the second query
         // re-read rows the first had already counted.
@@ -352,12 +333,40 @@ final class WorkspaceController extends Controller
 
         return response()->json([
             'tenantId' => $tenantId,
+            /*
+              `erp` IS THE STAFF ROSTER AND SAYS SO. activePeople counts the
+              table this tenant maps Person to — employees. It has never
+              included students and must not: an imported academic row is a
+              child, not a member of staff.
+            */
             'erp' => [
                 'activePeople' => $activePeople,
                 'activeDepartments' => $activeDepartments,
+                // 'hr' | 'academic' | 'none' — where those departments came
+                // from, so the tile can name them without guessing. See
+                // App\Domain\Organization\OrganizationStructureService.
+                'departmentSource' => $foundation['departments']['source'],
                 'peopleWithoutDepartment' => $peopleWithoutDepartment,
                 'departmentsWithoutManager' => $departmentsWithoutManager,
                 'peopleWithoutProfile' => $peopleWithoutProfile,
+            ],
+            /*
+              THE OTHER POPULATION, published in the same response so the
+              overview cannot show one without the other.
+
+              This is the whole "People = 1 next to 398,831 imported records"
+              defect: both figures were true, both were tenant-scoped, and the
+              screen named neither, so a reader was left to assume they
+              contradicted. `students` is the projection's distinct enrolment
+              count and `records` the imported source rows those students were
+              derived from — four different things, four labels. See
+              App\Domain\Organization\FoundationCounts for the definitions.
+            */
+            'imported' => [
+                'students' => $foundation['students']['total'],
+                'studentsInBothFiles' => $foundation['students']['inBothFiles'],
+                'studentsSupported' => $foundation['students']['supported'],
+                'records' => $foundation['records']['total'],
             ],
             'intelligence' => [
                 'openSignals' => $openSignals,

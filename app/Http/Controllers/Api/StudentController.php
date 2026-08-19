@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Domain\School\AcademicIntelligenceService;
+use App\Domain\School\AcademicSections;
 use App\Domain\School\DatasetRegistry;
 use App\Http\Controllers\Controller;
 use App\Repositories\AcademicRecordRepository;
@@ -48,6 +49,7 @@ final class StudentController extends Controller
         private readonly AcademicIntelligenceService $intelligence,
         private readonly DatasetRegistry $datasets,
         private readonly TenantScopedCache $cache,
+        private readonly AcademicSections $sections,
     ) {
     }
 
@@ -62,6 +64,23 @@ final class StudentController extends Controller
     {
         $tenantId = $this->authTenantId($request);
 
+        /*
+          An unrecognised ?section= is REFUSED, not ignored. Ignoring it would
+          return the whole cohort under a section heading — the list would say
+          "Secondary Section" above every student in the school, which is worse
+          than an error because it looks like an answer.
+        */
+        $sectionKey = $request->query('section');
+        $sectionPredicate = null;
+
+        if ($sectionKey !== null && $sectionKey !== '') {
+            $sectionPredicate = $this->sections->gradePredicate((string) $sectionKey);
+
+            if ($sectionPredicate === null) {
+                return response()->json(['error' => 'unknown_section', 'section' => (string) $sectionKey], 422);
+            }
+        }
+
         $result = $this->students->paginate(
             $tenantId,
             [
@@ -73,6 +92,10 @@ final class StudentController extends Controller
                 'student_quota'     => $request->query('quota'),
                 'cohort'            => $request->query('cohort'),
                 'subject'           => $request->query('subject'),
+                // ?section=secondary narrows the list to standards 9-10, using
+                // the same grade definition the Departments screen's section
+                // cards are counted with. Validated above.
+                'sectionPredicate'  => $sectionPredicate,
                 // Resolved here rather than in the repository, so the subject
                 // filter works for any tenant that has declared an academic
                 // dataset and is simply inert for one that has not.

@@ -159,6 +159,11 @@ Route::prefix('v1')->group(function () {
 
         Route::get('departments/{tenantId}', [DepartmentController::class, 'index']);
         Route::post('departments', [DepartmentController::class, 'store'])->middleware('permission:create');
+        // Literal segment BEFORE /{id} — Laravel matches in registration order,
+        // and `departments/{tenantId}/{id}` would otherwise swallow "summary"
+        // and look for a department whose id is the word.
+        Route::get('departments/{tenantId}/summary', [DepartmentController::class, 'summary']);
+        Route::get('departments/{tenantId}/sections', [DepartmentController::class, 'sections']);
         Route::get('departments/{tenantId}/{id}', [DepartmentController::class, 'show']);
 
         Route::get('people/{tenantId}/search', [PersonController::class, 'search']);

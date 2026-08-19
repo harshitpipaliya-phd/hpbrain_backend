@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Organization\DepartmentVisibilityScope;
+use App\Domain\School\AcademicSections;
+use App\Domain\Organization\FoundationCounts;
 use App\Domain\Universal\EntityResolver;
 use App\Domain\Universal\ResolvedSource;
 use App\Http\Controllers\Controller;
@@ -26,8 +29,70 @@ use Illuminate\Support\Facades\Schema;
  */
 final class DepartmentController extends Controller
 {
-    public function __construct(private readonly EntityResolver $resolver)
+    public function __construct(
+        private readonly EntityResolver $resolver,
+        private readonly FoundationCounts $foundation,
+        private readonly DepartmentVisibilityScope $visibility,
+        private readonly AcademicSections $sections,
+    ) {
+    }
+
+    /**
+     * The counts the Departments screen puts on its tiles.
+     *
+     * WHY THE SCREEN DOES NOT DERIVE THESE ITSELF. It used to: it counted the
+     * rows index() returned (which include inactive units, so it disagreed with
+     * the Organization overview's active-only figure) and it summed a per-unit
+     * headcount taken from each unit's twin — a figure the twin replaces with a
+     * STUDENT count on school tenants, so the tile labelled "People" published a
+     * number from a different population than the overview's "People". Both
+     * screens now publish FoundationCounts' answer, so they cannot drift.
+     *
+     * It also cost one request per department plus a full download of the
+     * tenant's people list to do it. `perUnit` here is one GROUP BY.
+     *
+     * Tenant scope comes from the authenticated token via authTenantId(), the
+     * same as every other method on this controller — never from the path.
+     */
+    public function summary(Request $request): JsonResponse
     {
+        $t = $this->authTenantId($request);
+        $counts = $this->foundation->forTenant($t);
+
+        return response()->json([
+            'tenantId' => $t,
+            'departments' => $counts['departments'],
+            'people' => $counts['people'],
+            // Published BESIDE people, never folded into it. A screen that shows
+            // one without the other is how "People 1" came to sit beside
+            // "Students 7,445" and read as a contradiction.
+            'students' => $counts['students'],
+            'records' => $counts['records'],
+            // Keyed by department id, so the screen can label a unit without
+            // holding the tenant's whole workforce in the browser.
+            'peoplePerDepartment' => (object) $counts['perUnit'],
+        ]);
+    }
+
+    /**
+     * The school sections this organization's imported data describes.
+     *
+     * WHY THIS LIVES ON THE DEPARTMENT CONTROLLER. It is what the Departments
+     * screen renders for a school that has students and no HR units — Lions has
+     * 7,445 children and zero rows in hrms_departments, so the screen was
+     * correctly, and uselessly, empty. These sections are DERIVED, not stored:
+     * nothing here writes to hrms_departments, and the screen labels them as
+     * academic sections rather than passing them off as HR departments.
+     *
+     * Tenant comes from the token via authTenantId(), like every other method
+     * here, so a caller who edits the {tenantId} segment gets their own school
+     * back and never another one's children.
+     */
+    public function sections(Request $request): JsonResponse
+    {
+        $t = $this->authTenantId($request);
+
+        return response()->json($this->sections->forTenant($t) + ['tenantId' => $t]);
     }
 
     public function index(Request $request): JsonResponse
@@ -385,64 +450,16 @@ final class DepartmentController extends Controller
         ];
     }
 
+    /**
+     * MOVED, NOT CHANGED. The rule this used to implement inline now lives in
+     * App\Domain\Organization\DepartmentVisibilityScope, because it is the
+     * DEFINITION of "this organization's departments" and every count of them
+     * has to apply it too. While it lived only here, the list excluded ERP
+     * template rows and every count included them, so the Organization overview
+     * and this screen published different totals for the same tenant.
+     */
     private function applyDepartmentVisibilityScope(Builder $query, ResolvedSource $unit, string $tenantId): void
     {
-        if ($unit->table !== 'hrms_departments') {
-            return;
-        }
-
-        if ($this->hasColumn($unit->table, 'is_calculated')) {
-            $query->where(fn (Builder $w) => $w->where('is_calculated', 0)->orWhereNull('is_calculated'));
-        }
-
-        if (! $this->hasColumns($unit->table, ['is_calculated', 'created_by', 'created_at', 'deleted_at'])) {
-            return;
-        }
-
-        $currentCohortStart = DB::table($unit->table)
-            ->where($unit->tenantKey, $tenantId)
-            ->whereNull('deleted_at')
-            ->where(fn (Builder $w) => $w->where('is_calculated', 0)->orWhereNull('is_calculated'))
-            ->whereNull('created_by')
-            ->whereNotNull('created_at')
-            ->min('created_at');
-
-        if ($currentCohortStart === null) {
-            return;
-        }
-
-        $hasTemplateRows = DB::table($unit->table)
-            ->where($unit->tenantKey, $tenantId)
-            ->whereNull('deleted_at')
-            ->where('is_calculated', 1)
-            ->exists();
-
-        $hasOlderManualRows = DB::table($unit->table)
-            ->where($unit->tenantKey, $tenantId)
-            ->whereNull('deleted_at')
-            ->where(fn (Builder $w) => $w->where('is_calculated', 0)->orWhereNull('is_calculated'))
-            ->whereNotNull('created_by')
-            ->where('created_at', '<', $currentCohortStart)
-            ->exists();
-
-        if ($hasTemplateRows && $hasOlderManualRows) {
-            $query->where('created_at', '>=', $currentCohortStart);
-        }
-    }
-
-    private function hasColumns(string $table, array $columns): bool
-    {
-        foreach ($columns as $column) {
-            if (! $this->hasColumn($table, $column)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private function hasColumn(string $table, string $column): bool
-    {
-        return Schema::hasColumn($table, $column);
+        $this->visibility->apply($query, $unit, $tenantId);
     }
 }

@@ -107,6 +107,13 @@ trait BuildsBrainSchema
         Schema::create('hpbrain_signals', function ($t) {
             $t->string('id', 36)->primary();
             $t->string('tenant_id', 36);
+            // The business identity of an INGESTED row — see
+            // 2026_08_19_000100_signal_dedupe_key. Nullable and uniquely indexed
+            // WITH tenant_id: rule-raised and hand-entered signals make no claim
+            // to identity and stay null, and two organizations that number a
+            // record identically stay two rows.
+            $t->char('dedupe_key', 64)->nullable();
+            $t->unique(['tenant_id', 'dedupe_key'], 'signals_dedupe_unique');
             $t->string('org_id', 36)->nullable();
             $t->string('department_id', 36)->nullable();
             $t->text('source');

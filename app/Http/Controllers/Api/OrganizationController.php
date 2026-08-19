@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Organization\OrganizationStructureService;
 use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use App\Repositories\OrganizationRepository;
@@ -28,6 +29,7 @@ final class OrganizationController extends Controller
     public function __construct(
         private readonly OrganizationRepository $repository,
         private readonly EntityResolver $resolver,
+        private readonly OrganizationStructureService $structure,
     ) {
     }
 
@@ -147,43 +149,37 @@ final class OrganizationController extends Controller
             return response()->json(['error' => 'organization_not_found'], 404);
         }
 
-        $unitId = $unit->field('id');
-        $unitName = $unit->field('name');
-        $unitParent = $unit->field('parent');
-        $unitStatus = $unit->field('status');
+        /*
+          THE SHARED STRUCTURE. All three lists below were built here from their
+          own queries over the unit and person tables, with no visibility filter
+          — so this aggregate reported units the Departments screen said did not
+          exist, and CommandCenter had to intersect the two by hand to avoid
+          listing them. OrganizationStructureService is the single definition of
+          what this organization's departments are and who is in them.
 
-        $departments = DB::table($unit->table)
-            ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->get([$unitId, $unitName, $unitParent, $unitStatus])
-            ->map(fn ($d) => [
-                'id' => (string) $d->{$unitId},
-                'name' => (string) $d->{$unitName},
-                'parentId' => (string) $d->{$unitParent},
-                'status' => (string) $d->{$unitStatus},
-            ])->values();
+          `memberType` is published because the members are STAFF for an
+          organization whose units come from its HR system and STUDENTS for one
+          whose structure is derived from imported academic data. A consumer that
+          prints a headcount must be able to label it correctly.
+        */
+        $structure = $this->structure->forTenant($t);
 
-        $personUnit = $person->field('unit');
-
-        $peopleByDepartment = DB::table($person->table)
-            ->where($person->tenantKey, $t)
-            ->where($person->field('status'), 1)
-            ->whereNull('deleted_at')
-            ->select($personUnit, DB::raw('COUNT(*) as count'))
-            ->groupBy($personUnit)
-            ->get()
-            ->mapWithKeys(fn ($r) => [(string) $r->{$personUnit} => (int) $r->count]);
-
-        $heads = DB::table($unit->table)
-            ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->get([$unitId, $unitName])
-            ->mapWithKeys(fn ($d) => [(string) $d->{$unitId} => (string) $d->{$unitName}]);
+        $departments = collect($structure['departments'])->map(fn (array $d) => [
+            'id' => (string) $d['id'],
+            'name' => (string) $d['name'],
+            'parentId' => $d['parentId'],
+            'status' => (string) $d['status'],
+            'source' => (string) $d['source'],
+        ])->values();
 
         return response()->json([
             'departments' => $departments,
-            'peopleByDepartment' => $peopleByDepartment,
-            'heads' => $heads,
+            'peopleByDepartment' => (object) $this->structure->getPeopleCountByDepartment($t),
+            'memberType' => $structure['memberType'],
+            'source' => $structure['source'],
+            'heads' => (object) collect($structure['departments'])
+                ->mapWithKeys(fn (array $d) => [(string) $d['id'] => (string) $d['name']])
+                ->all(),
         ]);
     }
 
@@ -238,14 +234,31 @@ final class OrganizationController extends Controller
             })
             ->count();
 
-        $deptsWithoutHead = $activeUnits()
-            ->where(function ($q) use ($unitParent) {
-                $q->whereNull($unitParent)->orWhere($unitParent, 0);
-            })
-            ->count();
+        /*
+          THE SHARED DEPARTMENT COUNT, and a quality check that only fires where
+          it can mean something.
+
+          `$totalDepts` came from a fourth independent COUNT here, so the data
+          quality report scored an organization against a different number of
+          departments than every screen showed it. It is the shared count now.
+
+          `deptsWithoutHead` is raised ONLY for departments that come from a
+          connected source system. A derived teaching section has no head column
+          to fill in and no ERP screen an administrator could go and fix it on,
+          so reporting it as a data-quality issue would ask somebody to correct
+          something that does not exist.
+        */
+        $totalDepts = $this->structure->departmentCount($t);
+
+        $deptsWithoutHead = $this->structure->isSourceSystemBacked($t)
+            ? $activeUnits()
+                ->where(function ($q) use ($unitParent) {
+                    $q->whereNull($unitParent)->orWhere($unitParent, 0);
+                })
+                ->count()
+            : 0;
 
         $totalPeople = $activePeople()->count();
-        $totalDepts = $activeUnits()->count();
 
         $issues = [];
 
