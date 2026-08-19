@@ -70,6 +70,22 @@ final class StudentRepository
             default        => null,
         };
 
+        /*
+          THE SECTION FILTER, applied as SQL rather than as a list of standards.
+
+          `sectionPredicate` arrives from App\Domain\School\AcademicSections and
+          is the SAME grade expression that produced the section's headline
+          count. Resolving the band to a list of spellings here instead — IX, X,
+          CBSE-9, CBSE-10 — would drift the moment a source spelled one of them
+          differently, and the card would then disagree with the list beneath
+          it. One definition, used by both.
+        */
+        $section = $filters['sectionPredicate'] ?? null;
+
+        if (is_array($section)) {
+            $query->whereRaw($section['sql'], $section['bindings']);
+        }
+
         $search = trim((string) ($filters['q'] ?? ''));
 
         if ($search !== '') {

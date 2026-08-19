@@ -205,6 +205,13 @@ final class IngestionService
         $chunks = $batch->chunks(self::CHUNK_ROWS);
         $rowNumber = 0;
 
+        // Identities already built in THIS commit. Held across chunks, not per
+        // chunk: two copies of a record 600 rows apart are still two copies.
+        // One bool per distinct record; on the largest real import (388,401
+        // rows) that is a few tens of MB, well inside the configured limit, and
+        // it is the price of the guarantee.
+        $seenInChunk = [];
+
         foreach ($chunks as $chunk) {
             $signals = [];
             $evidence = [];
@@ -236,6 +243,25 @@ final class IngestionService
                     $errors++;
                     continue;
                 }
+
+                /*
+                  IN-CHUNK DEDUPLICATION, before the database sees the row.
+
+                  insertOrIgnore would drop the repeat anyway, but a multi-row
+                  INSERT carrying the same primary key twice is a statement
+                  built on a contradiction, and the rollback manifest would list
+                  an id that was written once and recorded twice. Skipping here
+                  keeps the offered rows and the written rows the same set, so
+                  `success` and `duplicate_count` still reconcile against the
+                  file.
+                */
+                if (isset($seenInChunk[$built['signalId']])) {
+                    $this->log($tenantId, $jobId, $rowNumber, 'skipped', $built['signalId'], 'Duplicate of an earlier row in this batch.');
+                    $skipped++;
+                    continue;
+                }
+
+                $seenInChunk[$built['signalId']] = true;
 
                 $signals[] = $built['signal'];
                 $events[] = $built['event'];
@@ -428,10 +454,10 @@ final class IngestionService
         $state = $map->value($row, 'state');
         $now = $this->timestamp();
 
-        $signalId = $this->deterministicId($batch, $rowNumber, $row);
+        $signalId = $this->deterministicId($batch, $row, $map);
         $evidenceId = $evidenceText === null
             ? null
-            : $this->deterministicId($batch, $rowNumber, $row, 'evidence');
+            : $this->deterministicId($batch, $row, $map, 'evidence');
 
         // The provenance every downstream consumer needs, and the reason this
         // is ingestion rather than an import: source, job, row, and the exact
@@ -450,6 +476,22 @@ final class IngestionService
         $signal = [
             'id'             => $signalId,
             'tenant_id'      => $batch->tenantId,
+            /*
+              THE DEDUPLICATION KEY, WRITTEN AS A COLUMN.
+
+              The derived primary key above already makes a repeat collide, but
+              a key that exists only in this class's head is a convention, and a
+              convention is not a constraint — any other writer, any hand-run
+              backfill, any future code path that mints its own uuid can put the
+              same record in twice and nothing stops it. This column carries the
+              identity explicitly and UNIQUE (tenant_id, dedupe_key) makes the
+              DATABASE the thing that refuses the duplicate.
+
+              Null for every non-ingested signal (rules, manual entry): those
+              are not "the same fact seen again" and have no business key. MySQL
+              permits repeated NULLs in a unique index, so they are unaffected.
+            */
+            'dedupe_key'     => $this->dedupeKey($batch, $row, $map),
             'source'         => $batch->sourceKey,
             // The source's own word for the state, not a guess. When the row
             // has none, UNDETERMINED — this system's stated way of not
@@ -555,31 +597,150 @@ final class IngestionService
     }
 
     /**
-     * A stable id for one row of one source.
+     * A stable id for one LOGICAL RECORD of one source.
      *
-     * Same inputs, same uuid — which is what lets insertOrIgnore turn a retry
-     * into a no-op instead of a duplicate.
+     * WHAT THIS USED TO BE, AND WHY IT LET DUPLICATES THROUGH. The name hashed
+     * was (kind, tenant, sourceKey, ROW NUMBER, byte-hash of the row). That
+     * makes re-committing the SAME FILE a no-op — which it did correctly — but
+     * it makes the row's POSITION IN A FILE part of its identity. Two exports
+     * that both contain student 10821, or one export re-cut with an extra row
+     * near the top, produce different row numbers and therefore different ids,
+     * and the same child is written twice. A byte-level content hash has the
+     * same defect from the other direction: a trailing space or a re-ordered
+     * column makes an identical record look new.
+     *
+     * IDENTITY IS NOW THE BUSINESS KEY. See businessIdentity(): the mapped
+     * external_ref when the source has one — the enrollment number, GR number,
+     * ticket number, receipt number the organization itself uses — and a
+     * CANONICALISED content fingerprint only when it has none. Neither carries
+     * the file, the row number, the import batch or the ingest timestamp, so
+     * the same record arriving through a second file is recognised as the same
+     * record and insertOrIgnore drops it.
+     *
+     * WHAT IS STILL IN THE KEY, DELIBERATELY:
+     *
+     *   tenantId   — non-negotiable. Two organizations that both number a
+     *                student 10821 keep two separate records, always.
+     *   sourceKey  — the LOGICAL COLLECTION, not the file. Two uploads into the
+     *                same data source are the same collection and deduplicate
+     *                against each other; a complaint numbered 1001 and a work
+     *                order numbered 1001 are different facts in different
+     *                collections and must not collide. Dropping this would not
+     *                remove duplicates, it would DESTROY records — the strictly
+     *                worse failure.
+     *
+     * TWO BYTE-IDENTICAL ROWS IN ONE FILE NOW COLLAPSE TO ONE. With no business
+     * key to tell them apart they are indistinguishable, which is what
+     * "duplicate" means; the run reports them under duplicate_count rather than
+     * writing the same fact twice.
      *
      * @param  array<string, mixed>  $row
      */
     private function deterministicId(
         IngestionBatch $batch,
-        int $rowNumber,
         array $row,
+        FieldMap $map,
         string $kind = 'signal',
     ): string {
-        // json_encode of the row is a cheap, order-stable content fingerprint.
-        // Order matters and is preserved: the parser yields columns in header
-        // order for every row of a given file.
         $name = implode('|', [
             $kind,
             $batch->tenantId,
             $batch->sourceKey,
-            (string) $rowNumber,
-            hash('sha256', (string) json_encode($row)),
+            $this->businessIdentity($row, $map),
         ]);
 
         return Uuid::uuid5(self::ID_NAMESPACE, $name)->toString();
+    }
+
+    /**
+     * The value written to hpbrain_signals.dedupe_key.
+     *
+     * Same identity the primary key is derived from, hashed to a fixed 64
+     * characters so it fits a CHAR(64) and the unique index stays narrow. It is
+     * scoped by tenant_id in the index rather than inside the hash, so the
+     * column is readable and the index leads with the column every query
+     * already filters on.
+     *
+     * THE EXACT STRING MATTERS. 2026_08_19_000100_signal_dedupe_key backfills
+     * pre-existing rows by reproducing this concatenation in SQL, so that a
+     * file imported before that migration and re-imported after it is
+     * recognised as the same data. Change the shape here and that migration
+     * must change with it, or old and new rows will hash differently and the
+     * re-import will duplicate.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function dedupeKey(IngestionBatch $batch, array $row, FieldMap $map): string
+    {
+        return hash('sha256', $batch->sourceKey.'|'.$this->businessIdentity($row, $map));
+    }
+
+    /**
+     * What makes this row THIS record, independent of how it arrived.
+     *
+     * THE MAPPED BUSINESS FIELDS, canonicalised — reference, title, owner,
+     * state. Not the raw row, and not the reference alone. Both alternatives
+     * were tried against the real data and both are wrong:
+     *
+     *   THE REFERENCE ALONE IS NOT UNIQUE. On tenant 1000010 the fee export
+     *   carries receipt 4707 twice, once for TANMAY SHUKLA and once for
+     *   ADILALI MD. RAFIK SHAIKH — two different children, two real receipts,
+     *   one number. Keying on the reference would have deleted one of them.
+     *   That is not deduplication, it is data loss, and it is strictly worse
+     *   than the duplicate it set out to prevent. Any source may reuse a
+     *   number; nothing in this pipeline can assume otherwise.
+     *
+     *   THE WHOLE RAW ROW IS TOO BRITTLE. Every unmapped column — an export
+     *   that gains a "Remarks" field, a system that stamps its own extract
+     *   time into each line — changes the hash and makes an identical record
+     *   look new. The mapped fields are exactly the ones this pipeline stores
+     *   and reasons over; a difference outside them is a difference the Brain
+     *   does not record and must not treat as a new fact.
+     *
+     * Canonicalised for the differences that carry no meaning — leading and
+     * trailing space, doubled inner space, letter case. Nothing else: two
+     * values that differ in a digit are two different observations, and a
+     * normaliser clever enough to merge those would be clever enough to merge
+     * records that must stay apart.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function businessIdentity(array $row, FieldMap $map): string
+    {
+        $parts = [];
+
+        foreach (['external_ref', 'title', 'owner', 'state'] as $field) {
+            $parts[] = $map->has($field)
+                ? $this->canonicalToken($map->value($row, $field))
+                : '';
+        }
+
+        return implode("\x1f", $parts);
+    }
+
+    /** Trim, collapse internal whitespace, case-fold. Nothing more. */
+    private function canonicalToken(?string $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        $collapsed = preg_replace('/\s+/u', ' ', trim($value));
+
+        return mb_strtolower($collapsed ?? trim($value));
+    }
+
+    /**
+     * A natural key as it should be STORED.
+     *
+     * Whitespace-normalised but NOT case-folded: the unique index behind it is
+     * on a utf8mb4_unicode_ci column, so MySQL already treats "gr-1001" and
+     * "GR-1001" as the same key, and folding here would throw away the source's
+     * own spelling for no additional protection.
+     */
+    private function canonicalNaturalKey(string $value): string
+    {
+        return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
     }
 
     /**
@@ -638,6 +799,10 @@ final class IngestionService
         $skipped = 0;
         $rowNumber = 0;
 
+        // Natural keys already built in this commit — see the signal path for
+        // why this is per-COMMIT rather than per-chunk.
+        $seenKeys = [];
+
         foreach ($batch->chunks(self::CHUNK_ROWS) as $chunk) {
             $records = [];
 
@@ -652,6 +817,31 @@ final class IngestionService
                     continue;
                 }
 
+                /*
+                  CANONICALISED BEFORE IT BECOMES THE KEY. The unique index is
+                  (tenant_id, dataset, natural_key), so a leading space or a
+                  doubled inner space in one export and not the other made the
+                  same receipt two rows — the index doing exactly what it was
+                  asked, on two values that only LOOK different. Case needs no
+                  handling here: the column collates utf8mb4_unicode_ci, so the
+                  index already treats GR-1001 and gr-1001 as one key.
+                */
+                $naturalKey = $this->canonicalNaturalKey($naturalKey);
+
+                if ($naturalKey === '') {
+                    $this->log($tenantId, $jobId, $rowNumber, 'skipped', null, 'Dataset row has an empty external_ref.');
+                    $skipped++;
+                    continue;
+                }
+
+                if (isset($seenKeys[$naturalKey])) {
+                    $this->log($tenantId, $jobId, $rowNumber, 'skipped', null, 'Duplicate of an earlier row in this batch ('.$naturalKey.').');
+                    $skipped++;
+                    continue;
+                }
+
+                $seenKeys[$naturalKey] = true;
+
                 $subjectRef = $map->value($row, 'subject_ref');
                 $metric = $this->decimal($map->value($row, 'measure'));
 
@@ -663,7 +853,20 @@ final class IngestionService
 
                 $payload = $row;
                 $record = [
-                    'id'               => $this->deterministicId($batch, $rowNumber, $row, 'operational-record'),
+                    /*
+                      THE PRIMARY KEY IS NOW THE BUSINESS KEY, hashed into uuid
+                      shape. It was uuid5 over (source key, ROW NUMBER, byte
+                      hash of the row), which meant the id and the table's
+                      UNIQUE (tenant_id, dataset, natural_key) expressed two
+                      DIFFERENT identities: the same receipt arriving in a
+                      second file got a fresh id, was offered as a new row, and
+                      was rejected only because the unique index happened to
+                      catch it. The two agree now, so an insert either finds
+                      itself already present under both keys or is genuinely new
+                      — and a re-run produces a byte-identical row, which is
+                      what makes this idempotent rather than merely protected.
+                    */
+                    'id'               => $this->datasetRecordId($tenantId, $dataset, $naturalKey),
                     'tenant_id'        => $tenantId,
                     'org_id'           => $source['config']['org_id'] ?? null,
                     'dataset'          => $dataset,
@@ -705,9 +908,94 @@ final class IngestionService
 
             if ($records !== []) {
                 try {
-                    $written = DB::table('hpbrain_operational_records')->insertOrIgnore($records);
-                    $success += $written;
-                    $skipped += count($records) - $written;
+                    /*
+                      THREE OUTCOMES PER ROW, DECIDED BEFORE THE WRITE: new,
+                      already-here-unchanged, or already-here-with-DIFFERENT
+                      VALUES.
+
+                      insertOrIgnore alone gave two and folded the last two
+                      together, so a re-import carrying a corrected figure was
+                      reported identically to a re-import of a byte-identical
+                      file — "duplicate" — and an operator had no way to tell
+                      that a correction had not landed.
+
+                      ONE ROW PER IDENTITY, FOR EVER, IS THE DELIBERATE RULE and
+                      it is not being changed here. AcademicResultIngestionTest
+                      pins it with its reasoning: two conflicting marks for the
+                      same student, year, subject and exam would make every
+                      average ambiguous, so the FIRST value stands and a
+                      corrected re-import does not overwrite it. Applying
+                      corrections needs upsert semantics and is a decision to
+                      take deliberately, with a policy for which source wins —
+                      not something to fall into while fixing duplicates.
+
+                      What changes is that a conflict is now NAMED. It lands in
+                      hpbrain_import_logs against its own row number saying the
+                      stored value was kept, instead of vanishing into a
+                      duplicate tally.
+
+                      row_hash is the comparison — the column the table's
+                      original migration introduced for exactly this and which
+                      nothing read. It covers the business columns and excludes
+                      source_file, source_row, import_job_id and the timestamps,
+                      so the same record arriving from a different file in a
+                      different batch is correctly unchanged.
+
+                      ONE SELECT PER CHUNK, on the unique index, returning at
+                      most CHUNK_ROWS narrow rows.
+                    */
+                    $keys = array_column($records, 'natural_key');
+
+                    $existing = DB::table('hpbrain_operational_records')
+                        ->where('tenant_id', $tenantId)
+                        ->where('dataset', $dataset)
+                        ->whereIn('natural_key', $keys)
+                        ->pluck('row_hash', 'natural_key');
+
+                    $fresh = [];
+                    $unchanged = 0;
+                    $conflicting = 0;
+
+                    foreach ($records as $record) {
+                        $seen = $existing[$record['natural_key']] ?? null;
+
+                        if ($seen === null) {
+                            $fresh[] = $record;
+
+                            continue;
+                        }
+
+                        if ($seen === $record['row_hash']) {
+                            $unchanged++;
+
+                            continue;
+                        }
+
+                        $conflicting++;
+
+                        $this->log(
+                            $tenantId,
+                            $jobId,
+                            (int) $record['source_row'],
+                            'skipped',
+                            $record['id'],
+                            'Record '.$record['natural_key'].' already exists with different values; the stored record was kept.',
+                        );
+                    }
+
+                    if ($fresh !== []) {
+                        // insertOrIgnore, not insert: two workers racing the
+                        // same file must not turn a lost race into a failure.
+                        DB::table('hpbrain_operational_records')->insertOrIgnore($fresh);
+                    }
+
+                    $success += count($fresh);
+                    $skipped += $unchanged + $conflicting;
+
+                    // Only rows actually inserted belong in the rollback
+                    // manifest. Listing an id that was already there would make
+                    // a rollback delete a record this run did not create.
+                    array_splice($created, -count($records), count($records), array_column($fresh, 'id'));
                 } catch (\Throwable $e) {
                     $errors += count($records);
                     array_splice($created, -count($records));
@@ -762,6 +1050,22 @@ final class IngestionService
             'skipped'    => $skipped,
             'signal_ids' => [],
         ];
+    }
+
+    /**
+     * The id of the operational record for one business key.
+     *
+     * uuid5 over (tenant, dataset, natural key) — the exact tuple the table's
+     * UNIQUE constraint is on, so the primary key and the business key name the
+     * same record and cannot disagree. Tenant is inside the hash, which is what
+     * keeps two organizations' identically-numbered receipts apart.
+     */
+    private function datasetRecordId(string $tenantId, string $dataset, string $naturalKey): string
+    {
+        return Uuid::uuid5(
+            self::ID_NAMESPACE,
+            'operational-record|'.$tenantId.'|'.$dataset.'|'.mb_strtolower($naturalKey),
+        )->toString();
     }
 
     /**

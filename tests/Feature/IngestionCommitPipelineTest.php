@@ -174,6 +174,117 @@ final class IngestionCommitPipelineTest extends TestCase
         self::assertSame(11, DB::table('hpbrain_signals')->count());
     }
 
+    /**
+     * TWO DIFFERENT FILES CARRYING THE SAME RECORDS WRITE THEM ONCE.
+     *
+     * THE REGRESSION THIS PINS. Signal ids were derived from
+     * (tenant, source, ROW NUMBER, byte hash of the row), so a record's
+     * POSITION IN A FILE was part of its identity. File A and file B both
+     * containing students 1–3 produced six rows for three children, and
+     * re-cutting one export with an extra line near the top duplicated
+     * everything below it. Identity is now the mapped business fields, which
+     * no file layout can change.
+     */
+    public function test_overlapping_rows_from_two_different_files_are_stored_once(): void
+    {
+        $fileA = $this->rows(3);                             // records 1, 2, 3
+        $fileB = array_merge(
+            [['Name' => 'Row 9', 'Status' => 'Paid', 'Remarks' => 'note 9', 'Ref' => 'REF9']],
+            $this->rows(3),                                  // the SAME 1, 2, 3, now at rows 2-4
+        );
+
+        $this->service()->commit($this->newJob(), $this->batch($fileA), $this->map(), 'actor');
+        self::assertSame(3, DB::table('hpbrain_signals')->count());
+
+        $second = $this->service()->commit($this->newJob(), $this->batch($fileB), $this->map(), 'actor');
+
+        self::assertSame(4, DB::table('hpbrain_signals')->count(), 'Three overlapping records plus one new one.');
+        self::assertSame(1, $second['success']);
+        self::assertSame(3, $second['skipped']);
+    }
+
+    /**
+     * Formatting is not identity.
+     *
+     * Whitespace, letter case and column ORDER all differ here, and none of
+     * them changes which record this is. The user-visible symptom without this
+     * was a second import of the same register — re-exported from a different
+     * tool — doubling the whole dataset.
+     */
+    public function test_whitespace_case_and_column_order_do_not_create_duplicates(): void
+    {
+        $this->service()->commit($this->newJob(), $this->batch($this->rows(3)), $this->map(), 'actor');
+        self::assertSame(3, DB::table('hpbrain_signals')->count());
+
+        $reformatted = array_map(fn (array $row): array => [
+            // Different key order, padded and re-cased values.
+            'Ref'     => '  '.$row['Ref'].' ',
+            'Remarks' => $row['Remarks'],
+            'Status'  => strtoupper((string) $row['Status']),
+            'Name'    => '  '.str_replace(' ', '  ', (string) $row['Name']).'  ',
+        ], $this->rows(3));
+
+        $result = $this->service()->commit($this->newJob(), $this->batch($reformatted), $this->map(), 'actor');
+
+        self::assertSame(3, DB::table('hpbrain_signals')->count());
+        self::assertSame(0, $result['success']);
+        self::assertSame(3, $result['skipped']);
+    }
+
+    /**
+     * A repeated external reference is NOT on its own a duplicate.
+     *
+     * REAL DATA, NOT A HYPOTHETICAL. Tenant 1000010's fee export carries
+     * receipt 4707 twice — once for TANMAY SHUKLA, once for ADILALI MD. RAFIK
+     * SHAIKH. An earlier attempt at this fix keyed identity on the external
+     * reference alone and would have deleted one of those children's receipts.
+     * Losing a real record is strictly worse than keeping a duplicate, and this
+     * test exists so that trade is never made again.
+     */
+    public function test_two_records_sharing_an_external_reference_are_kept_apart(): void
+    {
+        $rows = [
+            ['Name' => 'TANMAY SHUKLA', 'Status' => 'Paid', 'Remarks' => 'cash', 'Ref' => '4707'],
+            ['Name' => 'ADILALI MD. RAFIK SHAIKH', 'Status' => 'Paid', 'Remarks' => 'cash', 'Ref' => '4707'],
+        ];
+
+        $result = $this->service()->commit($this->newJob(), $this->batch($rows), $this->map(), 'actor');
+
+        self::assertSame(2, $result['success']);
+        self::assertSame(2, DB::table('hpbrain_signals')->count());
+    }
+
+    /** The same record twice inside ONE file is still one record. */
+    public function test_a_record_repeated_within_one_file_is_written_once(): void
+    {
+        $rows = $this->rows(3);
+        $rows[] = $rows[0];
+        $rows[] = $rows[2];
+
+        $result = $this->service()->commit($this->newJob(), $this->batch($rows), $this->map(), 'actor');
+
+        self::assertSame(3, DB::table('hpbrain_signals')->count());
+        self::assertSame(3, $result['success']);
+        self::assertSame(2, $result['skipped']);
+    }
+
+    /**
+     * Two organizations numbering a student identically stay two students.
+     *
+     * The tenant is inside the derived id AND leads the UNIQUE index, so this
+     * holds even when every mapped field is byte-identical.
+     */
+    public function test_identical_records_in_two_tenants_never_merge(): void
+    {
+        $rows = [['Name' => 'Same Child', 'Status' => 'Paid', 'Remarks' => 'x', 'Ref' => '10821']];
+
+        $this->service()->commit($this->newJob('4'), $this->batch($rows, '4'), $this->map(), 'actor');
+        $this->service()->commit($this->newJob('9'), $this->batch($rows, '9'), $this->map(), 'actor');
+
+        self::assertSame(1, DB::table('hpbrain_signals')->where('tenant_id', '4')->count());
+        self::assertSame(1, DB::table('hpbrain_signals')->where('tenant_id', '9')->count());
+    }
+
     /** Two tenants uploading identical files do not collide. */
     public function test_identical_rows_in_two_tenants_are_separate_signals(): void
     {

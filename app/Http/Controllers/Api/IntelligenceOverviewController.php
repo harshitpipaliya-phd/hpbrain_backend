@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Cases\RecommendationCaseContext;
+use App\Domain\Organization\OrganizationStructureService;
 use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
@@ -24,6 +25,7 @@ final class IntelligenceOverviewController extends Controller
     public function __construct(
         private readonly EntityResolver $resolver,
         private readonly RecommendationCaseContext $recommendationCaseContext,
+        private readonly OrganizationStructureService $structure,
     ) {
     }
 
@@ -110,7 +112,7 @@ final class IntelligenceOverviewController extends Controller
                 'r.confidence as recommendation_confidence',
                 'rs.case_id as linked_case_id',
             ]));
-        $risks = collect(DB::table('hpbrain_risks')->where('tenant_id', $tenant)->get());
+        $risks = $this->riskRows($tenant);
         $evidenceRows = collect($caseIds === []
             ? []
             : DB::table('hpbrain_case_evidence as ce')
@@ -460,7 +462,7 @@ final class IntelligenceOverviewController extends Controller
         $capabilities = collect(DB::table('hpbrain_capabilities')->where('tenant_id', $tenant)->get());
         $assignments = collect(DB::table('hpbrain_capability_assignments')->where('tenant_id', $tenant)->where('status', 'active')->get());
         $recommendations = collect(DB::table('hpbrain_recommendations')->where('tenant_id', $tenant)->get());
-        $risks = collect(DB::table('hpbrain_risks')->where('tenant_id', $tenant)->get());
+        $risks = $this->riskRows($tenant);
         $decisions = collect(DB::table('hpbrain_decisions')->where('tenant_id', $tenant)->get());
         $executions = collect(DB::table('hpbrain_eso_executions')->where('tenant_id', $tenant)->get());
         $outcomes = collect(DB::table('hpbrain_outcomes')->where('tenant_id', $tenant)->get());
@@ -786,7 +788,9 @@ final class IntelligenceOverviewController extends Controller
             'topItems' => $openRisks->sortByDesc('score')->take(5)->map(fn ($row) => [
                 'id' => (string) $row->id,
                 'title' => (string) ($row->title ?? $row->category ?? 'Open risk'),
-                'owner' => $row->owner_id ? (string) $row->owner_id : null,
+                // Resolved from the owning decision by riskRows(); null when no
+                // decision links the risk, because then nobody owns it yet.
+                'owner' => ($row->owner_id ?? null) ? (string) $row->owner_id : null,
                 'score' => $row->score === null ? null : round((float) $row->score, 4),
                 'status' => (string) ($row->status ?? 'open'),
                 'impact' => $row->impact ? (string) $row->impact : null,
@@ -1458,6 +1462,43 @@ final class IntelligenceOverviewController extends Controller
         ]);
     }
 
+    /**
+     * Risks, each carrying the id of whoever actually owns it.
+     *
+     * WHY THIS EXISTS AT ALL. `hpbrain_risks` has no `owner_id` column — see
+     * 2026_01_01_001200_decision_intelligence: id, tenant_id, decision_id,
+     * recommendation_id, category, probability, impact, score, mitigation,
+     * status, created_by, and the two timestamps. That is the whole table.
+     * `$row->owner_id` therefore raised "Undefined property: stdClass::$owner_id"
+     * the moment a tenant had a single risk row, which is why the Intelligence
+     * Workspace failed on Lions and would have failed on every other tenant as
+     * soon as one was raised. The test schema omits the column too, so nothing
+     * in the suite could have caught it either.
+     *
+     * WHAT THE OWNER ACTUALLY IS. A risk is raised against a decision, and a
+     * decision names the person who took it — `hpbrain_decisions.decided_by`.
+     * That is the real accountability link this schema records, so it is what
+     * `owner_id` is resolved from. A risk with no decision behind it has no
+     * owner, and the join returns null rather than inventing one; the caller
+     * publishes null, which is the honest answer to "who owns this".
+     *
+     * The join is tenant-scoped on BOTH sides. Risk ids are UUIDs, so a
+     * cross-tenant decision_id collision is vanishingly unlikely, but "unlikely"
+     * is not an isolation guarantee and this system does not rely on one.
+     */
+    private function riskRows(string $tenant)
+    {
+        return collect(
+            DB::table('hpbrain_risks as risk')
+                ->leftJoin('hpbrain_decisions as owner_decision', function ($join) use ($tenant) {
+                    $join->on('owner_decision.id', '=', 'risk.decision_id')
+                        ->where('owner_decision.tenant_id', '=', $tenant);
+                })
+                ->where('risk.tenant_id', $tenant)
+                ->get(['risk.*', 'owner_decision.decided_by as owner_id'])
+        );
+    }
+
     private function organizationSummary(string $tenant): array
     {
         $organization = $this->resolver->resolve($tenant, 'Organization');
@@ -1475,24 +1516,27 @@ final class IntelligenceOverviewController extends Controller
         ];
     }
 
+    /**
+     * THE SHARED ANSWER, reshaped. This built its own query — the third in the
+     * application — and so the Intelligence Workspace could disagree with both
+     * the Organization overview and the Departments screen about how many
+     * departments an organization has. OrganizationStructureService is the only
+     * thing that decides that now.
+     */
     private function departmentRows(string $tenant)
     {
-        if (! $this->resolver->has($tenant, 'OrganizationUnit')) {
-            return collect();
-        }
-
-        $unit = $this->resolver->resolve($tenant, 'OrganizationUnit');
-        $rows = DB::table($unit->table)
-            ->where($unit->tenantKey, $tenant)
-            ->whereNull('deleted_at')
-            ->get();
-
-        return $rows->map(fn ($row) => [
-            'id' => (string) $row->{$unit->primaryKey},
-            'name' => (string) ($row->{$unit->field('name')} ?? ''),
-            'status' => isset($row->{$unit->field('status')}) && (int) $row->{$unit->field('status')} === 1 ? 'active' : 'inactive',
-            'headId' => $unit->has('head') ? ($row->{$unit->field('head')} ? (string) $row->{$unit->field('head')} : null) : null,
-        ]);
+        return collect($this->structure->getDepartmentsForOrganization($tenant))
+            ->map(fn (array $row) => [
+                'id' => (string) $row['id'],
+                'name' => (string) $row['name'],
+                'status' => (string) $row['status'],
+                'headId' => $row['headId'],
+                // Carried so downstream panels can label a headcount correctly:
+                // 'staff' for a unit of the HR system, 'students' for a derived
+                // teaching section.
+                'memberType' => (string) $row['memberType'],
+                'members' => (int) $row['members'],
+            ]);
     }
 
     private function personRows(string $tenant)

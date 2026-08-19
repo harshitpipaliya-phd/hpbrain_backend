@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Organization\OrganizationStructureService;
 use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
@@ -43,8 +44,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 final class AnalyticsController extends Controller
 {
-    public function __construct(private readonly EntityResolver $resolver)
-    {
+    public function __construct(
+        private readonly EntityResolver $resolver,
+        private readonly OrganizationStructureService $structure,
+    ) {
     }
 
     /** Statuses that count as a decision having been accepted. */
@@ -853,11 +856,14 @@ final class AnalyticsController extends Controller
 
         $activePeople = $activePersonRows()->count();
 
-        $activeDepartments = DB::table($unit->table)
-            ->where($unit->tenantKey, $t)
-            ->where($unit->field('status'), 1)
-            ->whereNull('deleted_at')
-            ->count();
+        /*
+          THE SHARED COUNT. This was its own COUNT over the unit table with no
+          visibility filter, so this report published a different number of
+          departments from the Organization overview, the Departments screen and
+          the Intelligence Workspace — all four honestly derived, none of them
+          reconcilable. OrganizationStructureService owns the definition.
+        */
+        $activeDepartments = $this->structure->departmentCount($t);
 
         $peopleWithoutDepartment = $activePersonRows()
             ->where(function ($q) use ($personUnit) {
