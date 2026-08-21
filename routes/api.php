@@ -503,6 +503,23 @@ Route::prefix('v1')->group(function () {
         // the provider client, not after.
         Route::post('ai/evidence/summarize', [AiController::class, 'summarizeEvidence']);
 
+        /*
+          Graph Explorer's reads. Every one of them is a READ — no verb beyond
+          the group's `permission:read` is stated because none of them writes a
+          row, and gating a visualisation of the organization's own data behind
+          `create` would stop a Viewer from looking at what they can already
+          read on every other screen.
+
+          `label` and `id` travel as QUERY PARAMETERS on expand/node, not as
+          path segments. The ids here are real values out of the data — a
+          subject called "Business Studies", a standard called "CBSE-12" — and
+          plenty of them contain characters a path segment mangles.
+        */
+        Route::get('graph/{tenantId}/overview', [GraphController::class, 'overview']);
+        Route::get('graph/{tenantId}/expand', [GraphController::class, 'expand']);
+        Route::get('graph/{tenantId}/node', [GraphController::class, 'node']);
+        Route::get('graph/{tenantId}/summary', [GraphController::class, 'summary']);
+        Route::get('graph/{tenantId}/vocabulary', [GraphController::class, 'vocabulary']);
         Route::get('graph/{tenantId}/search', [GraphController::class, 'search']);
         Route::get('graph/{tenantId}/entity/{label}/{id}/related', [GraphController::class, 'related']);
         Route::get('graph/{tenantId}/entity/{label}/{id}', [GraphController::class, 'entity']);
