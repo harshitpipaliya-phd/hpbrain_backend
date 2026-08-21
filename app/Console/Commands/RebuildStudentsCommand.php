@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Domain\School\AcademicIntelligenceService;
 use App\Domain\School\StudentProjectionBuilder;
+use App\Domain\Universal\EntityResolver;
 use App\Repositories\AcademicRecordRepository;
 use App\Services\TenantScopedCache;
 use Illuminate\Console\Command;
@@ -24,7 +25,8 @@ use Illuminate\Console\Command;
 final class RebuildStudentsCommand extends Command
 {
     protected $signature = 'students:rebuild
-        {tenant      : Tenant id to rebuild}
+        {tenant?     : Tenant id to rebuild}
+        {--all       : Rebuild every organization this installation has, in turn}
         {--academic= : Override the academic dataset key}
         {--fees=     : Override the fee dataset key}
         {--no-warm   : Skip warming the derived caches}';
@@ -36,9 +38,69 @@ final class RebuildStudentsCommand extends Command
         AcademicIntelligenceService $intelligence,
         AcademicRecordRepository $records,
         TenantScopedCache $cache,
+        EntityResolver $resolver,
     ): int {
-        $tenantId = (string) $this->argument('tenant');
+        $tenants = $this->targetTenants($resolver);
 
+        if ($tenants === []) {
+            $this->error('Name a tenant, or pass --all to rebuild every organization.');
+
+            return self::FAILURE;
+        }
+
+        $failed = 0;
+
+        foreach ($tenants as $tenantId) {
+            $failed += $this->rebuildOne($tenantId, $builder, $intelligence, $records, $cache) === self::SUCCESS ? 0 : 1;
+        }
+
+        // ONE ORGANIZATION'S FAILURE IS NOT THE RUN'S. Across an installation
+        // with sixty of them, stopping at the first tenant whose datasets are
+        // not configured would leave the other fifty-nine unbuilt for a reason
+        // that has nothing to do with them. Every tenant is attempted and the
+        // count is reported at the end.
+        if (count($tenants) > 1) {
+            $this->newLine();
+            $this->info(sprintf('%d of %d organizations rebuilt.', count($tenants) - $failed, count($tenants)));
+        }
+
+        return $failed === count($tenants) ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * Every organization this installation has, or the one that was named.
+     *
+     * READ THROUGH THE RESOLVER, so "every organization" means every tenant
+     * whose Organization entity is mapped — the same register login and
+     * provisioning already treat as the list of organizations — rather than a
+     * table named here.
+     *
+     * @return array<int, string>
+     */
+    private function targetTenants(EntityResolver $resolver): array
+    {
+        $named = (string) ($this->argument('tenant') ?? '');
+
+        if ($named !== '') {
+            return [$named];
+        }
+
+        if (! $this->option('all')) {
+            return [];
+        }
+
+        // Cast: array_keys() hands back an int for a numeric tenant id, and
+        // tenant comparison is by string everywhere in this codebase.
+        return array_map('strval', array_keys($resolver->everyTenantWith('Organization')));
+    }
+
+    private function rebuildOne(
+        string $tenantId,
+        StudentProjectionBuilder $builder,
+        AcademicIntelligenceService $intelligence,
+        AcademicRecordRepository $records,
+        TenantScopedCache $cache,
+    ): int {
         $this->info("Rebuilding student projection for tenant {$tenantId}…");
         $startedAt = microtime(true);
 
@@ -55,6 +117,7 @@ final class RebuildStudentsCommand extends Command
         }
 
         $this->info(sprintf('Done in %ds.', (int) round(microtime(true) - $startedAt)));
+        $this->line('  rows touched by the roster pass    '.$result['roster']);
         $this->line('  rows touched by the academic pass  '.$result['academic']);
         $this->line('  rows touched by the fee pass       '.$result['fees']);
         $this->line('  students now in the projection     '.$result['students']);

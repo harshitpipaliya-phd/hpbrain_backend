@@ -50,10 +50,21 @@ final class EntityResolver
     /**
      * The vocabulary the Brain reasons in.
      *
-     * The first four are the entities intelligence is produced about. The last
+     * The first four are the entities intelligence is produced about. The next
      * two are satellite records the ERP keeps alongside them — an organization's
      * legal details, a person's role profile — which need resolving because the
      * code reads and writes them, but which nothing reasons over directly.
+     *
+     * `Student` is last because it is the one entity many source systems do not
+     * have. An HR-shaped ERP records staff and stops there; a school ERP keeps
+     * children in a table of their own, and where it does, that roster is the
+     * organization's largest population and the thing most of its intelligence
+     * is about. Listing it here does NOT assume it exists — an installation
+     * whose ERP has no student table simply never maps it, `has()` answers
+     * false, and every student surface stays empty exactly as it does today.
+     * The alternative, reaching a student roster only through whatever exam
+     * results happened to be imported, means a school with eight thousand
+     * children on its register and no results export has none.
      */
     public const ENTITIES = [
         'Organization',
@@ -62,6 +73,7 @@ final class EntityResolver
         'Position',
         'OrganizationProfile',
         'PersonProfile',
+        'Student',
     ];
 
     /** @var array<string, array<string, ResolvedSource>> tenantId => entity => source */
