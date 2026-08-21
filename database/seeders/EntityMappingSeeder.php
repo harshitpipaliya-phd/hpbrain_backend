@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Ramsey\Uuid\Uuid;
 
 /**
@@ -42,7 +43,7 @@ final class EntityMappingSeeder extends Seeder
      * 'tenantKey' and 'id' are the two reserved bindings EntityResolver requires
      * on every entity; see the class docblock on ResolvedSource.
      */
-    private const ORGANIZATION = ['institute_detail', [
+    private const LEGACY_ORGANIZATION = ['institute_detail', [
         // OrganizationRepository::list() selects `d.sub_institute_id as id` —
         // the organization's identity IS its tenant key in this ERP. Both rows
         // therefore name the same column, which is correct and not a duplicate.
@@ -106,11 +107,26 @@ final class EntityMappingSeeder extends Seeder
      * would describe a read path the code does not take and leave the writes
      * with nothing to resolve against.
      */
-    private const ORGANIZATION_PROFILE = ['org_details', [
+    private const LEGACY_ORGANIZATION_PROFILE = ['org_details', [
         'id'        => 'id',
         'tenantKey' => 'sub_institute_id',
         'legalName' => 'legal_name',
         'logo'      => 'logo',
+    ]];
+
+    private const SCHOOL_SETUP_ORGANIZATION = ['school_setup', [
+        'id'        => 'Id',
+        'tenantKey' => 'Id',
+        'name'      => 'SchoolName',
+        'code'      => 'ShortCode',
+        'industry'  => 'institute_type',
+    ]];
+
+    private const SCHOOL_SETUP_ORGANIZATION_PROFILE = ['school_setup', [
+        'id'        => 'Id',
+        'tenantKey' => 'Id',
+        'legalName' => 'SchoolName',
+        'logo'      => 'Logo',
     ]];
 
     private const PERSON_PROFILE = ['tbluserprofilemaster', [
@@ -119,6 +135,97 @@ final class EntityMappingSeeder extends Seeder
         'name'      => 'name',
         'status'    => 'status',
     ]];
+
+    /**
+     * The student roster, where the ERP keeps one.
+     *
+     * NOT EVERY ERP HAS ONE, and that is why this is a candidate rather than a
+     * fixture. An HR-shaped ERP records staff and nothing else; a school ERP
+     * records children in a table of their own. Where the table is absent the
+     * entity is simply not mapped, `has()` reports false, and every student
+     * surface stays honestly empty — the same answer it gives today.
+     *
+     * Identity is `enrollment_no`, because that is the number the academic and
+     * fee exports also carry, and it is the only key the three sources share.
+     */
+    private const STUDENT = ['tblstudent', [
+        'id'            => 'id',
+        'tenantKey'     => 'sub_institute_id',
+        'externalRef'   => 'enrollment_no',
+        'firstName'     => 'first_name',
+        'middleName'    => 'middle_name',
+        'lastName'      => 'last_name',
+        'gender'        => 'gender',
+        'birthDate'     => 'dob',
+        'email'         => 'email',
+        'phone'         => 'mobile',
+        'status'        => 'status',
+        'uniqueId'      => 'uniqueid',
+        'batch'         => 'studentbatch',
+        'admissionYear' => 'admission_year',
+    ]];
+
+    /**
+     * universal entity => candidate sources, best first, each paired with the
+     * universal fields it must be able to bind before it may be chosen.
+     *
+     * THE CANDIDATE LIST IS HOW ONE CODEBASE FOLLOWS TWO ERPs. Neither branch
+     * names a database. A candidate qualifies on the SHAPE of what is in front
+     * of it — the table exists and carries the columns that make it that entity
+     * — so the same seeder describes an HR-shaped ERP whose organizations live
+     * in `institute_detail` and a school-shaped one whose organizations live in
+     * `school_setup`, and it would describe a third without being edited again.
+     *
+     * ORDER IS SIGNIFICANT AND `institute_detail` IS FIRST ON PURPOSE. BOTH
+     * ERPs have a `school_setup` table, and column lookup is case-insensitive,
+     * so "does school_setup exist" is not a question that tells them apart —
+     * asking it first re-points an installation that already works onto a table
+     * whose ids are a different numbering altogether. Only one of the two has
+     * an `institute_detail` carrying `organization_name`; requiring that column
+     * is what keeps each ERP on its own register.
+     *
+     * @return array<string, array<int, array{table: string, fields: array<string, string>, required: array<int, string>}>>
+     */
+    private function sources(): array
+    {
+        $candidate = static fn (array $source, array $required, bool $optional = false): array => [
+            'table' => $source[0],
+            'fields' => $source[1],
+            'required' => $required,
+            'optional' => $optional,
+        ];
+
+        return [
+            'Organization' => [
+                $candidate(self::LEGACY_ORGANIZATION, ['id', 'tenantKey', 'name']),
+                $candidate(self::SCHOOL_SETUP_ORGANIZATION, ['id', 'tenantKey', 'name']),
+            ],
+            'OrganizationUnit' => [
+                $candidate(self::ORG_UNIT, ['id', 'tenantKey', 'name']),
+            ],
+            'Person' => [
+                $candidate(self::PERSON, ['id', 'tenantKey', 'email', 'firstName']),
+            ],
+            'Position' => [
+                $candidate(self::POSITION, ['id', 'tenantKey', 'title']),
+            ],
+            'OrganizationProfile' => [
+                $candidate(self::LEGACY_ORGANIZATION_PROFILE, ['id', 'tenantKey', 'legalName']),
+                $candidate(self::SCHOOL_SETUP_ORGANIZATION_PROFILE, ['id', 'tenantKey', 'legalName']),
+            ],
+            'PersonProfile' => [
+                $candidate(self::PERSON_PROFILE, ['id', 'tenantKey', 'name']),
+            ],
+            'Student' => [
+                // OPTIONAL: the only entity a source system may legitimately
+                // not have. An HR-shaped ERP records staff and stops there, and
+                // mapping it to a table that is not in front of us would turn
+                // "this organization has no students" from an honest empty
+                // screen into a SQL error.
+                $candidate(self::STUDENT, ['id', 'tenantKey', 'externalRef'], optional: true),
+            ],
+        ];
+    }
 
     /**
      * @param  array<int, string>|null  $tenantIds  explicit tenants to map, or
@@ -132,20 +239,25 @@ final class EntityMappingSeeder extends Seeder
 
     public function run(): void
     {
-        $entities = [
-            'Organization'        => self::ORGANIZATION,
-            'OrganizationUnit'    => self::ORG_UNIT,
-            'Person'              => self::PERSON,
-            'Position'            => self::POSITION,
-            'OrganizationProfile' => self::ORGANIZATION_PROFILE,
-            'PersonProfile'       => self::PERSON_PROFILE,
-        ];
+        $entities = $this->resolvedEntities();
+
+        if (! isset($entities['Organization'])) {
+            $this->command?->error('EntityMappingSeeder: no table in this database looks like an organization register; nothing was written.');
+
+            return;
+        }
 
         $now = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');
         $written = 0;
 
+        foreach ($entities as $universalEntity => [$sourceTable, $fields]) {
+            $this->command?->line(sprintf('  %-20s -> %s (%d fields)', $universalEntity, $sourceTable, count($fields)));
+        }
+
         foreach ($this->tenants() as $tenantId) {
             foreach ($entities as $universalEntity => [$sourceTable, $fields]) {
+                $this->retireStaleMappings($tenantId, $universalEntity, $sourceTable, array_keys($fields), $now);
+
                 foreach ($fields as $universalField => $sourceColumn) {
                     $written += $this->upsert(
                         $tenantId,
@@ -163,7 +275,104 @@ final class EntityMappingSeeder extends Seeder
     }
 
     /**
+     * The source each universal entity actually has in THIS database.
+     *
+     * An entity with no qualifying candidate is left out entirely rather than
+     * pointed at a table that is not there. That is the same fail-closed rule
+     * EntityResolver enforces at read time: an unmapped entity makes `has()`
+     * answer false and the screens above it render "not recorded", which is the
+     * truth. A mapping to a missing table would instead surface as a SQL error
+     * on a page that has nothing wrong with it.
+     *
+     * @return array<string, array{0: string, 1: array<string, string>}>
+     */
+    private function resolvedEntities(): array
+    {
+        $out = [];
+
+        foreach ($this->sources() as $universalEntity => $candidates) {
+            $chosen = $this->chooseSource($candidates);
+
+            if ($chosen !== null) {
+                $out[$universalEntity] = $chosen;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Which candidate describes the ERP in front of us.
+     *
+     * A candidate QUALIFIES when its table is present and carries the columns
+     * that identify it as that entity. The first qualifying candidate wins.
+     *
+     * WHEN NOTHING QUALIFIES THE FIRST CANDIDATE IS STILL USED, and that is not
+     * a fallback in the sense EntityResolver forbids — the resolver's rule is
+     * about READ time, where guessing a table means one tenant reading
+     * another's rows. This is describe time, and the ERP tables need not be
+     * reachable from the connection that writes the description: the seeder
+     * runs against installations whose ERP lives in another schema, and the
+     * suite runs with no ERP tables at all. If the table really is missing, the
+     * resolver still fails closed on the first read, which is where the
+     * question belongs.
+     *
+     * AN OPTIONAL ENTITY IS THE EXCEPTION. `Student` is the one entity a source
+     * system may simply not have, so an unqualified candidate is dropped rather
+     * than described — `has()` then answers false and the student surfaces stay
+     * honestly empty instead of erroring.
+     *
+     * NOTHING IS NARROWED. A candidate's whole field list is written, including
+     * the fields that particular deployment happens not to have a column for;
+     * dropping them here would make the description depend on which connection
+     * happened to run the seeder.
+     *
+     * @param  array<int, array{table: string, fields: array<string, string>, required: array<int, string>, optional: bool}>  $candidates
+     * @return array{0: string, 1: array<string, string>}|null
+     */
+    private function chooseSource(array $candidates): ?array
+    {
+        foreach ($candidates as $candidate) {
+            if ($this->qualifies($candidate)) {
+                return [$candidate['table'], $candidate['fields']];
+            }
+        }
+
+        $first = $candidates[0] ?? null;
+
+        if ($first === null || $first['optional']) {
+            return null;
+        }
+
+        return [$first['table'], $first['fields']];
+    }
+
+    /**
+     * @param  array{table: string, fields: array<string, string>, required: array<int, string>, optional: bool}  $candidate
+     */
+    private function qualifies(array $candidate): bool
+    {
+        if (! Schema::hasTable($candidate['table'])) {
+            return false;
+        }
+
+        foreach ($candidate['required'] as $universalField) {
+            $column = $candidate['fields'][$universalField] ?? null;
+
+            if ($column === null || ! Schema::hasColumn($candidate['table'], $column)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Tenant ids, as strings, from the ERP's own register of organizations.
+     *
+     * THE REGISTER IS WHICHEVER TABLE Organization RESOLVED TO, so this follows
+     * the same candidate choice the mappings do rather than naming a second
+     * table that could disagree with the first.
      *
      * sub_institute_id is a BIGINT there and a VARCHAR(36) on every hpbrain_
      * table, and tenant comparison happens as strings throughout the Brain.
@@ -178,11 +387,28 @@ final class EntityMappingSeeder extends Seeder
             return array_values(array_map('strval', $this->tenantIds));
         }
 
-        return DB::table('institute_detail')
-            ->whereNull('deleted_at')
+        [$table, $fields] = $this->resolvedEntities()['Organization'] ?? [null, []];
+
+        if ($table === null) {
+            return [];
+        }
+
+        $idColumn = $fields['tenantKey'];
+
+        // Soft deletion is honoured only where the register actually records
+        // it. One ERP's organization table has a deleted_at column and the
+        // other's does not, and filtering on a column that is not there would
+        // fail the whole seed rather than seed every live organization.
+        $deletedColumn = ($fields['deletedAt'] ?? null) !== null
+            && Schema::hasColumn($table, $fields['deletedAt'])
+                ? $fields['deletedAt']
+                : null;
+
+        return DB::table($table)
+            ->when($deletedColumn !== null, fn ($query) => $query->whereNull($deletedColumn))
             ->distinct()
-            ->orderBy('sub_institute_id')
-            ->pluck('sub_institute_id')
+            ->orderBy($idColumn)
+            ->pluck($idColumn)
             ->map(fn ($id) => (string) $id)
             ->all();
     }
@@ -200,11 +426,13 @@ final class EntityMappingSeeder extends Seeder
         string $sourceColumn,
         string $now,
     ): int {
-        $existing = DB::table('hpbrain_entity_mappings')
+        $existingRows = DB::table('hpbrain_entity_mappings')
             ->where('tenant_id', $tenantId)
             ->where('universal_entity', $universalEntity)
             ->where('universal_field', $universalField)
-            ->value('id');
+            ->where('is_active', 1)
+            ->orderBy('created_date')
+            ->get(['id']);
 
         $values = [
             'source_system'        => self::SOURCE_SYSTEM,
@@ -217,8 +445,21 @@ final class EntityMappingSeeder extends Seeder
             'updated_date'         => $now,
         ];
 
-        if ($existing !== null) {
-            DB::table('hpbrain_entity_mappings')->where('id', $existing)->update($values);
+        if ($existingRows->isNotEmpty()) {
+            $keeper = (string) $existingRows->first()->id;
+
+            DB::table('hpbrain_entity_mappings')->where('id', $keeper)->update($values);
+
+            $duplicates = $existingRows->skip(1)->pluck('id')->all();
+
+            if ($duplicates !== []) {
+                DB::table('hpbrain_entity_mappings')
+                    ->whereIn('id', $duplicates)
+                    ->update([
+                        'is_active' => 0,
+                        'updated_date' => $now,
+                    ]);
+            }
 
             return 1;
         }
@@ -233,5 +474,34 @@ final class EntityMappingSeeder extends Seeder
         ]);
 
         return 1;
+    }
+
+    /**
+     * Remove active rows that belonged to a previous source shape for the same
+     * universal entity. This is what lets the same seeder follow DB_DATABASE:
+     * hp_erp can keep institute_detail/org_details, while development_erp can
+     * move Organization onto school_setup without leaving both active.
+     *
+     * @param array<int, string> $universalFields
+     */
+    private function retireStaleMappings(
+        string $tenantId,
+        string $universalEntity,
+        string $sourceTable,
+        array $universalFields,
+        string $now,
+    ): void {
+        DB::table('hpbrain_entity_mappings')
+            ->where('tenant_id', $tenantId)
+            ->where('universal_entity', $universalEntity)
+            ->where('is_active', 1)
+            ->where(function ($query) use ($sourceTable, $universalFields): void {
+                $query->where('source_entity', '!=', $sourceTable)
+                    ->orWhereNotIn('universal_field', $universalFields);
+            })
+            ->update([
+                'is_active' => 0,
+                'updated_date' => $now,
+            ]);
     }
 }

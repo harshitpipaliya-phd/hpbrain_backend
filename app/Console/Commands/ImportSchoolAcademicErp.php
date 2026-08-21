@@ -14,12 +14,14 @@ use App\Services\Import\Loaders\OperationalRecordLoader;
 use App\Services\TenantScopedCache;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Ramsey\Uuid\Uuid;
 
 final class ImportSchoolAcademicErp extends Command
 {
     protected $signature = 'brain:import-erp-school-academics
         {--tenant= : Tenant/sub_institute_id to import}
+        {--all : Import every organization this installation has, in turn}
         {--source=erp-academic-results : hpbrain_data_sources source_key}
         {--dataset=erp-academic-results : hpbrain_operational_records dataset key}
         {--actor=artisan:brain:import-erp-school-academics : Audit actor label}
@@ -57,10 +59,25 @@ final class ImportSchoolAcademicErp extends Command
     ): int {
         $tenantId = (string) ($this->option('tenant') ?? '');
 
-        if ($tenantId === '') {
-            $this->error('--tenant is required.');
+        if ($tenantId === '' && ! $this->option('all')) {
+            $this->error('--tenant is required, or pass --all to import every organization.');
 
             return self::FAILURE;
+        }
+
+        /*
+          --all EXISTS BECAUSE ONBOARDING IS NOT A ONE-ORGANIZATION JOB.
+
+          An installation is not "connected" when one tenant has been imported
+          by hand; every organization on the register has to reach the same
+          pipeline, or the ones that were missed present as a product that does
+          not work rather than as data that has not been loaded. The list comes
+          from the resolver, so it is the same register login and provisioning
+          use, and a tenant whose ERP holds no result rows is reported and
+          skipped rather than failing the run.
+        */
+        if ($tenantId === '') {
+            return $this->importEvery($resolver, $students, $intelligence, $records, $cache);
         }
 
         if (! $this->organizationExists($resolver, $tenantId)) {
@@ -81,6 +98,15 @@ final class ImportSchoolAcademicErp extends Command
 
             if ($total === 0) {
                 $this->warn("No ERP result marks found for tenant {$tenantId}.");
+
+                // AND YET THE ORGANIZATION MAY STILL HAVE STUDENTS. The
+                // projection has a third source — the ERP's own register — and
+                // returning here without rebuilding is what left a school with
+                // several thousand children on its roster publishing zero of
+                // them because it had never exported a results file.
+                if (! $this->option('no-rebuild')) {
+                    $this->rebuildStudents($tenantId, $dataset, $students, $intelligence, $records, $cache);
+                }
 
                 return self::SUCCESS;
             }
@@ -141,6 +167,67 @@ final class ImportSchoolAcademicErp extends Command
         }
 
         return $result['errors'] > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * Run this command once per organization, in tenant order.
+     *
+     * ONE ORGANIZATION'S FAILURE IS NOT THE RUN'S — an ERP with no result rows
+     * for a tenant, or a tenant whose mapping is incomplete, must not stop the
+     * fifty after it. Each is attempted, its outcome recorded, and the tally
+     * printed at the end so a partial run is visible rather than silent.
+     */
+    private function importEvery(
+        EntityResolver $resolver,
+        StudentProjectionBuilder $students,
+        AcademicIntelligenceService $intelligence,
+        AcademicRecordRepository $records,
+        TenantScopedCache $cache,
+    ): int {
+        // Cast: array_keys() hands back an int for a numeric tenant id, and
+        // tenant comparison is by string everywhere in this codebase.
+        $tenants = array_map('strval', array_keys($resolver->everyTenantWith('Organization')));
+
+        if ($tenants === []) {
+            $this->warn('No organizations are mapped in this database.');
+
+            return self::SUCCESS;
+        }
+
+        $this->info(sprintf('Importing ERP academics for %d organizations.', count($tenants)));
+
+        $succeeded = 0;
+        $failures = [];
+
+        foreach ($tenants as $tenantId) {
+            $this->newLine();
+            $this->line("── tenant {$tenantId}");
+
+            try {
+                $this->input->setOption('tenant', $tenantId);
+                $code = $this->handle($resolver, $students, $intelligence, $records, $cache);
+            } catch (\Throwable $e) {
+                $code = self::FAILURE;
+                $this->error('  '.$e->getMessage());
+            }
+
+            if ($code === self::SUCCESS) {
+                $succeeded++;
+            } else {
+                $failures[] = $tenantId;
+            }
+        }
+
+        $this->input->setOption('tenant', null);
+
+        $this->newLine();
+        $this->info(sprintf('%d of %d organizations imported.', $succeeded, count($tenants)));
+
+        if ($failures !== []) {
+            $this->warn('Not imported: '.implode(', ', $failures));
+        }
+
+        return self::SUCCESS;
     }
 
     private function organizationExists(EntityResolver $resolver, string $tenantId): bool
@@ -234,6 +321,13 @@ final class ImportSchoolAcademicErp extends Command
     private function countMysqlRows(EntityResolver $resolver, string $tenantId): int
     {
         $prefix = $this->sourcePrefix($resolver, $tenantId);
+
+        // AN ERP WITHOUT EXAM RESULTS IS NOT A BROKEN ERP. An HR-shaped source
+        // system has no result_marks table, and asking it for one raises a SQL
+        // error on a command that should simply report nothing to import.
+        if (! Schema::hasTable($prefix.'result_marks')) {
+            return 0;
+        }
 
         $row = DB::selectOne(
             "SELECT COUNT(*) AS n
@@ -461,7 +555,7 @@ final class ImportSchoolAcademicErp extends Command
 
         $minId = (int) ($bounds->min_id ?? 0);
         $maxId = (int) ($bounds->max_id ?? 0);
-        $chunkSize = 1000;
+        $chunkSize = 20000;
         $created = 0;
         $processed = 0;
         $idHash = "SHA2(CONCAT('erp-academic-results|', rm.sub_institute_id, '|', rm.id), 256)";
@@ -810,9 +904,11 @@ final class ImportSchoolAcademicErp extends Command
     ): void {
         $projection = $students->rebuild($tenantId, $dataset, null);
 
+
         if ($projection['skipped'] !== null) {
             $this->warn('Student projection skipped: '.$projection['skipped']);
         } else {
+            $this->line('  students from the register   '.$projection['roster']);
             $this->line('  students in projection       '.$projection['students']);
         }
 
