@@ -46,7 +46,7 @@ final class OperationalRecordLoader implements RecordLoader
     /** @var array<string, int> natural_key => position in $insertBuffer */
     private array $bufferIndex = [];
 
-    private const INSERT_CHUNK = 500;
+    private const INSERT_CHUNK = 2000;
 
     public function load(string $tenantId, ImportProfile $profile, string $naturalKey, array $fields, array $context): array
     {

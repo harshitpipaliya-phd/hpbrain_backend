@@ -49,10 +49,18 @@ final class PersonController extends Controller
      */
     private function listColumns(ResolvedSource $person): array
     {
-        return array_values(array_unique(array_merge(
+        $columns = array_values(array_unique(array_merge(
             array_values($person->columns(self::LIST_FIELDS)),
-            [$person->tenantKey, 'created_at', 'updated_at'],
+            [$person->tenantKey],
         )));
+
+        foreach (['created_at', 'updated_at'] as $column) {
+            if ($this->sourceHasColumn($person, $column)) {
+                $columns[] = $column;
+            }
+        }
+
+        return array_values(array_unique($columns));
     }
 
     public function index(Request $request): JsonResponse
@@ -63,8 +71,8 @@ final class PersonController extends Controller
         $rows = DB::table($person->table)
             ->select($this->listColumns($person))
             ->where($person->tenantKey, $t)
-            ->whereNull('deleted_at')
             ->where($person->field('status'), 1)
+            ->tap(fn ($query) => $this->activeSourceRows($query, $person))
             ->get();
 
         // One query for every role name on the page, before mapping begins.
@@ -86,13 +94,15 @@ final class PersonController extends Controller
         $rows = DB::table($person->table)
             ->select($this->listColumns($person))
             ->where($person->tenantKey, $t)
-            ->whereNull('deleted_at')
             ->where($person->field('status'), 1)
             ->where(function ($w) use ($q, $searchable) {
                 foreach ($searchable as $column) {
                     $w->orWhere($column, 'like', "%{$q}%");
                 }
-            })->limit(50)->get();
+            })
+            ->tap(fn ($query) => $this->activeSourceRows($query, $person))
+            ->limit(50)
+            ->get();
 
         $roles = $this->profileNames($rows, $person);
 
@@ -108,13 +118,29 @@ final class PersonController extends Controller
             ->select($this->listColumns($person))
             ->where($person->primaryKey, $id)
             ->where($person->tenantKey, $t)
-            ->whereNull('deleted_at')
             ->where($person->field('status'), 1)
+            ->tap(fn ($query) => $this->activeSourceRows($query, $person))
             ->first();
 
         return $row
             ? response()->json($this->map((array) $row, $person))
             : response()->json(['error' => 'person_not_found'], 404);
+    }
+
+    private function sourceHasColumn(ResolvedSource $source, string $column): bool
+    {
+        try {
+            return Schema::hasColumn($source->table, $column);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function activeSourceRows(\Illuminate\Database\Query\Builder $query, ResolvedSource $source): void
+    {
+        if ($source->has('deletedAt')) {
+            $query->whereNull($source->field('deletedAt'));
+        }
     }
 
     public function store(Request $request): JsonResponse
@@ -194,7 +220,7 @@ final class PersonController extends Controller
      */
     private function profileNames($rows, ResolvedSource $person): array
     {
-        if (! $person->has('profile') || ! Schema::hasTable('tbluserprofilemaster')) {
+        if (! $person->has('profile')) {
             return [];
         }
 
@@ -211,9 +237,16 @@ final class PersonController extends Controller
             return [];
         }
 
-        return DB::table('tbluserprofilemaster')
-            ->whereIn('id', $ids)
-            ->pluck('name', 'id')
+        try {
+            $profile = $this->resolver->resolve($person->tenantId, 'PersonProfile');
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return DB::table($profile->table)
+            ->where($profile->tenantKey, $person->tenantId)
+            ->whereIn($profile->primaryKey, $ids)
+            ->pluck($profile->field('name'), $profile->primaryKey)
             ->map(fn ($n) => (string) $n)
             ->all();
     }
@@ -221,19 +254,25 @@ final class PersonController extends Controller
     /**
      * @param  array<string, string>|null  $roles  preloaded names, or null to look one up
      */
-    private function roleFor(mixed $profileId, ?array $roles): ?string
+    private function roleFor(mixed $profileId, ?array $roles, ResolvedSource $person): ?string
     {
         if ($profileId === null || $profileId === '') {
             return null;
         }
 
-        $name = $roles !== null
-            ? ($roles[(string) $profileId] ?? null)
-            // Single-row callers resolve the one name they need. One query for
-            // one person is not an N+1.
-            : (Schema::hasTable('tbluserprofilemaster')
-                ? DB::table('tbluserprofilemaster')->where('id', $profileId)->value('name')
-                : null);
+        if ($roles !== null) {
+            $name = $roles[(string) $profileId] ?? null;
+        } else {
+            try {
+                $profile = $this->resolver->resolve($person->tenantId, 'PersonProfile');
+                $name = DB::table($profile->table)
+                    ->where($profile->tenantKey, $person->tenantId)
+                    ->where($profile->primaryKey, $profileId)
+                    ->value($profile->field('name'));
+            } catch (\Throwable) {
+                $name = null;
+            }
+        }
 
         return $name !== null && trim((string) $name) !== '' ? (string) $name : null;
     }
@@ -273,7 +312,7 @@ final class PersonController extends Controller
         // $roles is prepared once by the caller (see profileNames) and passed
         // down. It is optional so the single-row callers — show(), store() —
         // stay unchanged and simply resolve the one name they need.
-        $role = $this->roleFor($profileId, $roles);
+        $role = $this->roleFor($profileId, $roles, $person);
 
         return [
             'id'           => (string) $r[$person->primaryKey],

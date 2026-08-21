@@ -42,7 +42,7 @@ final class DepartmentVisibilityScope
 
     public function apply(Builder $query, ResolvedSource $unit, string $tenantId): void
     {
-        if ($unit->table !== 'hrms_departments') {
+        if ($this->baseTable($unit->table) !== 'hrms_departments') {
             return;
         }
 
@@ -67,8 +67,11 @@ final class DepartmentVisibilityScope
     public function visibleIds(ResolvedSource $unit, string $tenantId): array
     {
         $query = DB::table($unit->table)
-            ->where($unit->tenantKey, $tenantId)
-            ->whereNull('deleted_at');
+            ->where($unit->tenantKey, $tenantId);
+
+        if ($unit->has('deletedAt')) {
+            $query->whereNull($unit->field('deletedAt'));
+        }
 
         $this->apply($query, $unit, $tenantId);
 
@@ -96,7 +99,11 @@ final class DepartmentVisibilityScope
 
     private function computeCohortStart(ResolvedSource $unit, string $tenantId): ?string
     {
-        foreach (['is_calculated', 'created_by', 'created_at', 'deleted_at'] as $column) {
+        if (! $unit->has('deletedAt')) {
+            return null;
+        }
+
+        foreach (['is_calculated', 'created_by', 'created_at', $unit->field('deletedAt')] as $column) {
             if (! Schema::hasColumn($unit->table, $column)) {
                 return null;
             }
@@ -104,7 +111,7 @@ final class DepartmentVisibilityScope
 
         $currentCohortStart = DB::table($unit->table)
             ->where($unit->tenantKey, $tenantId)
-            ->whereNull('deleted_at')
+            ->whereNull($unit->field('deletedAt'))
             ->where(fn (Builder $w) => $w->where('is_calculated', 0)->orWhereNull('is_calculated'))
             ->whereNull('created_by')
             ->whereNotNull('created_at')
@@ -116,18 +123,25 @@ final class DepartmentVisibilityScope
 
         $hasTemplateRows = DB::table($unit->table)
             ->where($unit->tenantKey, $tenantId)
-            ->whereNull('deleted_at')
+            ->whereNull($unit->field('deletedAt'))
             ->where('is_calculated', 1)
             ->exists();
 
         $hasOlderManualRows = DB::table($unit->table)
             ->where($unit->tenantKey, $tenantId)
-            ->whereNull('deleted_at')
+            ->whereNull($unit->field('deletedAt'))
             ->where(fn (Builder $w) => $w->where('is_calculated', 0)->orWhereNull('is_calculated'))
             ->whereNotNull('created_by')
             ->where('created_at', '<', $currentCohortStart)
             ->exists();
 
         return $hasTemplateRows && $hasOlderManualRows ? (string) $currentCohortStart : null;
+    }
+
+    private function baseTable(string $table): string
+    {
+        $dot = strrpos($table, '.');
+
+        return $dot === false ? $table : substr($table, $dot + 1);
     }
 }

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\Organization\OrganizationStructureService;
 use App\Domain\Universal\EntityResolver;
+use App\Domain\Universal\ResolvedSource;
 use App\Http\Controllers\Controller;
 use App\Repositories\OrganizationRepository;
 use Illuminate\Http\JsonResponse;
@@ -105,11 +106,13 @@ final class OrganizationController extends Controller
         }
 
         $fields['updated_at'] = now()->format('Y-m-d H:i:s');
-        $n = DB::table($org->table)
+        $query = DB::table($org->table)
             ->where($org->tenantKey, $id)
-            ->where($org->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->update($fields);
+            ->where($org->tenantKey, $t);
+
+        $this->activeSourceRows($query, $org);
+
+        $n = $query->update($fields);
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'organization_not_found'], 404);
     }
@@ -123,11 +126,17 @@ final class OrganizationController extends Controller
         $t = $this->tenantId($request);
         $org = $this->resolver->resolve($t, 'Organization');
 
-        $n = DB::table($org->table)
+        if (! $org->has('deletedAt')) {
+            return response()->json(['error' => 'archive_not_supported_by_source'], 422);
+        }
+
+        $query = DB::table($org->table)
             ->where($org->tenantKey, $id)
-            ->where($org->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->update(['deleted_at' => now()->format('Y-m-d H:i:s')]);
+            ->where($org->tenantKey, $t);
+
+        $this->activeSourceRows($query, $org);
+
+        $n = $query->update([$org->field('deletedAt') => now()->format('Y-m-d H:i:s')]);
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'organization_not_found'], 404);
     }
@@ -139,11 +148,7 @@ final class OrganizationController extends Controller
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
         $person = $this->resolver->resolve($t, 'Person');
 
-        $exists = DB::table($org->table)
-            ->where($org->tenantKey, $id)
-            ->where($org->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->exists();
+        $exists = $this->sourceRowExists($org, $t, $id);
 
         if (! $exists) {
             return response()->json(['error' => 'organization_not_found'], 404);
@@ -190,11 +195,7 @@ final class OrganizationController extends Controller
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
         $person = $this->resolver->resolve($t, 'Person');
 
-        $exists = DB::table($org->table)
-            ->where($org->tenantKey, $id)
-            ->where($org->tenantKey, $t)
-            ->whereNull('deleted_at')
-            ->exists();
+        $exists = $this->sourceRowExists($org, $t, $id);
 
         if (! $exists) {
             return response()->json(['error' => 'organization_not_found'], 404);
@@ -296,5 +297,23 @@ final class OrganizationController extends Controller
                 'departmentsWithHead' => $totalDepts - $deptsWithoutHead,
             ],
         ]);
+    }
+
+    private function sourceRowExists(ResolvedSource $source, string $tenantId, string $id): bool
+    {
+        $query = DB::table($source->table)
+            ->where($source->primaryKey, $id)
+            ->where($source->tenantKey, $tenantId);
+
+        $this->activeSourceRows($query, $source);
+
+        return $query->exists();
+    }
+
+    private function activeSourceRows(\Illuminate\Database\Query\Builder $query, ResolvedSource $source): void
+    {
+        if ($source->has('deletedAt')) {
+            $query->whereNull($source->field('deletedAt'));
+        }
     }
 }
