@@ -46,22 +46,37 @@ final class OrganizationRepository
         // values stay bound. Every fragment here originates in a mapping row,
         // and the mapping table is administrator-configured data — which is why
         // the tenant filter below is a binding and not a concatenation.
-        return DB::table($org->table.' as d')
+        $query = DB::table($org->table.' as d')
             ->selectRaw('d.'.$org->field('id').' as id')
             ->selectRaw('MAX(d.'.$org->field('name').') as name')
-            ->selectRaw('MAX(d.'.$org->field('code').') as org_code')
-            ->selectRaw('MAX(d.'.$org->field('industry').') as industry')
+            ->selectRaw($org->has('code') ? 'MAX(d.'.$org->field('code').') as org_code' : "'' as org_code")
+            ->selectRaw($org->has('industry') ? 'MAX(d.'.$org->field('industry').') as industry' : 'NULL as industry')
             ->selectRaw('MAX(d.created_at) as created_date')
-            ->selectRaw('MAX(d.updated_at) as updated_date')
-            ->selectRaw(
+            ->selectRaw('MAX(d.updated_at) as updated_date');
+
+        if ($profile->has('legalName')) {
+            $query->selectRaw(
                 '(SELECT '.$profile->field('legalName').' FROM '.$profile->table
                 .' WHERE '.$profile->tenantKey.' = d.'.$key.' LIMIT 1) as legal_name'
-            )
-            ->selectRaw(
+            );
+        } else {
+            $query->selectRaw('NULL as legal_name');
+        }
+
+        if ($profile->has('logo')) {
+            $query->selectRaw(
                 '(SELECT '.$profile->field('logo').' FROM '.$profile->table
                 .' WHERE '.$profile->tenantKey.' = d.'.$key.' LIMIT 1) as logo'
-            )
-            ->whereNull('d.deleted_at')
+            );
+        } else {
+            $query->selectRaw('NULL as logo');
+        }
+
+        if ($org->has('deletedAt')) {
+            $query->whereNull('d.'.$org->field('deletedAt'));
+        }
+
+        return $query
             ->where('d.'.$key, $tenantId)
             ->groupBy('d.'.$key)
             ->orderByDesc('d.'.$key)

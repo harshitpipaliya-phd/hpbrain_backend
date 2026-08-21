@@ -258,8 +258,9 @@ final class FoundationCounts
 
         $query = DB::table($person->table)
             ->where($person->tenantKey, $tenant)
-            ->whereNull('deleted_at')
             ->selectRaw('COUNT(*) AS total');
+
+        $this->activeSourceRows($query, $person);
 
         if ($person->has('status')) {
             $query->where($person->field('status'), 1);
@@ -314,11 +315,12 @@ final class FoundationCounts
 
         $query = DB::table($person->table)
             ->where($person->tenantKey, $tenant)
-            ->whereNull('deleted_at')
             ->whereNotNull($unitColumn)
             ->where($unitColumn, '!=', 0)
             ->groupBy($unitColumn)
             ->selectRaw("{$unitColumn} AS unit_id, COUNT(*) AS n");
+
+        $this->activeSourceRows($query, $person);
 
         if ($person->has('status')) {
             $query->where($person->field('status'), 1);
@@ -352,5 +354,12 @@ final class FoundationCounts
         }
 
         return $out;
+    }
+
+    private function activeSourceRows(\Illuminate\Database\Query\Builder $query, \App\Domain\Universal\ResolvedSource $source): void
+    {
+        if ($source->has('deletedAt')) {
+            $query->whereNull($source->field('deletedAt'));
+        }
     }
 }

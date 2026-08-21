@@ -102,9 +102,9 @@ final class DepartmentController extends Controller
 
         $query = DB::table($unit->table)
             ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at')
             ->orderBy($unit->primaryKey);
 
+        $this->activeSourceRows($query, $unit);
         $this->applyDepartmentVisibilityScope($query, $unit, $t);
 
         $rows = $query->get();
@@ -119,9 +119,9 @@ final class DepartmentController extends Controller
 
         $query = DB::table($unit->table)
             ->where($unit->primaryKey, $id)
-            ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at');
+            ->where($unit->tenantKey, $t);
 
+        $this->activeSourceRows($query, $unit);
         $this->applyDepartmentVisibilityScope($query, $unit, $t);
 
         $row = $query->first();
@@ -144,17 +144,26 @@ final class DepartmentController extends Controller
 
         $now = now()->format('Y-m-d H:i:s');
 
-        $id = DB::table($unit->table)->insertGetId([
+        $fields = [
             $unit->field('name')        => $data['name'],
             $unit->field('description') => $data['description'] ?? null,
             $unit->field('parent')      => $data['parentId'] ?? 0,
             $unit->field('status')      => 1,
             'is_calculated'             => 0,
             $unit->tenantKey            => $t,
-            'created_by'                => $this->actorErpId($request),
-            'created_at'                => $now,
-            'updated_at'                => $now,
-        ]);
+        ];
+
+        foreach ([
+            'created_by' => $this->actorErpId($request),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ] as $column => $value) {
+            if ($this->sourceHasColumn($unit, $column)) {
+                $fields[$column] = $value;
+            }
+        }
+
+        $id = DB::table($unit->table)->insertGetId($fields);
 
         return response()->json(
             $this->map((array) DB::table($unit->table)->where($unit->primaryKey, $id)->first(), $unit),
@@ -178,7 +187,7 @@ final class DepartmentController extends Controller
             // this ERP, and has() would report false — see EntityMappingSeeder.
             'headId'             => null,
             'orgId'              => (string) ($row[$unit->tenantKey] ?? ''),
-            'status'             => $row['deleted_at']
+            'status'             => $unit->has('deletedAt') && ($row[$unit->field('deletedAt')] ?? null)
                 ? 'archived'
                 : (((int) ($row[$unit->field('status')] ?? 0)) === 1 ? 'active' : 'inactive'),
             'createdBy'          => (string) ($row['created_by'] ?? 'unknown'),
@@ -220,12 +229,15 @@ final class DepartmentController extends Controller
             return response()->json(['error' => 'no_fields_to_update'], 422);
         }
 
-        $fields['updated_at'] = now()->format('Y-m-d H:i:s');
+        if ($this->sourceHasColumn($unit, 'updated_at')) {
+            $fields['updated_at'] = now()->format('Y-m-d H:i:s');
+        }
+
         $query = DB::table($unit->table)
             ->where($unit->primaryKey, $id)
-            ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at');
+            ->where($unit->tenantKey, $t);
 
+        $this->activeSourceRows($query, $unit);
         $this->applyDepartmentVisibilityScope($query, $unit, $t);
 
         $n = $query->update($fields);
@@ -238,14 +250,18 @@ final class DepartmentController extends Controller
         $t = $this->authTenantId($request);
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
+        if (! $unit->has('deletedAt')) {
+            return response()->json(['error' => 'archive_not_supported_by_source'], 422);
+        }
+
         $query = DB::table($unit->table)
             ->where($unit->primaryKey, $id)
-            ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at');
+            ->where($unit->tenantKey, $t);
 
+        $this->activeSourceRows($query, $unit);
         $this->applyDepartmentVisibilityScope($query, $unit, $t);
 
-        $n = $query->update(['deleted_at' => now()->format('Y-m-d H:i:s')]);
+        $n = $query->update([$unit->field('deletedAt') => now()->format('Y-m-d H:i:s')]);
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'department_not_found'], 404);
     }
@@ -258,9 +274,9 @@ final class DepartmentController extends Controller
 
         $query = DB::table($unit->table)
             ->where($unit->primaryKey, $id)
-            ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at');
+            ->where($unit->tenantKey, $t);
 
+        $this->activeSourceRows($query, $unit);
         $this->applyDepartmentVisibilityScope($query, $unit, $t);
 
         $row = $query->first();
@@ -274,8 +290,8 @@ final class DepartmentController extends Controller
         $personIds = DB::table($person->table)
             ->where($person->tenantKey, $t)
             ->where($person->field('unit'), $id)
-            ->whereNull('deleted_at')
             ->where($person->field('status'), 1)
+            ->tap(fn ($query) => $this->activeSourceRows($query, $person))
             ->pluck($person->primaryKey)->map(fn ($v) => (string) $v)->all();
 
         $assignments = DB::table('hpbrain_capability_assignments')
@@ -461,5 +477,21 @@ final class DepartmentController extends Controller
     private function applyDepartmentVisibilityScope(Builder $query, ResolvedSource $unit, string $tenantId): void
     {
         $this->visibility->apply($query, $unit, $tenantId);
+    }
+
+    private function activeSourceRows(Builder $query, ResolvedSource $source): void
+    {
+        if ($source->has('deletedAt')) {
+            $query->whereNull($source->field('deletedAt'));
+        }
+    }
+
+    private function sourceHasColumn(ResolvedSource $source, string $column): bool
+    {
+        try {
+            return Schema::hasColumn($source->table, $column);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

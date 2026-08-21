@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Ramsey\Uuid\Uuid;
 
@@ -302,11 +303,11 @@ final class AuthController extends Controller
                 ->where($source->field('email'), $email)
                 ->where($source->field('status'), 1)
                 ->whereIn($source->tenantKey, $group['tenants'])
-                ->whereNull('deleted_at')
+                ->tap(fn ($query) => $this->activeSourceRows($query, $source))
                 ->first();
 
             if ($row) {
-                return [$row, $source];
+                return [$row, $this->resolver->resolve((string) $row->{$source->tenantKey}, 'Person')];
             }
         }
 
@@ -457,7 +458,7 @@ final class AuthController extends Controller
             $user = DB::table($person->table)
                 ->where($person->primaryKey, (int) $actor)
                 ->where($person->tenantKey, $this->authTenantId($request))
-                ->whereNull('deleted_at')
+                ->tap(fn ($query) => $this->activeSourceRows($query, $person))
                 ->first();
         } else {
             $user = DB::table('hpbrain_auth_users')->where('id', $actor)->first();
@@ -478,11 +479,9 @@ final class AuthController extends Controller
                 return response()->json(['error' => 'invalid_credentials'], 401);
             }
 
-            DB::table($person->table)->where($person->primaryKey, (int) $actor)->update([
-                'password' => Hash::make($data['newPassword']),
-                'plain_password' => null,
-                'updated_at' => now()->format('Y-m-d H:i:s'),
-            ]);
+            DB::table($person->table)
+                ->where($person->primaryKey, (int) $actor)
+                ->update($this->erpCredentialUpdate($data['newPassword'], $person));
         } else {
             if (! Hash::check($data['currentPassword'], $user->password_hash)) {
                 return response()->json(['error' => 'invalid_credentials'], 401);
@@ -539,7 +538,7 @@ final class AuthController extends Controller
         $verified = false;
         $needsMigration = false;
 
-        if ($passwordColumn !== null && Hash::check($raw, $passwordColumn)) {
+        if ($passwordColumn !== null && Hash::isHashed($passwordColumn) && Hash::check($raw, $passwordColumn)) {
             $verified = true;
             // Already a real hash. Re-write it only to raise a stale work factor.
             $needsMigration = Hash::needsRehash($passwordColumn) || $plainPasswordColumn !== null;
@@ -552,14 +551,27 @@ final class AuthController extends Controller
         }
 
         if ($verified && $needsMigration) {
-            DB::table($person->table)->where($person->primaryKey, $userId)->update([
-                'password' => Hash::make($raw),
-                'plain_password' => null,
-                'updated_at' => now()->format('Y-m-d H:i:s'),
-            ]);
+            DB::table($person->table)
+                ->where($person->primaryKey, $userId)
+                ->update($this->erpCredentialUpdate($raw, $person));
         }
 
         return $verified;
+    }
+
+    /** @return array<string, string|null> */
+    private function erpCredentialUpdate(string $raw, ResolvedSource $person): array
+    {
+        $values = [
+            'password' => Hash::make($raw),
+            'plain_password' => null,
+        ];
+
+        if (Schema::hasColumn($person->table, 'updated_at')) {
+            $values['updated_at'] = now()->format('Y-m-d H:i:s');
+        }
+
+        return $values;
     }
 
     /**
@@ -727,5 +739,12 @@ final class AuthController extends Controller
             'name' => 'Organization '.$subInstituteId,
             'logo' => null,
         ];
+    }
+
+    private function activeSourceRows(\Illuminate\Database\Query\Builder $query, ResolvedSource $source): void
+    {
+        if ($source->has('deletedAt')) {
+            $query->whereNull($source->field('deletedAt'));
+        }
     }
 }

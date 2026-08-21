@@ -214,8 +214,9 @@ final class OrganizationStructureService
 
         $query = DB::table($unit->table)
             ->where($unit->tenantKey, $tenant)
-            ->whereNull('deleted_at')
             ->orderBy($unit->primaryKey);
+
+        $this->activeSourceRows($query, $unit);
 
         // The same filter the Departments list applies. Applying it here is the
         // whole point of the class: the count and the list are one query shape.
@@ -331,10 +332,11 @@ final class OrganizationStructureService
 
         $query = DB::table($person->table)
             ->where($person->tenantKey, $tenant)
-            ->whereNull('deleted_at')
             ->whereIn($unitColumn, $unitIds)
             ->groupBy($unitColumn)
             ->selectRaw("{$unitColumn} AS unit_id, COUNT(*) AS n");
+
+        $this->activeSourceRows($query, $person);
 
         if ($person->has('status')) {
             $query->where($person->field('status'), 1);
@@ -358,13 +360,21 @@ final class OrganizationStructureService
         $person = $this->resolver->resolve($tenant, 'Person');
 
         $query = DB::table($person->table)
-            ->where($person->tenantKey, $tenant)
-            ->whereNull('deleted_at');
+            ->where($person->tenantKey, $tenant);
+
+        $this->activeSourceRows($query, $person);
 
         if ($person->has('status')) {
             $query->where($person->field('status'), 1);
         }
 
         return $query->count();
+    }
+
+    private function activeSourceRows(\Illuminate\Database\Query\Builder $query, \App\Domain\Universal\ResolvedSource $source): void
+    {
+        if ($source->has('deletedAt')) {
+            $query->whereNull($source->field('deletedAt'));
+        }
     }
 }

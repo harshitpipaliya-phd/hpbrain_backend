@@ -8,6 +8,7 @@ use App\Support\Jwt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Ramsey\Uuid\Uuid;
 use Tests\TestCase;
 
 /**
@@ -228,6 +229,28 @@ final class ErpLoginTest extends TestCase
         $this->assertNull(DB::table('tbluser')->where('id', 6)->value('plain_password'));
     }
 
+    public function test_legacy_plain_password_column_value_is_migrated_on_login(): void
+    {
+        config(['hashing.bcrypt.verify' => true]);
+
+        DB::table('tbluser')->insert([
+            'id' => 16, 'employee_no' => 'E016', 'password' => 'admin',
+            'plain_password' => null, 'first_name' => 'Legacy', 'last_name' => 'Admin',
+            'email' => 'legacy-admin@example.com', 'mobile' => null, 'gender' => null,
+            'sub_institute_id' => 1, 'user_profile_id' => 1, 'status' => 1,
+            'created_at' => null, 'updated_at' => null, 'deleted_at' => null,
+        ]);
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'legacy-admin@example.com', 'password' => 'admin',
+        ])->assertStatus(200);
+
+        $stored = DB::table('tbluser')->where('id', 16)->value('password');
+
+        self::assertTrue(Hash::check('admin', $stored));
+        $this->assertNull(DB::table('tbluser')->where('id', 16)->value('plain_password'));
+    }
+
     /**
      * An already-hashed password is NOT rewritten on login.
      *
@@ -285,6 +308,279 @@ final class ErpLoginTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertSame('manager', $response->json('user.role'));
+    }
+
+    public function test_unmapped_development_erp_user_does_not_bypass_entity_mappings(): void
+    {
+        DB::statement("ATTACH DATABASE ':memory:' AS development_erp");
+
+        Schema::create('development_erp.tbluser', function ($t) {
+            $t->integer('id')->primary();
+            $t->string('employee_no')->nullable();
+            $t->string('password')->nullable();
+            $t->string('plain_password')->nullable();
+            $t->string('first_name')->nullable();
+            $t->string('last_name')->nullable();
+            $t->string('email');
+            $t->string('mobile')->nullable();
+            $t->string('gender')->nullable();
+            $t->integer('sub_institute_id');
+            $t->integer('user_profile_id')->nullable();
+            $t->integer('status')->default(1);
+            $t->timestamp('deleted_at')->nullable();
+            $t->integer('jobtitle_id')->nullable();
+            $t->integer('department_id')->nullable();
+            $t->timestamp('joined_date')->nullable();
+        });
+
+        Schema::create('development_erp.tbluserprofilemaster', function ($t) {
+            $t->integer('id')->primary();
+            $t->integer('sub_institute_id');
+            $t->string('name');
+            $t->integer('status')->default(1);
+        });
+
+        Schema::create('development_erp.school_setup', function ($t) {
+            $t->integer('Id')->primary();
+            $t->string('SchoolName');
+            $t->string('Logo')->nullable();
+        });
+
+        DB::table('development_erp.tbluserprofilemaster')->insert([
+            'id' => 3282, 'sub_institute_id' => 254, 'name' => 'Admin', 'status' => 1,
+        ]);
+
+        DB::table('development_erp.school_setup')->insert([
+            'Id' => 254, 'SchoolName' => 'Hills High School', 'Logo' => 'hills_logo1.png',
+        ]);
+
+        DB::table('development_erp.tbluser')->insert([
+            'id' => 8679, 'employee_no' => 'HH1', 'password' => 'admin',
+            'plain_password' => null, 'first_name' => 'Jigu', 'last_name' => 'Zaveri',
+            'email' => 'jiguzaveri@gmail.com', 'mobile' => null, 'gender' => null,
+            'sub_institute_id' => 254, 'user_profile_id' => 3282, 'status' => 1,
+            'deleted_at' => null, 'jobtitle_id' => null, 'department_id' => null,
+            'joined_date' => null,
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'jiguzaveri@gmail.com', 'password' => 'admin',
+        ]);
+
+        $response->assertStatus(401)
+            ->assertJsonPath('error', 'invalid_credentials');
+    }
+
+    public function test_development_erp_user_can_open_the_mapped_organization_workspace(): void
+    {
+        DB::statement("ATTACH DATABASE ':memory:' AS development_erp");
+
+        Schema::create('development_erp.school_setup', function ($t) {
+            $t->integer('Id')->primary();
+            $t->string('SchoolName');
+            $t->string('ShortCode')->nullable();
+            $t->string('Logo')->nullable();
+            $t->string('institute_type')->nullable();
+            $t->timestamp('created_at')->nullable();
+            $t->timestamp('updated_at')->nullable();
+        });
+
+        Schema::create('development_erp.hrms_departments', function ($t) {
+            $t->integer('id')->primary();
+            $t->integer('sub_institute_id');
+            $t->string('department');
+            $t->text('roles_responsibility')->nullable();
+            $t->integer('parent_id')->nullable();
+            $t->integer('status')->default(1);
+            $t->integer('is_calculated')->default(0);
+            $t->timestamp('deleted_at')->nullable();
+            $t->timestamp('updated_at')->nullable();
+        });
+
+        Schema::create('development_erp.tbluserprofilemaster', function ($t) {
+            $t->integer('id')->primary();
+            $t->integer('sub_institute_id');
+            $t->string('name');
+            $t->integer('status')->default(1);
+        });
+
+        Schema::create('development_erp.tbluser', function ($t) {
+            $t->integer('id')->primary();
+            $t->string('employee_no')->nullable();
+            $t->string('password')->nullable();
+            $t->string('plain_password')->nullable();
+            $t->string('first_name')->nullable();
+            $t->string('last_name')->nullable();
+            $t->string('email');
+            $t->string('mobile')->nullable();
+            $t->string('gender')->nullable();
+            $t->integer('sub_institute_id');
+            $t->integer('department_id')->nullable();
+            $t->integer('jobtitle_id')->nullable();
+            $t->integer('user_profile_id')->nullable();
+            $t->date('joined_date')->nullable();
+            $t->integer('status')->default(1);
+            $t->timestamp('created_at')->nullable();
+            $t->timestamp('updated_at')->nullable();
+            $t->timestamp('deleted_at')->nullable();
+        });
+
+        Schema::create('development_erp.hrms_job_titles', function ($t) {
+            $t->integer('id')->primary();
+            $t->integer('sub_institute_id');
+            $t->string('title');
+            $t->integer('is_active')->default(1);
+        });
+
+        DB::table('development_erp.school_setup')->insert([
+            'Id' => 254,
+            'SchoolName' => 'Hills High School',
+            'ShortCode' => 'HHS',
+            'Logo' => 'hills_logo1.png',
+            'institute_type' => 'school',
+            'created_at' => '2026-01-01 00:00:00',
+            'updated_at' => '2026-01-02 00:00:00',
+        ]);
+
+        DB::table('development_erp.hrms_departments')->insert([
+            'id' => 10,
+            'sub_institute_id' => 254,
+            'department' => 'Administration',
+            'roles_responsibility' => 'School administration',
+            'parent_id' => 0,
+            'status' => 1,
+            'is_calculated' => 0,
+            'deleted_at' => null,
+            'updated_at' => '2026-01-02 00:00:00',
+        ]);
+
+        DB::table('development_erp.tbluserprofilemaster')->insert([
+            'id' => 3282, 'sub_institute_id' => 254, 'name' => 'Admin', 'status' => 1,
+        ]);
+
+        DB::table('development_erp.tbluser')->insert([
+            'id' => 8679,
+            'employee_no' => '2',
+            'password' => 'admin',
+            'plain_password' => null,
+            'first_name' => 'Jigna',
+            'last_name' => 'Zaveri',
+            'email' => 'jiguzaveri@gmail.com',
+            'mobile' => null,
+            'gender' => null,
+            'sub_institute_id' => 254,
+            'department_id' => 10,
+            'jobtitle_id' => null,
+            'user_profile_id' => 3282,
+            'joined_date' => null,
+            'status' => 1,
+            'created_at' => null,
+            'updated_at' => null,
+            'deleted_at' => null,
+        ]);
+
+        $this->insertDevelopmentErpMappings('254');
+
+        $login = $this->postJson('/api/v1/auth/login', [
+            'email' => 'jiguzaveri@gmail.com', 'password' => 'admin',
+        ])->assertStatus(200);
+
+        $token = $login->json('accessToken');
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/v1/organizations/254/254')
+            ->assertStatus(200)
+            ->assertJsonPath('id', 254)
+            ->assertJsonPath('name', 'Hills High School')
+            ->assertJsonPath('logo', 'hills_logo1.png');
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/v1/organizations/254/254/structure')
+            ->assertStatus(200)
+            ->assertJsonPath('departments.0.name', 'Administration')
+            ->assertJsonPath('memberType', 'staff');
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/v1/people/254')
+            ->assertStatus(200)
+            ->assertJsonPath('0.email', 'jiguzaveri@gmail.com');
+    }
+
+    private function insertDevelopmentErpMappings(string $tenantId): void
+    {
+        $entities = [
+            'Organization' => ['development_erp.school_setup', [
+                'id' => 'Id',
+                'tenantKey' => 'Id',
+                'name' => 'SchoolName',
+                'code' => 'ShortCode',
+                'industry' => 'institute_type',
+            ]],
+            'OrganizationProfile' => ['development_erp.school_setup', [
+                'id' => 'Id',
+                'tenantKey' => 'Id',
+                'legalName' => 'SchoolName',
+                'logo' => 'Logo',
+            ]],
+            'OrganizationUnit' => ['development_erp.hrms_departments', [
+                'id' => 'id',
+                'tenantKey' => 'sub_institute_id',
+                'name' => 'department',
+                'description' => 'roles_responsibility',
+                'parent' => 'parent_id',
+                'status' => 'status',
+                'deletedAt' => 'deleted_at',
+            ]],
+            'Person' => ['development_erp.tbluser', [
+                'id' => 'id',
+                'tenantKey' => 'sub_institute_id',
+                'externalRef' => 'employee_no',
+                'firstName' => 'first_name',
+                'lastName' => 'last_name',
+                'email' => 'email',
+                'phone' => 'mobile',
+                'gender' => 'gender',
+                'unit' => 'department_id',
+                'position' => 'jobtitle_id',
+                'profile' => 'user_profile_id',
+                'status' => 'status',
+                'joinedDate' => 'joined_date',
+                'deletedAt' => 'deleted_at',
+            ]],
+            'PersonProfile' => ['development_erp.tbluserprofilemaster', [
+                'id' => 'id',
+                'tenantKey' => 'sub_institute_id',
+                'name' => 'name',
+                'status' => 'status',
+            ]],
+            'Position' => ['development_erp.hrms_job_titles', [
+                'id' => 'id',
+                'tenantKey' => 'sub_institute_id',
+                'title' => 'title',
+                'status' => 'is_active',
+            ]],
+        ];
+
+        foreach ($entities as $entity => [$table, $fields]) {
+            foreach ($fields as $field => $column) {
+                DB::table('hpbrain_entity_mappings')->insert([
+                    'id' => Uuid::uuid4()->toString(),
+                    'tenant_id' => $tenantId,
+                    'source_system' => 'erp',
+                    'source_entity' => $table,
+                    'source_field' => $column,
+                    'universal_entity' => $entity,
+                    'universal_field' => $field,
+                    'mapping_type' => 'direct',
+                    'transform_expression' => null,
+                    'lookup_table' => null,
+                    'is_active' => 1,
+                    'created_by' => 'test',
+                    'created_date' => now(),
+                    'updated_date' => now(),
+                ]);
+            }
+        }
     }
 
     public function test_logout_revokes_refresh_token(): void
