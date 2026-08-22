@@ -13,16 +13,23 @@ namespace App\Domain\Kasba;
  * states this as "a fact the system hasn't verified is null, never defaulted to
  * 0", and the Node build enforced it by test in every scoring function.
  *
- * KNOWN DIVERGENCE FROM THE DOCUMENTS — read before extending.
- * Architecture Invariant 6 requires every capability to carry an explicit
- * STATE: Unknown -> Asserted -> Inferred -> Assessed -> Demonstrated ->
+ * LEVEL AND STATE ARE TWO DIFFERENT ANSWERS, and this class only computes the
+ * first. A level answers "how good"; a STATE answers "how firmly do we know
+ * that" — Unknown -> Asserted -> Inferred -> Assessed -> Demonstrated ->
  * Mastered (Observed for Behaviour and Attitude), advancing only on evidence
- * and never regressing or inflating silently. This implementation has numeric
- * 0-5 levels only. Levels answer "how good", state answers "how firmly do we
- * know" — they are not interchangeable, and the second is the one the Brain
- * needs in order to be honest. Closing this gap requires a capability_state
- * column with an evidence_ref, plus a guarded transition. It is not done in
- * either the Node or the Laravel build.
+ * and never regressing or inflating silently (Architecture Invariant 6).
+ *
+ * THAT STATE MODEL IS IMPLEMENTED — this docstring previously said it was not,
+ * and was wrong. It lives in App\Domain\Capability\CapabilityState, which owns
+ * the ranking and the guarded transition, and it is persisted on
+ * hpbrain_capability_proficiency.capability_state alongside evidence_ref,
+ * state_source, state_changed_date and state_change_reason. The writer is
+ * KasbaController::recordProficiency, which advances from the assignment's
+ * CURRENT state rather than from Unknown, refuses an advance without evidence,
+ * and refuses a regression without an explicit reason.
+ *
+ * The division of labour is deliberate: scoring stays numeric and stateless
+ * here, so a change to the confidence model cannot quietly alter a score.
  */
 final class KasbaService
 {
