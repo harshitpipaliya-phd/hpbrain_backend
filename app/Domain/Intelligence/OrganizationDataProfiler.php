@@ -37,6 +37,29 @@ final class OrganizationDataProfiler
     public const RECORDS = 'hpbrain_operational_records';
 
     /**
+     * Above this size, keep profiling to full-population scalar aggregates and
+     * cadence. Per-value breakdowns and windowed percentiles can exceed PHP's
+     * request timeout on live databases, and they are supporting detail rather
+     * than the intelligence contract.
+     *
+     * IT IS A CEILING, NOT A SWITCH. It stood at 0 — which is not "no limit" but
+     * "every dataset is over the limit", since a dataset with one record is
+     * already above zero. Every per-value breakdown in the product was therefore
+     * off: no top values, so no recurring patterns, so no knowledge domains and
+     * no measure unit, on tenants of any size. The screens went quiet and the
+     * profiler reported the silence as an omission rather than as a fault.
+     *
+     * Matched to LARGE_TENANT_DATASET_SUMMARY_LIMIT deliberately: a tenant above
+     * that never reaches this method at all, so the two together say "profile in
+     * full up to a hundred thousand records, and summarise beyond it" with one
+     * number rather than two that can drift apart.
+     */
+    private const DETAIL_BREAKDOWN_RECORD_LIMIT = 100000;
+
+    /** Above this, use one grouped summary query instead of one profile query per dataset. */
+    private const LARGE_TENANT_DATASET_SUMMARY_LIMIT = 100000;
+
+    /**
      * Columns that classify a record — the axes an organization's practice can
      * be described along. Ordered by how strongly each tends to name the *kind*
      * of work rather than its circumstances, which is the order the domain
@@ -115,6 +138,14 @@ final class OrganizationDataProfiler
      */
     public function datasets(string $tenantId): array
     {
+        $total = (int) DB::table(self::RECORDS)
+            ->where('tenant_id', $tenantId)
+            ->count();
+
+        if ($total > self::LARGE_TENANT_DATASET_SUMMARY_LIMIT) {
+            return $this->summarizedDatasets($total);
+        }
+
         $names = DB::table(self::RECORDS)
             ->where('tenant_id', $tenantId)
             ->select('dataset')->distinct()->orderBy('dataset')
@@ -135,6 +166,61 @@ final class OrganizationDataProfiler
     }
 
     /**
+     * Request-safe dataset profiles for tenants whose operational record volume
+     * makes per-dataset drilldowns too expensive for a web screen.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function summarizedDatasets(int $total): array
+    {
+        $detailOmitted = [
+            'reason' => 'Tenant is above the request-safe dataset profiling limit; source-level detail is available from ingestion sources and operational records.',
+            'limit' => self::LARGE_TENANT_DATASET_SUMMARY_LIMIT,
+        ];
+
+        $fields = [];
+
+        foreach (array_merge(self::CLASSIFIERS, self::ACTORS, ['subject_ref']) as $column) {
+            $fields[$column] = [
+                'field' => $column,
+                'nonNull' => null,
+                'nullCount' => null,
+                'completeness' => null,
+                'distinct' => 0,
+                'invariant' => false,
+                'topValues' => [],
+                'topValuesOmitted' => $detailOmitted,
+            ];
+        }
+
+        return [[
+            'dataset' => 'operational_records',
+            'label' => 'Operational Records',
+            'records' => $total,
+            'firstAt' => null,
+            'lastAt' => null,
+            'ingestedAt' => null,
+            'spanDays' => null,
+            'sourceFiles' => null,
+            'sourceFilesOmitted' => $detailOmitted,
+            'importJobs' => null,
+            'importJobsOmitted' => $detailOmitted,
+            'duplicateKeys' => null,
+            'duplicateKeysOmitted' => $detailOmitted,
+            'closedCount' => 0,
+            'closureRate' => null,
+            'hasPayload' => null,
+            'fields' => $fields,
+            'measure' => null,
+            'monthly' => [[
+                'omitted' => true,
+                'reason' => 'Tenant is above the request-safe dataset profiling limit.',
+                'limit' => self::LARGE_TENANT_DATASET_SUMMARY_LIMIT,
+            ]],
+        ]];
+    }
+
+    /**
      * One dataset: shape, completeness, timespan, outcome measure, cadence.
      *
      * @return array<string, mixed>
@@ -144,18 +230,35 @@ final class OrganizationDataProfiler
         $base = static fn () => DB::table(self::RECORDS)
             ->where('tenant_id', $tenantId)->where('dataset', $dataset);
 
-        // ONE query for every scalar. Issuing a query per column would multiply
-        // a single index range scan by the number of columns for no extra
-        // information.
+        /*
+            ONE QUERY FOR EVERY SCALAR — BUT NOT FOR THE DISTINCT COUNTS.
+
+            Non-null counts, extremes, sums and averages all fall out of a single
+            index range scan, so they belong together and are cheap. `COUNT
+            (DISTINCT …)` does not: it needs the values grouped, and a statement
+            asking for eight of them over eight different columns can use an
+            index for none of them. MySQL falls back to a temporary table per
+            column over the whole matched slice.
+
+            MEASURED ON THE DEVELOPMENT DATABASE, one tenant's 27,000-row
+            school_fee dataset, with the per-column indexes in place:
+
+                the combined aggregate, distinct counts included    152.86s
+                the same aggregate without them                       ~0.6s
+                one indexed COUNT(DISTINCT col), per column     0.03s – 0.86s
+
+            Splitting them out is therefore not "a query per column instead of
+            one" — it is eight index scans instead of eight temporary tables,
+            and it is the difference between a profile that completes inside a
+            request and one that does not. The comment that stood here argued
+            the opposite, correctly, at a time when the columns had no indexes
+            to scan.
+        */
         $columns = array_merge(self::CLASSIFIERS, self::ACTORS, ['subject_ref', 'metric_value', 'metric_unit', 'quantity', 'closed_at', 'occurred_at', 'payload']);
         $selects = ['COUNT(*) AS records'];
 
         foreach ($columns as $column) {
             $selects[] = "COUNT(`{$column}`) AS nn_{$column}";
-        }
-
-        foreach (array_merge(self::CLASSIFIERS, self::ACTORS, ['subject_ref', 'metric_unit']) as $column) {
-            $selects[] = "COUNT(DISTINCT `{$column}`) AS dc_{$column}";
         }
 
         $selects[] = 'MIN(occurred_at) AS first_at';
@@ -169,14 +272,37 @@ final class OrganizationDataProfiler
         // the source system recorded a close before an open. Counted here so the
         // gap detector can report them instead of quietly averaging them in.
         $selects[] = 'SUM(CASE WHEN metric_value < 0 THEN 1 ELSE 0 END) AS metric_negative';
-        $selects[] = 'COUNT(DISTINCT source_file) AS source_files';
-        $selects[] = 'COUNT(DISTINCT import_job_id) AS import_jobs';
-        // A natural key repeated across rows means the source re-stated the same
-        // subject; the difference between the two counts is duplication.
-        $selects[] = 'COUNT(DISTINCT natural_key) AS distinct_natural_keys';
 
         $agg = (array) $base()->selectRaw(implode(', ', $selects))->first();
         $records = (int) ($agg['records'] ?? 0);
+
+        /*
+            The distinct counts, one indexed statement each.
+
+            `source_file` and `import_job_id` are in the list even though the
+            table has no (tenant_id, dataset, …) index for either: they carry a
+            handful of values per dataset, so grouping them is cheap once the
+            statement is small enough for the optimiser to reach the tenant
+            index at all. `natural_key` is unique table-wide and answers from
+            its own unique index.
+        */
+        $distinctOf = array_merge(
+            self::CLASSIFIERS,
+            self::ACTORS,
+            ['subject_ref', 'metric_unit', 'source_file', 'import_job_id', 'natural_key'],
+        );
+
+        foreach ($distinctOf as $column) {
+            $agg['dc_'.$column] = (int) $base()->selectRaw("COUNT(DISTINCT `{$column}`) AS n")->value('n');
+        }
+
+        // The three the rest of this method reads under their older names.
+        $agg['source_files'] = $agg['dc_source_file'];
+        $agg['import_jobs'] = $agg['dc_import_job_id'];
+        // A natural key repeated across rows means the source re-stated the same
+        // subject; the difference between the two counts is duplication.
+        $agg['distinct_natural_keys'] = $agg['dc_natural_key'];
+        $detailBreakdownsAvailable = $records <= self::DETAIL_BREAKDOWN_RECORD_LIMIT;
 
         $profiled = array_merge(self::CLASSIFIERS, self::ACTORS, ['subject_ref']);
 
@@ -186,7 +312,11 @@ final class OrganizationDataProfiler
         // profiled dataset — where every value would be its own "top value".
         $withValues = array_values(array_filter(
             $profiled,
-            static function (string $column) use ($agg): bool {
+            static function (string $column) use ($agg, $detailBreakdownsAvailable): bool {
+                if (! $detailBreakdownsAvailable) {
+                    return false;
+                }
+
                 $distinct = (int) ($agg['dc_'.$column] ?? 0);
 
                 return $distinct > 0 && $distinct <= 400;
@@ -212,10 +342,16 @@ final class OrganizationDataProfiler
                 // sees only "100% complete" would conclude the opposite.
                 'invariant'    => $nonNull > 0 && $distinct === 1,
                 'topValues'    => $topValues[$column] ?? [],
+                'topValuesOmitted' => $detailBreakdownsAvailable ? null : [
+                    'reason' => 'Dataset is above the request-safe detailed breakdown limit; full counts and completeness are still computed.',
+                    'limit'  => self::DETAIL_BREAKDOWN_RECORD_LIMIT,
+                ],
             ];
         }
 
         $metricCount = (int) ($agg['nn_metric_value'] ?? 0);
+
+        $percentiles = $this->percentiles($tenantId, $dataset, $metricCount);
 
         return [
             'dataset'       => $dataset,
@@ -233,7 +369,11 @@ final class OrganizationDataProfiler
             'hasPayload'    => (int) ($agg['nn_payload'] ?? 0) > 0,
             'fields'        => $fields,
             'measure'       => $metricCount === 0 ? null : [
-                'unit'      => $this->dominantUnit($tenantId, $dataset),
+                'unit'      => $detailBreakdownsAvailable ? $this->dominantUnit($tenantId, $dataset) : null,
+                'unitOmitted' => $detailBreakdownsAvailable ? null : [
+                    'reason' => 'Dataset is above the request-safe detailed breakdown limit.',
+                    'limit' => self::DETAIL_BREAKDOWN_RECORD_LIMIT,
+                ],
                 'count'     => $metricCount,
                 'coverage'  => $records === 0 ? null : round($metricCount / $records, 4),
                 'mean'      => $this->num($agg['metric_avg'] ?? null),
@@ -241,8 +381,14 @@ final class OrganizationDataProfiler
                 'max'       => $this->num($agg['metric_max'] ?? null),
                 'stdDev'    => $this->num($agg['metric_sd'] ?? null),
                 'negatives' => (int) ($agg['metric_negative'] ?? 0),
-            ] + $this->percentiles($tenantId, $dataset),
-            'monthly'       => $this->monthly($tenantId, $dataset),
+            ] + $percentiles,
+            'monthly'       => $detailBreakdownsAvailable
+                ? $this->monthly($tenantId, $dataset)
+                : [[
+                    'omitted' => true,
+                    'reason' => 'Dataset is above the request-safe detailed breakdown limit; firstAt and lastAt still report the full observed span.',
+                    'limit' => self::DETAIL_BREAKDOWN_RECORD_LIMIT,
+                ]],
         ];
     }
 
@@ -402,26 +548,59 @@ final class OrganizationDataProfiler
      *
      * @return array<string, float|null>
      */
-    private function percentiles(string $tenantId, string $dataset): array
+    /**
+     * The median and 95th percentile of this dataset's measurements.
+     *
+     * TWO ORDERED READS, NOT A WINDOW FUNCTION.
+     *
+     * This was `PERCENTILE_CONT(…) WITHIN GROUP (ORDER BY metric_value) OVER ()`,
+     * and it had two problems that pulled in opposite directions and hid each
+     * other. `PERCENTILE_CONT` is a MariaDB extension: on MySQL it does not
+     * exist, the statement raises, the catch below returns nulls, and every
+     * MySQL deployment silently showed no median and no p95 with nothing to say
+     * why. On MariaDB, where it does run, `OVER ()` evaluates the window across
+     * every matching row before the LIMIT can discard them — measured at over
+     * five minutes for a dataset of twenty-seven thousand on the development
+     * database, which is well past any web request.
+     *
+     * Selecting the value at the rank instead is one index-ordered scan with an
+     * early stop, portable to every engine, and asks the database for exactly
+     * the two rows wanted. It returns the DISCRETE percentile — an actual
+     * observed value — where the window function interpolated between the two
+     * either side. That is a real difference and a defensible one: an
+     * interpolated median of a set of durations is a number no record has, and
+     * for a figure a reader may go and check against the source rows, the
+     * observed value is the more useful answer.
+     *
+     * @param  int  $metricCount  non-null metric values, already counted by the
+     *                            caller's aggregate — asking again would be a
+     *                            third pass for a number in hand.
+     * @return array{median: float|null, p95: float|null}
+     */
+    private function percentiles(string $tenantId, string $dataset, int $metricCount): array
     {
-        try {
-            $row = DB::selectOne(
-                'SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY metric_value) OVER () AS p50,
-                        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY metric_value) OVER () AS p95
-                   FROM '.self::RECORDS.'
-                  WHERE tenant_id = ? AND dataset = ? AND metric_value IS NOT NULL
-                  LIMIT 1',
-                [$tenantId, $dataset],
-            );
-
-            return ['median' => $this->num($row->p50 ?? null), 'p95' => $this->num($row->p95 ?? null)];
-        } catch (Throwable) {
-            // PERCENTILE_CONT ... WITHIN GROUP is MariaDB 10.3+ / MySQL 8+. On an
-            // older engine the profile is still correct, just without the two
-            // order statistics — reported as null so no reader mistakes their
-            // absence for a distribution with no spread.
+        if ($metricCount === 0) {
             return ['median' => null, 'p95' => null];
         }
+
+        $at = function (float $fraction) use ($tenantId, $dataset, $metricCount): ?float {
+            // Zero-based rank, clamped inside the population: the 95th
+            // percentile of four values is the fourth, not a row past the end.
+            $offset = min($metricCount - 1, (int) floor($fraction * ($metricCount - 1)));
+
+            $value = DB::table(self::RECORDS)
+                ->where('tenant_id', $tenantId)
+                ->where('dataset', $dataset)
+                ->whereNotNull('metric_value')
+                ->orderBy('metric_value')
+                ->offset($offset)
+                ->limit(1)
+                ->value('metric_value');
+
+            return $this->num($value);
+        };
+
+        return ['median' => $at(0.5), 'p95' => $at(0.95)];
     }
 
     private function dominantUnit(string $tenantId, string $dataset): ?string

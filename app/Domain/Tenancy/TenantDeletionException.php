@@ -57,6 +57,32 @@ final class TenantDeletionException extends RuntimeException
         );
     }
 
+    /**
+     * A row belonging to ANOTHER tenant points at a row this tenant owns.
+     *
+     * Deleting it would destroy a different organization's data purely to let
+     * this deletion through, which is the one thing this operation must never
+     * do. The alternative — leaving it and letting the foreign key refuse — is
+     * the rollback bug this class of error exists to explain rather than
+     * reproduce, so the caller is told exactly which table and which rows.
+     *
+     * @param  array<int, array<string, mixed>>  $conflicts
+     */
+    public static function crossTenantReference(string $tenantId, array $conflicts): self
+    {
+        $rows = array_sum(array_column($conflicts, 'rows'));
+
+        return new self(
+            'cross_tenant_reference',
+            "This organization cannot be deleted because {$rows} row(s) in ".count($conflicts).' table(s) '
+            .'belong to a DIFFERENT organization but reference records this one owns. Deleting them would '
+            .'destroy the other organization\'s data, so nothing has been deleted. The references must be '
+            .'resolved in the source system first.',
+            409,
+            ['tenantId' => $tenantId, 'conflicts' => $conflicts, 'rows' => $rows],
+        );
+    }
+
     /** @param array<int, array<string, mixed>> $tables */
     public static function sourceSystemData(string $tenantId, array $tables, int $rows): self
     {

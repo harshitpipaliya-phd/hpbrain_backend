@@ -134,6 +134,15 @@ final class PersonProfileService
         return [
             'person'       => $identity,
             'organization' => $this->organization($tenantId),
+            // WHAT KIND OF ORGANIZATION THIS IS, told by what it has imported.
+            //
+            // A person page has to decide whether a panel is missing because
+            // this person has no such record, or because the organization has
+            // no such data at all — an "Academic record: none" panel on a
+            // telecoms engineer is noise, while the same panel on a school's
+            // student is a finding. Nothing else can answer that: the person's
+            // own linkage lists only the datasets that matched THEM.
+            'datasets'     => $this->tenantDatasets($tenantId),
             'linkage'      => $links,
             'academic'     => $fee['academic'] ?? null,
             'contacts'     => $this->contacts($tenantId, $pid, $fee['contact'] ?? null),
@@ -334,6 +343,39 @@ final class PersonProfileService
      * @param  array<string, mixed>  $identity
      * @return array<string, mixed>
      */
+    /**
+     * Every operational dataset this tenant has imported, with its size.
+     *
+     * ORGANIZATION-WIDE, DELIBERATELY. It answers "does this organization keep
+     * school fee records / work orders / complaints at all", which is a property
+     * of the tenant and not of the person being viewed, and it is what lets a
+     * screen omit a whole section rather than render an empty one.
+     *
+     * One grouped scan on the (tenant_id, dataset, …) index prefix, and the
+     * result is a handful of rows — datasets are a fixed small vocabulary, not
+     * a per-record dimension.
+     *
+     * @return array<int, array{dataset: string, label: string, records: int}>
+     */
+    private function tenantDatasets(string $tenantId): array
+    {
+        if (! $this->hasTable('hpbrain_operational_records')) {
+            return [];
+        }
+
+        return DB::table('hpbrain_operational_records')
+            ->where('tenant_id', $tenantId)
+            ->groupBy('dataset')
+            ->orderByDesc(DB::raw('COUNT(*)'))
+            ->get([DB::raw('dataset'), DB::raw('COUNT(*) as records')])
+            ->map(fn ($d) => [
+                'dataset' => (string) $d->dataset,
+                'label'   => $this->humanize((string) $d->dataset),
+                'records' => (int) $d->records,
+            ])
+            ->all();
+    }
+
     private function linkRules(string $tenantId, array $identity): array
     {
         if (! $this->hasTable('hpbrain_operational_records')) {

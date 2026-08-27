@@ -7,11 +7,13 @@ namespace App\Http\Controllers\Api;
 use App\Domain\Organization\OrganizationStructureService;
 use App\Domain\Universal\EntityResolver;
 use App\Domain\Universal\ResolvedSource;
+use App\Domain\Universal\SourceSchema;
 use App\Http\Controllers\Controller;
 use App\Repositories\OrganizationRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Organizations come from the tenant's own system of record, not from a
@@ -31,6 +33,7 @@ final class OrganizationController extends Controller
         private readonly OrganizationRepository $repository,
         private readonly EntityResolver $resolver,
         private readonly OrganizationStructureService $structure,
+        private readonly SourceSchema $schema,
     ) {
     }
 
@@ -82,39 +85,163 @@ final class OrganizationController extends Controller
         );
     }
 
+    /**
+     * Edit the organization record.
+     *
+     * WHAT IS EDITABLE IS A PROPERTY OF THE TENANT, NOT OF THIS METHOD. The
+     * validator accepts the product's whole organization vocabulary; which of
+     * those fields reach a column is decided per tenant by the mapping and then
+     * narrowed by SourceSchema to the columns the table physically has. A field
+     * this tenant's ERP cannot hold is dropped rather than rejected, because the
+     * client is told up front — `profileFields` on every listed row — which
+     * fields exist, and only ever offers those.
+     *
+     * The response echoes the freshly-read row, so the caller never has to guess
+     * what the source system made of the write.
+     */
     public function update(Request $request, string $tenantId, string $id): JsonResponse
     {
         $data = $request->validate([
-            'name'      => ['sometimes', 'string', 'min:1', 'max:255'],
-            'orgCode'   => ['sometimes', 'nullable', 'string'],
-            'industry'  => ['sometimes', 'nullable', 'string'],
+            'name'               => ['sometimes', 'string', 'min:1', 'max:255'],
+            'orgCode'            => ['sometimes', 'nullable', 'string', 'max:255'],
+            'industry'           => ['sometimes', 'nullable', 'string', 'max:255'],
+            'legalName'          => ['sometimes', 'nullable', 'string', 'max:255'],
+            'logo'               => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'country'            => ['sometimes', 'nullable', 'string', 'max:255'],
+            'address'            => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'email'              => ['sometimes', 'nullable', 'string', 'max:255'],
+            'phone'              => ['sometimes', 'nullable', 'string', 'max:255'],
+            'website'            => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'contactPerson'      => ['sometimes', 'nullable', 'string', 'max:255'],
+            'registrationNumber' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'taxId'              => ['sometimes', 'nullable', 'string', 'max:255'],
+            // A BAND, NOT A NUMBER. The ERP records '51-200', which is what an
+            // onboarding form asks for and what every organization in it holds.
+            'employeeCount'      => ['sometimes', 'nullable', 'string', 'max:255'],
+            'workWeek'           => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         $t = $this->tenantId($request);
         $org = $this->resolver->resolve($t, 'Organization');
+        $profile = $this->resolver->resolve($t, 'OrganizationProfile');
 
-        $map = [
-            'name'     => $org->field('name'),
-            'orgCode'  => $org->field('code'),
-            'industry' => $org->field('industry'),
-        ];
-        $fields = [];
-        foreach ($data as $k => $v) { $fields[$map[$k]] = $v; }
+        // The organization row owns identity; the profile row owns description.
+        $orgWritable = $this->schema->usable($org, ['name', 'code', 'industry']);
+        $profileWritable = $this->schema->usable($profile, OrganizationRepository::PROFILE_FIELDS);
 
-        if ($fields === []) {
-            return response()->json(['error' => 'no_fields_to_update'], 422);
+        // The API spells one of the organization's own fields differently from
+        // the universal vocabulary. Nothing else needs translating.
+        $inputToUniversal = ['orgCode' => 'code'];
+
+        $orgFields = [];
+        $profileFields = [];
+
+        foreach ($data as $input => $value) {
+            $universal = $inputToUniversal[$input] ?? $input;
+
+            if (isset($orgWritable[$universal])) {
+                $orgFields[$orgWritable[$universal]] = $value;
+
+                continue;
+            }
+
+            if (isset($profileWritable[$universal])) {
+                $profileFields[$profileWritable[$universal]] = $value;
+            }
         }
 
-        $fields['updated_at'] = now()->format('Y-m-d H:i:s');
-        $query = DB::table($org->table)
-            ->where($org->tenantKey, $id)
-            ->where($org->tenantKey, $t);
+        /*
+            ONE ERP KEEPS BOTH ON THE SAME ROW. The school-shaped register maps
+            Organization and OrganizationProfile to `school_setup`, so a write
+            split across two statements would touch the same row twice, and the
+            "insert a profile row when none was updated" path below would create
+            a second school. Merging first is what keeps that from happening,
+            and it is also simply the correct statement.
+        */
+        if ($profile->table === $org->table) {
+            $orgFields += $profileFields;
+            $profileFields = [];
+        }
 
-        $this->activeSourceRows($query, $org);
+        if ($orgFields === [] && $profileFields === []) {
+            return response()->json(['error' => 'no_editable_fields_for_tenant'], 422);
+        }
 
-        $n = $query->update($fields);
+        if (! $this->sourceRowExists($org, $t, $id)) {
+            return response()->json(['error' => 'organization_not_found'], 404);
+        }
 
-        return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'organization_not_found'], 404);
+        DB::transaction(function () use ($org, $profile, $id, $t, $orgFields, $profileFields) {
+            $now = now()->format('Y-m-d H:i:s');
+
+            if ($orgFields !== []) {
+                $query = DB::table($org->table)
+                    ->where($org->tenantKey, $id)
+                    ->where($org->tenantKey, $t);
+
+                $this->activeSourceRows($query, $org);
+                $query->update($this->withTimestamp($org->table, $orgFields, 'updated_at', $now));
+            }
+
+            if ($profileFields === []) {
+                return;
+            }
+
+            $updated = DB::table($profile->table)
+                ->where($profile->tenantKey, $id)
+                ->where($profile->tenantKey, $t)
+                ->update($this->withTimestamp($profile->table, $profileFields, 'updated_at', $now));
+
+            /*
+                A tenant can legitimately have no profile row yet — the ERP
+                creates one lazily — and the edit that discovers this is the one
+                that should create it. Safe only because the profile table is
+                genuinely a satellite here: the same-table case was merged away
+                above, so this can never insert a duplicate organization.
+            */
+            if ($updated === 0) {
+                DB::table($profile->table)->insert(
+                    $this->withTimestamp(
+                        $profile->table,
+                        [$profile->tenantKey => $id] + $profileFields,
+                        'created_at',
+                        $now,
+                    ),
+                );
+            }
+        });
+
+        /*
+            `ok` FIRST, THE ROW BESIDE IT. The shipped contract is {ok:true} and
+            clients already depend on it, so it stays; the freshly-read row is
+            added rather than substituted, which saves the caller a round trip
+            without taking anything away from one that does not want it.
+        */
+        $row = collect($this->repository->list($t))->firstWhere('id', (int) $id);
+
+        return response()->json(['ok' => true] + ($row ?: []));
+    }
+
+    /**
+     * Stamp a write with a timestamp only where the table keeps one.
+     *
+     * ERP tables are not uniformly Laravel-shaped, and naming a column that is
+     * not there turns a good edit into a SQL error.
+     *
+     * @param  array<string, mixed>  $fields
+     * @return array<string, mixed>
+     */
+    private function withTimestamp(string $table, array $fields, string $column, string $now): array
+    {
+        try {
+            if (! Schema::hasColumn($table, $column)) {
+                return $fields;
+            }
+        } catch (\Throwable) {
+            return $fields;
+        }
+
+        return $fields + [$column => $now];
     }
 
     /**
