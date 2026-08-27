@@ -6,6 +6,7 @@ namespace App\Domain\Tenancy;
 
 use App\Domain\Intelligence\OrganizationDataProfiler;
 use App\Domain\Universal\EntityResolver;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
@@ -88,6 +89,17 @@ final class TenantOwnedTables
         'hpbrain_schema_migrations',
         'migrations',
     ];
+
+    /**
+     * How far below a plan table transitively-owned junction rows are followed.
+     *
+     * Three covers every chain in this schema (the deepest observed is two) and
+     * bounds both the walk and the nesting of the scoping subquery. A chain
+     * deeper than this is not silently truncated into a partial delete: the
+     * foreign key still refuses and the transaction still rolls back, which is
+     * the safe direction to fail in.
+     */
+    private const MAX_DEPENDENT_DEPTH = 3;
 
     public function __construct(
         private readonly EntityResolver $resolver,
@@ -238,6 +250,287 @@ final class TenantOwnedTables
         }
 
         return $ordered;
+    }
+
+    /**
+     * Rows the plan cannot see, but which the plan's own deletes trip over.
+     *
+     * THE BUG THIS CLOSES. classify() finds tables by looking for a tenant
+     * column, which is the right way to find everything a tenant owns DIRECTLY.
+     * It is blind to a table that owns nothing itself and exists only to join
+     * two rows together, and inDeletionOrder() is blind to it a second time
+     * because it only orders edges whose BOTH ends were found. hp_erp's
+     * content_mapping_type is exactly that table — id, content_id,
+     * mapping_type_id, mapping_value_id, no tenant column anywhere — and its
+     * content_id foreign key into the tenant-scoped content_master is
+     * ON DELETE NO ACTION. The sweep deleted content_master's rows, InnoDB
+     * refused because junction rows still referenced them, and the whole
+     * transaction unwound: the organization survived its own deletion.
+     *
+     * OWNERSHIP IS DERIVED, NOT ASSUMED. A row qualifies only when its foreign
+     * key points at a row this tenant owns, so the junction table is filtered
+     * rather than emptied — see scopedDependentQuery().
+     *
+     * Walked breadth-first so a junction hanging off a junction is found too,
+     * and returned deepest-first, which is the order the deletes must run in.
+     *
+     * @param  array<int, TenantTable>  $planTables
+     * @return array<int, TenantDependentRows>
+     */
+    public function dependentRows(array $planTables): array
+    {
+        $plan = [];
+        foreach ($planTables as $t) {
+            $plan[$t->table] = $t;
+        }
+
+        /** @var array<string, array<int, array{0:string,1:string,2:string}>> parent => [child, childCol, parentCol] */
+        $children = [];
+        foreach ($this->foreignKeyColumns() as [$child, $childCol, $parent, $parentCol]) {
+            if ($child === $parent) {
+                continue; // self-references are nulled by TenantPurgeService
+            }
+
+            $children[$parent][] = [$child, $childCol, $parentCol];
+        }
+
+        $out   = [];
+        $seen  = [];
+        $queue = [];
+
+        foreach ($plan as $table => $planTable) {
+            $queue[] = [$table, $planTable, []];
+        }
+
+        while ($queue !== []) {
+            [$parent, $root, $path] = array_shift($queue);
+
+            if (count($path) >= self::MAX_DEPENDENT_DEPTH) {
+                continue;
+            }
+
+            foreach ($children[$parent] ?? [] as [$child, $childCol, $parentCol]) {
+                // Already destroyed by the plan's own tenant-scoped sweep.
+                if (isset($plan[$child]) || in_array($child, self::NEVER_DELETE, true)) {
+                    continue;
+                }
+
+                // A dependent that HAS a tenant column is not transitively
+                // owned — it names its own owner. It is either in the plan
+                // (handled above) or holds no rows for this tenant at all, and
+                // any row of it referencing this tenant belongs to a DIFFERENT
+                // organization. Those are conflicts, not collateral:
+                // crossTenantConflicts() reports them and the purge refuses.
+                if ($this->tenantColumn($child) !== null) {
+                    continue;
+                }
+
+                $key = $child.'|'.$childCol.'|'.$parent.'|'.$parentCol;
+
+                if (isset($seen[$key])) {
+                    continue;
+                }
+
+                // A cycle would put the dependent table inside its own scoping
+                // subquery, and MySQL refuses that outright — error 1093, "you
+                // can't specify target table for update in FROM clause". The
+                // constraint would be left unsatisfied and the transaction
+                // would roll back, which is precisely the failure mode being
+                // fixed, so the chain stops rather than being built.
+                if ($child === $root->table || $child === $parent || $this->pathTouches($path, $child)) {
+                    continue;
+                }
+
+                $seen[$key] = true;
+
+                $next = array_merge(
+                    [['table' => $parent, 'column' => $childCol, 'parentColumn' => $parentCol]],
+                    $path,
+                );
+
+                $mode = TenantDependentRows::modeFor($childCol);
+
+                $out[] = new TenantDependentRows(
+                    table: $child,
+                    column: $childCol,
+                    path: $next,
+                    rootTable: $root->table,
+                    rootTenantColumn: $root->tenantColumn,
+                    tier: $root->tier,
+                    mode: $mode,
+                );
+
+                // Only an OWNERSHIP edge is followed further. A row that merely
+                // records who edited it is not this tenant's, so nothing hanging
+                // off it is either — walking through it would turn one shared
+                // lookup row into a path to somebody else's data.
+                if ($mode === TenantDependentRows::MODE_DELETE) {
+                    $queue[] = [$child, $root, $next];
+                }
+            }
+        }
+
+        // Deepest first: a junction under a junction must go before the
+        // junction it hangs off, or it simply becomes the next blocker.
+        usort($out, static fn (TenantDependentRows $a, TenantDependentRows $b): int => $b->depth() <=> $a->depth());
+
+        return $out;
+    }
+
+    /**
+     * Whether a table already appears in a dependency chain.
+     *
+     * @param  array<int, array{table: string, column: string, parentColumn: string}>  $path
+     */
+    private function pathTouches(array $path, string $table): bool
+    {
+        foreach ($path as $step) {
+            if ($step['table'] === $table) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The same list with this tenant's row count on each, empties dropped.
+     *
+     * @param  array<int, TenantDependentRows>  $dependents
+     * @return array<int, TenantDependentRows>
+     */
+    public function dependentRowsWithCounts(string $tenantId, array $dependents): array
+    {
+        $out = [];
+
+        foreach ($dependents as $dependent) {
+            try {
+                $rows = (int) $this->scopedDependentQuery($tenantId, $dependent)->count();
+            } catch (Throwable) {
+                // Counted one at a time and skipped on failure for the same
+                // reason withCounts() does it: a type mismatch on one join must
+                // not take the whole plan down with it.
+                continue;
+            }
+
+            if ($rows > 0) {
+                $out[] = $dependent->withRows($rows);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Exactly the rows of a dependent table this tenant owns, selected by
+     * following the foreign key back to a row the plan deletes.
+     *
+     * THE NESTING IS THE SAFETY PROPERTY. The innermost WHERE is the tenant
+     * scope, so a junction row pointing at another organization's parent is
+     * never selected. On the live database content_mapping_type holds 56 rows
+     * and this matches the 7 that belong to Fiber Valley.
+     */
+    public function scopedDependentQuery(string $tenantId, TenantDependentRows $dependent): Builder
+    {
+        $build = function (array $path) use (&$build, $tenantId, $dependent): callable {
+            $step = $path[0];
+            $rest = array_slice($path, 1);
+
+            return function ($q) use ($step, $rest, $build, $tenantId, $dependent): void {
+                $q->select($step['parentColumn'])->from($step['table']);
+
+                if ($rest === []) {
+                    $q->where($dependent->rootTenantColumn, $tenantId);
+
+                    return;
+                }
+
+                $q->whereNotNull($rest[0]['column'])->whereIn($rest[0]['column'], $build($rest));
+            };
+        };
+
+        return DB::table($dependent->table)
+            ->whereNotNull($dependent->column)
+            ->whereIn($dependent->column, $build($dependent->path));
+    }
+
+    /**
+     * Dependent tables that DO declare an owner and hold rows belonging to
+     * someone else which point at this tenant's rows.
+     *
+     * These must stop the deletion rather than be swept up by it. Deleting them
+     * would destroy another organization's data purely to let this deletion
+     * through; leaving them makes the foreign key refuse, which is the very
+     * rollback this work exists to eliminate. So they are found first and
+     * reported by name, before anything is deleted.
+     *
+     * @param  array<int, TenantTable>  $planTables
+     * @return array<int, array<string, mixed>>
+     */
+    public function crossTenantConflicts(string $tenantId, array $planTables): array
+    {
+        $plan = [];
+        foreach ($planTables as $t) {
+            $plan[$t->table] = $t;
+        }
+
+        $conflicts = [];
+        $seen      = [];
+
+        foreach ($this->foreignKeyColumns() as [$child, $childCol, $parent, $parentCol]) {
+            if ($child === $parent || isset($plan[$child]) || ! isset($plan[$parent])) {
+                continue;
+            }
+
+            $childTenantColumn = $this->tenantColumn($child);
+
+            if ($childTenantColumn === null) {
+                continue; // transitively owned — handled by dependentRows()
+            }
+
+            $key = $child.'|'.$childCol;
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+
+            try {
+                $rows = (int) DB::table($child)
+                    ->whereNotNull($childCol)
+                    // NULL is included deliberately. `!= '7'` is false for NULL
+                    // in SQL, so a row whose owner is unrecorded would slip
+                    // past this check and then break the delete from inside the
+                    // transaction — the exact rollback being fixed. A row that
+                    // references this tenant and declines to say who owns it is
+                    // not provably ours, so it is reported rather than deleted.
+                    ->where(function ($w) use ($childTenantColumn, $tenantId): void {
+                        $w->where($childTenantColumn, '!=', $tenantId)
+                            ->orWhereNull($childTenantColumn);
+                    })
+                    ->whereIn($childCol, function ($q) use ($parent, $parentCol, $plan, $tenantId): void {
+                        $q->select($parentCol)->from($parent)->where($plan[$parent]->tenantColumn, $tenantId);
+                    })
+                    ->count();
+            } catch (Throwable) {
+                // A comparison this driver cannot make — the BIGINT/VARCHAR
+                // tenant-id split this class already documents — is not
+                // evidence of a conflict, so it is not reported as one.
+                continue;
+            }
+
+            if ($rows > 0) {
+                $conflicts[] = [
+                    'table'  => $child,
+                    'column' => $childCol,
+                    'via'    => $parent,
+                    'rows'   => $rows,
+                ];
+            }
+        }
+
+        return $conflicts;
     }
 
     /**
@@ -435,6 +728,78 @@ final class TenantOwnedTables
             return [];
         }
     }
+
+    /**
+     * Every foreign key as [dependent, dependentColumn, referenced, referencedColumn].
+     *
+     * foreignKeys() above answers "which table depends on which", which is all
+     * an ordering needs. Following ownership THROUGH a foreign key needs the
+     * columns as well, so this is the same introspection kept at full width.
+     * Memoised because both dependentRows() and crossTenantConflicts() walk it.
+     *
+     * @return array<int, array{0: string, 1: string, 2: string, 3: string}>
+     */
+    private function foreignKeyColumns(): array
+    {
+        if ($this->fkColumnCache !== null) {
+            return $this->fkColumnCache;
+        }
+
+        try {
+            $driver = DB::connection()->getDriverName();
+
+            if ($driver === 'mysql' || $driver === 'mariadb') {
+                $rows = DB::select(
+                    'SELECT TABLE_NAME AS dependent, COLUMN_NAME AS dependent_column,
+                            REFERENCED_TABLE_NAME AS referenced, REFERENCED_COLUMN_NAME AS referenced_column
+                       FROM information_schema.KEY_COLUMN_USAGE
+                      WHERE TABLE_SCHEMA = ? AND REFERENCED_TABLE_NAME IS NOT NULL',
+                    [DB::connection()->getDatabaseName()],
+                );
+
+                return $this->fkColumnCache = array_map(
+                    static fn ($r): array => [
+                        (string) $r->dependent,
+                        (string) $r->dependent_column,
+                        (string) $r->referenced,
+                        (string) $r->referenced_column,
+                    ],
+                    $rows,
+                );
+            }
+
+            $out = [];
+
+            foreach ($this->tables() as $table) {
+                foreach (Schema::getForeignKeys($table) as $fk) {
+                    $referenced = $fk['foreign_table'] ?? null;
+                    $columns    = $fk['columns'] ?? [];
+                    $foreign    = $fk['foreign_columns'] ?? [];
+
+                    // Composite keys are not followed. A partial scope on one
+                    // column of a two-column key would select rows this tenant
+                    // does not own, and that is the one mistake this whole
+                    // class is written to avoid.
+                    if (! is_string($referenced) || $referenced === '' || count($columns) !== 1 || count($foreign) !== 1) {
+                        continue;
+                    }
+
+                    $out[] = [$table, (string) $columns[0], $referenced, (string) $foreign[0]];
+                }
+            }
+
+            return $this->fkColumnCache = $out;
+        } catch (Throwable) {
+            // No foreign-key metadata available (SQLite in the suite). With no
+            // constraints declared there is nothing to trip over and nothing to
+            // follow, so an empty graph is the correct answer rather than a
+            // degraded one.
+            return $this->fkColumnCache = [];
+        }
+    }
+
+    /** @var array<int, array{0: string, 1: string, 2: string, 3: string}>|null */
+    private ?array $fkColumnCache = null;
 
     /**
      * Columns that point at their own table — hpbrain_capability_tasks.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repositories;
 
 use App\Domain\Universal\EntityResolver;
+use App\Domain\Universal\SourceSchema;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -31,8 +32,60 @@ use Illuminate\Support\Facades\DB;
  */
 final class OrganizationRepository
 {
-    public function __construct(private readonly EntityResolver $resolver)
+    public function __construct(
+        private readonly EntityResolver $resolver,
+        private readonly SourceSchema $schema,
+    ) {
+    }
+
+    /**
+     * The organization-profile fields the product knows how to show and edit,
+     * in the order a reader wants them.
+     *
+     * THIS LIST IS THE VOCABULARY, NOT THE CONTRACT. Which of them a tenant
+     * actually has is answered per tenant by the mapping plus SourceSchema, and
+     * published to the client as `profileFields` so the UI can render exactly
+     * the fields that exist rather than a fixed form with permanent blanks.
+     *
+     * @var array<int, string>
+     */
+    public const PROFILE_FIELDS = [
+        'legalName',
+        'registrationNumber',
+        'taxId',
+        'country',
+        'address',
+        'email',
+        'phone',
+        'website',
+        'contactPerson',
+        'employeeCount',
+        'workWeek',
+        'logo',
+    ];
+
+    /**
+     * The snake_case alias a universal field is published under.
+     *
+     * The API has always spoken snake_case for these rows and the client
+     * normalises both spellings; deriving the alias keeps the two in step
+     * without a second list to forget to update.
+     */
+    public static function alias(string $universalField): string
     {
+        return strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $universalField));
+    }
+
+    /**
+     * The profile fields this tenant's source system can actually hold.
+     *
+     * @return array<int, string> universal field names, in PROFILE_FIELDS order
+     */
+    public function supportedProfileFields(string $tenantId): array
+    {
+        $profile = $this->resolver->resolve($tenantId, 'OrganizationProfile');
+
+        return array_keys($this->schema->usable($profile, self::PROFILE_FIELDS));
     }
 
     public function list(string $tenantId): array
@@ -54,34 +107,65 @@ final class OrganizationRepository
             ->selectRaw('MAX(d.created_at) as created_date')
             ->selectRaw('MAX(d.updated_at) as updated_date');
 
-        if ($profile->has('legalName')) {
-            $query->selectRaw(
-                '(SELECT '.$profile->field('legalName').' FROM '.$profile->table
-                .' WHERE '.$profile->tenantKey.' = d.'.$key.' LIMIT 1) as legal_name'
-            );
-        } else {
-            $query->selectRaw('NULL as legal_name');
-        }
+        /*
+            THE WHOLE PROFILE, one correlated sub-select per field.
 
-        if ($profile->has('logo')) {
-            $query->selectRaw(
-                '(SELECT '.$profile->field('logo').' FROM '.$profile->table
-                .' WHERE '.$profile->tenantKey.' = d.'.$key.' LIMIT 1) as logo'
-            );
-        } else {
-            $query->selectRaw('NULL as logo');
+            A field the tenant's ERP has no column for is selected as NULL
+            rather than omitted, so every row in the response has the same shape
+            and the client never has to tell "absent from this payload" apart
+            from "absent from this organization". Which fields those are is
+            published alongside as `profileFields`, and that — not the NULLs —
+            is what the screens read to decide whether to offer a field at all.
+
+            usable() rather than has(): the mapping describes the ERP in general
+            and this deployment's copy of the table may be older, and selecting
+            a column that is not there fails the whole page rather than one
+            field on it.
+        */
+        $usableProfile = $this->schema->usable($profile, self::PROFILE_FIELDS);
+
+        foreach (self::PROFILE_FIELDS as $field) {
+            $alias = self::alias($field);
+
+            if (isset($usableProfile[$field])) {
+                $query->selectRaw(
+                    '(SELECT '.$usableProfile[$field].' FROM '.$profile->table
+                    .' WHERE '.$profile->tenantKey.' = d.'.$key.' LIMIT 1) as '.$alias
+                );
+            } else {
+                $query->selectRaw('NULL as '.$alias);
+            }
         }
 
         if ($org->has('deletedAt')) {
             $query->whereNull('d.'.$org->field('deletedAt'));
         }
 
+        /*
+            WHICH FIELDS THIS TENANT CAN HOLD, published beside the values.
+
+            Without it a client cannot tell a field that is empty from one the
+            source system has no column for, and the only rendering available to
+            it is a fixed form with "Not recorded" against both. With it the
+            Organization screen shows and edits exactly the fields that exist —
+            different for an HR-shaped ERP and a school-shaped one, and correct
+            for a third without either side being edited.
+        */
+        $profileFields = array_keys($usableProfile);
+        $identityFields = array_values(array_intersect(
+            ['name', 'code', 'industry'],
+            array_keys($this->schema->usable($org, ['name', 'code', 'industry'])),
+        ));
+
         return $query
             ->where('d.'.$key, $tenantId)
             ->groupBy('d.'.$key)
             ->orderByDesc('d.'.$key)
             ->get()
-            ->map(fn ($r) => (array) $r)
+            ->map(fn ($r) => ((array) $r) + [
+                'profile_fields' => $profileFields,
+                'identity_fields' => $identityFields,
+            ])
             ->all();
     }
 

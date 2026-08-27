@@ -112,6 +112,31 @@ final class EntityMappingSeeder extends Seeder
         'tenantKey' => 'sub_institute_id',
         'legalName' => 'legal_name',
         'logo'      => 'logo',
+
+        // THE REST OF THE ORGANISATION RECORD, which the ERP has always kept
+        // here and the Brain simply never asked for. Leaving them unmapped is
+        // what made the Organization screen show "Not recorded" beside eight
+        // fields that were populated one table away, and what made the edit
+        // form able to change three of them.
+        //
+        // Every column below is verified against the live org_details schema.
+        // A deployment whose copy of the table is older is covered by
+        // SourceSchema, which narrows a mapped set to the columns the table
+        // actually carries before anything is selected or written.
+        'email'              => 'email',
+        'phone'              => 'mobile_no',
+        'website'            => 'website',
+        'address'            => 'registered_address',
+        'registrationNumber' => 'cin',
+        'taxId'              => 'gstin',
+        'employeeCount'      => 'employee_count',
+        'workWeek'           => 'work_week',
+        // 'country', 'timezone' and 'currency' are deliberately absent.
+        // org_details HAS a `country_code` column, and mapping it here was the
+        // tempting mistake: it holds a dialling prefix ('+91'), so a Country
+        // row rendered from it reads "Country: +91". A field the ERP does not
+        // record is better unmapped — the screen then omits it — than filled
+        // with a value that is confidently wrong.
     ]];
 
     private const SCHOOL_SETUP_ORGANIZATION = ['school_setup', [
@@ -127,6 +152,15 @@ final class EntityMappingSeeder extends Seeder
         'tenantKey' => 'Id',
         'legalName' => 'SchoolName',
         'logo'      => 'Logo',
+
+        // The school-shaped ERP keeps a smaller profile, and the difference is
+        // the point: it has no registration number, no country and no tax id,
+        // so those stay unmapped for this branch and the same screen renders
+        // fewer fields without being told which ERP it is looking at.
+        'email'         => 'Email',
+        'phone'         => 'Mobile',
+        'address'       => 'ReceiptAddress',
+        'contactPerson' => 'ContactPerson',
     ]];
 
     private const PERSON_PROFILE = ['tbluserprofilemaster', [

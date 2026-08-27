@@ -17,13 +17,42 @@ final class TenantDeletionPlan
     /**
      * @param  array<int, TenantTable>  $tables  in deletion order
      * @param  array<int, string>  $missingReferences
+     * @param  array<int, TenantDependentRows>  $dependents  transitively-owned
+     *         junction rows, deepest first. Deleted BEFORE $tables, because
+     *         every one of them is a foreign key pointing at a row $tables
+     *         removes.
      */
     public function __construct(
         public readonly string $tenantId,
         public readonly string $organizationName,
         public readonly array $tables,
         public readonly array $missingReferences = [],
+        public readonly array $dependents = [],
     ) {
+    }
+
+    /**
+     * Transitively-owned rows in a given tier.
+     *
+     * A junction hanging off an LMS table is LMS data and is acknowledged as
+     * such; it does not become Brain-owned by having no tenant column.
+     *
+     * @return array<int, TenantDependentRows>
+     */
+    public function dependentsInTier(string $tier): array
+    {
+        return array_values(array_filter(
+            $this->dependents,
+            static fn (TenantDependentRows $d): bool => $d->tier === $tier,
+        ));
+    }
+
+    public function dependentRowCount(): int
+    {
+        return array_sum(array_map(
+            static fn (TenantDependentRows $d): int => $d->rows,
+            $this->dependents,
+        ));
     }
 
     /** @return array<int, TenantTable> */
@@ -46,6 +75,9 @@ final class TenantDeletionPlan
         return array_sum(array_map(
             static fn (TenantTable $t): int => $t->rows ?? 0,
             $this->tier($tier),
+        )) + array_sum(array_map(
+            static fn (TenantDependentRows $d): int => $d->rows,
+            $this->dependentsInTier($tier),
         ));
     }
 
@@ -54,7 +86,7 @@ final class TenantDeletionPlan
         return array_sum(array_map(
             static fn (TenantTable $t): int => $t->rows ?? 0,
             $this->tables,
-        ));
+        )) + $this->dependentRowCount();
     }
 
     /**
@@ -71,6 +103,13 @@ final class TenantDeletionPlan
                 static fn (TenantTable $t): bool => $t->tier !== TenantTable::TIER_SOURCE_SYSTEM,
             )),
             $this->missingReferences,
+            // Dropped alongside their parents. A junction row whose parent is
+            // being preserved must be preserved too, or the deletion leaves a
+            // reference pointing at a row that is still there.
+            array_values(array_filter(
+                $this->dependents,
+                static fn (TenantDependentRows $d): bool => $d->tier !== TenantTable::TIER_SOURCE_SYSTEM,
+            )),
         );
     }
 
@@ -88,6 +127,10 @@ final class TenantDeletionPlan
                 'sourceSystem' => $this->rowsInTier(TenantTable::TIER_SOURCE_SYSTEM),
             ],
             'tables' => array_map(static fn (TenantTable $t) => $t->toArray(), $this->tables),
+            // Reported apart from `tables` because they are a different kind of
+            // thing: rows in a table this tenant does not own, scoped by a
+            // foreign key into one it does.
+            'dependents' => array_map(static fn (TenantDependentRows $d) => $d->toArray(), $this->dependents),
             // Named rather than counted: an administrator reviewing a deletion
             // needs to know WHICH expected table is absent, because "the
             // migration has not run" and "this tenant genuinely has none" lead

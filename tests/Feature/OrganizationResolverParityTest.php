@@ -78,15 +78,27 @@ final class OrganizationResolverParityTest extends TestCase
         $body = $response->json();
 
         $this->assertCount(3, $body['departments']);
+        // NORMALISED, NOT RAW. The service publishes the ERP's `parent_id = 0`
+        // as null and its `status = 1` as 'active', and labels which system the
+        // unit came from, so a client never has to know one ERP's sentinel
+        // values. This asserts that vocabulary rather than the column contents.
         $this->assertSame(
-            ['id' => '1', 'name' => 'Nursing', 'parentId' => '0', 'status' => '1'],
+            ['id' => '1', 'name' => 'Nursing', 'parentId' => null, 'status' => 'active', 'source' => 'hr'],
             $body['departments'][0],
         );
 
-        // Grouped headcount, including the person whose department_id is 0.
+        /*
+            Grouped headcount, keyed by REAL departments only.
+
+            The person whose department_id is 0 is not filed under a department
+            called "0" — there is no such unit, and a client rendering this map
+            beside the department list would print a phantom row. They are
+            reported as unassigned by the summary and data-quality endpoints,
+            which is where a headless person belongs.
+        */
         $this->assertSame(1, $body['peopleByDepartment']['1']);
         $this->assertSame(2, $body['peopleByDepartment']['2']);
-        $this->assertSame(1, $body['peopleByDepartment']['0']);
+        $this->assertArrayNotHasKey('0', $body['peopleByDepartment']);
 
         $this->assertSame('Radiology', $body['heads']['3']);
     }

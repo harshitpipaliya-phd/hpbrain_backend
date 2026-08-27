@@ -81,6 +81,15 @@ final class TenantPurgeService
         $counted    = $this->tables->withCounts($tenantId, $classified);
         $ordered    = $this->tables->inDeletionOrder($counted);
 
+        // Rows in tables the sweep above does NOT delete, which its deletes
+        // would nevertheless trip over: junction rows with no tenant column of
+        // their own, owned transitively through a foreign key. Discovered from
+        // the counted set, so only parents that actually have rows are walked.
+        $dependents = $this->tables->dependentRowsWithCounts(
+            $tenantId,
+            $this->tables->dependentRows($counted),
+        );
+
         return new TenantDeletionPlan(
             tenantId: $tenantId,
             organizationName: $name,
@@ -94,6 +103,7 @@ final class TenantPurgeService
             // "this organization has none of these" are opposite findings, and
             // this list is only worth having if it means the first one.
             missingReferences: $this->tables->missingReferences($tenantId, $classified),
+            dependents: $dependents,
         );
     }
 
@@ -154,8 +164,62 @@ final class TenantPurgeService
 
         $effective = $acknowledgeSourceSystemData ? $plan : $plan->withoutSourceSystem();
 
+        // CHECKED BEFORE THE TRANSACTION OPENS, and it is the check that keeps
+        // the safety guarantee honest while the deletion actually works.
+        //
+        // The dependent sweep below removes junction rows that have no owner of
+        // their own. This finds the opposite case: a row that DOES name an
+        // owner, names a different organization, and points at a row this
+        // tenant owns. Deleting it would destroy another organization's data
+        // purely to let this deletion through; leaving it makes the foreign key
+        // refuse and the transaction unwind. Neither is acceptable silently, so
+        // the caller is told which table and how many rows, and nothing runs.
+        $conflicts = $this->tables->crossTenantConflicts($tenantId, $effective->tables);
+
+        if ($conflicts !== []) {
+            throw TenantDeletionException::crossTenantReference($tenantId, $conflicts);
+        }
+
         return DB::transaction(function () use ($effective, $tenantId, $name, $actorId): array {
-            $deleted = [];
+            $deleted     = [];
+            $dissociated = [];
+
+            // FIRST, and deepest-first within itself: rows owned transitively
+            // through a foreign key rather than by a tenant column. Every one
+            // of these is a child of a row the sweep below deletes, and 41 of
+            // the 42 hpbrain_ constraints — plus content_mapping_type's, which
+            // is the one that actually bit — are RESTRICT. The parent cannot go
+            // until the child has.
+            //
+            // The query is built by TenantOwnedTables::scopedDependentQuery and
+            // is tenant-scoped at its innermost level, so a junction row
+            // belonging to another organization is never in the result set.
+            foreach ($effective->dependents as $dependent) {
+                $query = $this->tables->scopedDependentQuery($tenantId, $dependent);
+
+                if ($dependent->dissociates()) {
+                    // The row is NOT this tenant's — it only records that one of
+                    // this tenant's users touched it. lms_mapping_type's 56 rows
+                    // of shared LMS taxonomy carry created_by/updated_by/
+                    // deleted_by into tbluser; deleting them because a Fiber
+                    // Valley administrator authored them would destroy every
+                    // other organization's reference data. Clearing the pointer
+                    // satisfies the constraint and leaves the row where it is.
+                    $n = $query->update([$dependent->column => null]);
+
+                    if ($n > 0) {
+                        $dissociated[$dependent->table.'.'.$dependent->column] = $n;
+                    }
+
+                    continue;
+                }
+
+                $n = $query->delete();
+
+                if ($n > 0) {
+                    $deleted[$dependent->table] = ($deleted[$dependent->table] ?? 0) + $n;
+                }
+            }
 
             // Read BEFORE the sweep: school_setup is deleted below, and after
             // that there is no way left to tell which client belonged to this
@@ -192,7 +256,7 @@ final class TenantPurgeService
             // row is the one thing intentionally left behind, because an
             // organization vanishing with no trace of who removed it is worse
             // than a single retained row.
-            $this->recordAudit($tenantId, $name, $deleted, $actorId);
+            $this->recordAudit($tenantId, $name, $deleted, $actorId, $dissociated);
 
             // The resolver caches mappings per request. They have just been
             // deleted, so anything resolving this tenant later in the same
@@ -205,6 +269,12 @@ final class TenantPurgeService
                 'tables'           => count($deleted),
                 'rows'             => array_sum($deleted),
                 'deleted'          => $deleted,
+                // Reported separately because it is a different outcome. These
+                // rows still exist; only their pointer at a deleted user was
+                // cleared. Collapsing the two into one "rows" figure would
+                // claim shared reference data had been destroyed when it was
+                // deliberately kept.
+                'dissociated'      => $dissociated,
             ];
         });
     }
@@ -314,8 +384,15 @@ final class TenantPurgeService
 
     /**
      * @param  array<string, int>  $deleted
+     * @param  array<string, int>  $dissociated
      */
-    private function recordAudit(string $tenantId, string $name, array $deleted, ?string $actorId): void
+    private function recordAudit(
+        string $tenantId,
+        string $name,
+        array $deleted,
+        ?string $actorId,
+        array $dissociated = [],
+    ): void
     {
         if (! Schema::hasTable('hpbrain_audit_logs')) {
             return;
@@ -335,6 +412,7 @@ final class TenantPurgeService
                     'tables'           => count($deleted),
                     'rows'             => array_sum($deleted),
                     'deleted'          => $deleted,
+                    'dissociated'      => $dissociated,
                 ]),
                 'created_at'  => now()->format('Y-m-d H:i:s'),
             ]);

@@ -1,0 +1,8 @@
+start
+everyTenantWith(Person)       0.37s  array(10)
+tenants: 10
+email lookup                  0.05s  obj
+tenant of user: 1000018
+resolveRole-ish               0.10s  obj
+loadOrganization              0.13s  array(1)
+done

@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Domain\Industry\Vocabulary;
 use App\Domain\Universal\EntityResolver;
+use App\Domain\Universal\SourceSchema;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -27,6 +28,10 @@ final class UniversalServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(EntityResolver::class);
+
+        // Same lifetime, same reason: it caches a table's column list, and a
+        // column list is only correct for as long as the schema behind it is.
+        $this->app->scoped(SourceSchema::class);
 
         // Vocabulary caches per tenant for exactly the same reason and with
         // exactly the same lifetime: labels are configuration, and a request

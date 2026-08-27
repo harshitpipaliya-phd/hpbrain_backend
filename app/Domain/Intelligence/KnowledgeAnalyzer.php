@@ -147,8 +147,10 @@ final class KnowledgeAnalyzer
         $patterns    = [];
         $unsupported = 0;
 
-        if ($axis !== null) {
+        if ($axis !== null && ($axis['topValuesOmitted'] ?? null) === null) {
             [$patterns, $unsupported] = $this->patterns($tenantId, (string) $dataset['dataset'], $axis, $dataset);
+        } elseif ($axis !== null) {
+            $unsupported = (int) ($axis['distinct'] ?? 0);
         }
 
         $patternRecords = array_sum(array_column($patterns, 'records'));
@@ -218,7 +220,9 @@ final class KnowledgeAnalyzer
 
         if (count($patterns) < self::FRAGILE_PATTERNS) {
             $fragileReasons[] = count($patterns) === 0
-                ? 'no recurring pattern could be established'
+                ? ($axis !== null && ($axis['topValuesOmitted'] ?? null) !== null
+                    ? 'recurring pattern expansion was omitted for this large dataset'
+                    : 'no recurring pattern could be established')
                 : 'only '.count($patterns).' recurring pattern'.(count($patterns) === 1 ? '' : 's');
         }
 
