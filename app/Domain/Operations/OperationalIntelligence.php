@@ -10,6 +10,7 @@ use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 /**
  * EVERY DERIVED OPERATIONAL FACT ABOUT AN ORGANIZATION, IN A DOZEN AGGREGATES.
@@ -137,7 +138,7 @@ final class OperationalIntelligence
 
         if ($lock->get()) {
             try {
-                return $this->computeAndStore($tenantId, $version, $key, $store);
+                return $this->computeOrLastGood($tenantId, $version, $key, $store);
             } finally {
                 $lock->release();
             }
@@ -161,13 +162,13 @@ final class OperationalIntelligence
         } catch (LockTimeoutException) {
             $hit = $store->get($key);
 
-            return is_array($hit) ? $hit : $this->computeAndStore($tenantId, $version, $key, $store);
+            return is_array($hit) ? $hit : $this->computeOrLastGood($tenantId, $version, $key, $store);
         }
 
         try {
             $hit = $store->get($key);
 
-            return is_array($hit) ? $hit : $this->computeAndStore($tenantId, $version, $key, $store);
+            return is_array($hit) ? $hit : $this->computeOrLastGood($tenantId, $version, $key, $store);
         } finally {
             $lock->release();
         }
@@ -237,6 +238,56 @@ final class OperationalIntelligence
             ->first();
 
         return (string) ($row->labelled ?? 0);
+    }
+
+    /**
+     * Compute, or fall back to the last answer that completed.
+     *
+     * WHY A FAILED COMPUTE MUST NOT REACH THE SCREEN. This aggregate is one
+     * expensive pass over the record store, and when it fails — a statement
+     * killed, a connection dropped mid-scan, a timeout — the exception used to
+     * propagate to the Departments screen, which caught it and rendered an empty
+     * metrics payload. Every unit then reported "nothing about this unit can be
+     * measured", which is a claim ABOUT THE ORGANIZATION'S DATA made on the
+     * strength of a query that never ran. Units that had scored 70% and 79%
+     * minutes earlier read as unmeasurable.
+     *
+     * That is the one failure this class must not have. It publishes findings
+     * about what an organization does and does not record, so "I could not
+     * compute" and "there is nothing there" have to stay distinguishable. A
+     * stale answer, labelled stale, is honest. A blank one is a false finding.
+     *
+     * So: serve the last completed answer where there is one, marked stale with
+     * the reason. Where there is none, return the unavailable payload — which
+     * says the aggregate could not be produced — rather than one that looks like
+     * a successful measurement of nothing.
+     *
+     * @return array<string, mixed>
+     */
+    private function computeOrLastGood(string $tenantId, string $version, string $key, Repository $store): array
+    {
+        try {
+            return $this->computeAndStore($tenantId, $version, $key, $store);
+        } catch (Throwable $e) {
+            $lastGood = $store->get('brain:ops:last:'.$tenantId);
+
+            if (is_array($lastGood)) {
+                $lastGood['stale'] = [
+                    'isStale' => true,
+                    'servedVersion' => $lastGood['dataVersion'] ?? null,
+                    'requestedVersion' => $version,
+                    'reason' => 'The recomputation for this organization did not complete, so this is the previous completed answer.',
+                ];
+
+                return $lastGood;
+            }
+
+            return $this->empty(
+                $tenantId,
+                $version,
+                'Derived operational intelligence could not be computed on this request, and no previous result is held. This says nothing about what the organization records — the aggregation itself did not complete.',
+            );
+        }
     }
 
     /**

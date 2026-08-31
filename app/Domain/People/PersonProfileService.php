@@ -100,6 +100,52 @@ final class PersonProfileService
     }
 
     /**
+     * The index that answers `tenant_id = ? AND <column> = ?` for each link
+     * column, keyed by the column.
+     *
+     * Each is `(tenant_id, <column>, dataset, occurred_at)` — the name second so
+     * it is a seek key, then the two fields the per-dataset rollup needs so the
+     * rollup never touches a row. The older `(tenant_id, dataset, <column>)`
+     * indexes cannot serve this: `dataset` sits in the middle and the profile
+     * does not filter on one, and a gap mid-key ends the seek. See the
+     * 2026_08_31_000100 migration for the measurements.
+     *
+     * @var array<string, string>
+     */
+    private const LINK_INDEXES = [
+        'owner_name'      => 'idx_oprec_tenant_owner_ds_time',
+        'supervisor_name' => 'idx_oprec_tenant_supervisor_ds_time',
+        'subject_ref'     => 'idx_oprec_tenant_subject_ds_time',
+    ];
+
+    /** @var array<string, bool> index name => exists. Per instance, per request. */
+    private array $indexes = [];
+
+    /**
+     * `FROM` for one link column, hinted only where the hint is valid AND the
+     * index is present, so an installation that has not run the migration still
+     * answers — slowly, but it answers rather than failing on an unknown index.
+     */
+    private function linkFrom(string $column): string
+    {
+        $index = self::LINK_INDEXES[$column] ?? null;
+
+        if ($index === null || DB::connection()->getDriverName() !== 'mysql') {
+            return 'hpbrain_operational_records';
+        }
+
+        $exists = $this->indexes[$index] ??= (int) (DB::selectOne(
+            'SELECT COUNT(*) AS n FROM information_schema.STATISTICS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?',
+            ['hpbrain_operational_records', $index],
+        )->n ?? 0) > 0;
+
+        return $exists
+            ? 'hpbrain_operational_records FORCE INDEX ('.$index.')'
+            : 'hpbrain_operational_records';
+    }
+
+    /**
      * @return array<string, mixed>|null null when the tenant has no such person
      */
     public function build(string $tenantId, string $personId): ?array
@@ -413,26 +459,54 @@ final class PersonProfileService
             return ['rules' => [], 'matched' => [], 'records' => 0, 'datasets' => [], 'available' => true];
         }
 
-        $select = ['dataset'];
+        /*
+          ONE SEEK PER LINK COLUMN, UNIONED — NOT ONE `OR` ACROSS THREE.
+
+          This was a single query reading
+          `WHERE tenant_id = ? AND (subject_ref = ? OR owner_name = ? OR
+          supervisor_name = ?)`. No index can serve an OR across three different
+          columns, so the optimizer took none of them and read every one of the
+          tenant's 335,856 rows off the clustered index, each dragging its inline
+          JSON payload. Opening one person took minutes.
+
+          Split into one branch per column, each branch seeks its own index and
+          answers from it. The branches are UNION ALL rather than UNION because
+          the outer COUNT(DISTINCT id) is what must not double-count a record
+          matched by two rules, and making the union itself distinct would
+          instead throw away the duplicate that `rule_n` needs to count.
+
+          `rule_n` is therefore per-rule and may overlap; `records` is distinct.
+          Those are different questions — 'how many records name this person as
+          supervisor' and 'how many records name this person at all' — and the
+          screen asks both.
+        */
+        $branches = [];
         $bindings = [];
 
         foreach ($candidates as $i => $candidate) {
-            $select[] = DB::raw("sum(case when `{$candidate['column']}` = ? then 1 else 0 end) as rule_{$i}");
+            $branches[] = 'SELECT '.$i.' AS rule_index, id, dataset, occurred_at'
+                .' FROM '.$this->linkFrom($candidate['column'])
+                .' WHERE tenant_id = ? AND `'.$candidate['column'].'` = ?';
+            $bindings[] = $tenantId;
             $bindings[] = $candidate['value'];
         }
 
-        $select[] = DB::raw('count(*) as records');
-        $select[] = DB::raw('min(occurred_at) as first_seen');
-        $select[] = DB::raw('max(occurred_at) as last_seen');
+        $ruleColumns = [];
 
-        $rows = $this->recordQuery($tenantId, $candidates)
-            ->select($select)
-            // The select's placeholders bind ahead of the where clause's, which
-            // the builder cannot know from a raw expression.
-            ->addBinding($bindings, 'select')
-            ->groupBy('dataset')
-            ->orderByDesc(DB::raw('count(*)'))
-            ->get();
+        foreach (array_keys($candidates) as $i) {
+            $ruleColumns[] = 'SUM(CASE WHEN rule_index = '.$i.' THEN 1 ELSE 0 END) AS rule_'.$i;
+        }
+
+        $rows = collect(DB::select(
+            'SELECT dataset,'
+            .' COUNT(DISTINCT id) AS records,'
+            .' MIN(occurred_at) AS first_seen,'
+            .' MAX(occurred_at) AS last_seen,'
+            .' '.implode(', ', $ruleColumns)
+            .' FROM ('.implode(' UNION ALL ', $branches).') AS linked'
+            .' GROUP BY dataset ORDER BY records DESC',
+            $bindings,
+        ));
 
         $rules = [];
         foreach ($candidates as $i => $candidate) {
@@ -457,27 +531,71 @@ final class PersonProfileService
     }
 
     /**
-     * The tenant-scoped record set for this person.
+     * The ids of the records this person is linked to, newest first.
+     *
+     * WHY IDS FIRST, AND NOT ONE `WHERE ... OR ...`. The predicate that names a
+     * person spans three columns, and an OR across three columns is servable by
+     * no single index — the optimizer drops all of them and reads the tenant's
+     * whole table off the clustered index, payload and all. Seeking each column
+     * on its own index instead keeps every branch on an index, and the row
+     * fetch that follows touches only the handful of ids that survived.
+     *
+     * The cap is the point of the `$limit`: the caller wants a window, and
+     * ordering happens here across the merged branches so the window is the
+     * newest records overall rather than the newest of whichever branch
+     * happened to be listed first.
      *
      * @param  array<int, array<string, mixed>>  $rules
+     * @return array<int, string>
      */
-    private function recordQuery(string $tenantId, array $rules): \Illuminate\Database\Query\Builder
+    private function linkedRecordIds(string $tenantId, array $rules, int $limit, ?string $dataset = null): array
     {
-        $query = DB::table('hpbrain_operational_records')->where('tenant_id', $tenantId);
-
         if ($rules === []) {
-            // No rule can name this person, so no record does. whereRaw('0=1')
-            // rather than returning the unfiltered query: an unscoped builder
-            // escaping this method would put the whole tenant's records on one
-            // person's page.
-            return $query->whereRaw('1 = 0');
+            // No rule can name this person, so no record does. An empty id list
+            // is what the callers turn into an empty result — never an unscoped
+            // query, which would put the whole tenant's records on one person's
+            // page.
+            return [];
         }
 
-        return $query->where(function ($w) use ($rules) {
-            foreach ($rules as $rule) {
-                $w->orWhere($rule['column'], $rule['value']);
+        $seen = [];
+
+        foreach ($rules as $rule) {
+            $sql = 'SELECT id, occurred_at FROM '.$this->linkFrom($rule['column'])
+                .' WHERE tenant_id = ? AND `'.$rule['column'].'` = ?';
+            $bindings = [$tenantId, $rule['value']];
+
+            if ($dataset !== null) {
+                $sql .= ' AND dataset = ?';
+                $bindings[] = $dataset;
             }
+
+            foreach (DB::select($sql, $bindings) as $row) {
+                // Keyed by id, so a record naming this person twice — handler
+                // and supervisor both — is one entry, not two.
+                $seen[(string) $row->id] = (string) ($row->occurred_at ?? '');
+            }
+        }
+
+        // Newest first, with the id as the tie-break so a page of records with
+        // identical timestamps does not reshuffle between requests.
+        uksort($seen, static function (string $a, string $b) use ($seen): int {
+            return [$seen[$b], $b] <=> [$seen[$a], $a];
         });
+
+        return array_slice(array_keys($seen), 0, $limit);
+    }
+
+    /**
+     * The tenant-scoped record set for a known set of ids.
+     *
+     * @param  array<int, string>  $ids
+     */
+    private function recordsByIds(string $tenantId, array $ids): \Illuminate\Database\Query\Builder
+    {
+        return DB::table('hpbrain_operational_records')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('id', $ids === [] ? [''] : $ids);
     }
 
     // ---------------------------------------------------------------- activity
@@ -525,10 +643,15 @@ final class PersonProfileService
             return collect();
         }
 
-        return $this->recordQuery($tenantId, $links['rules'])
+        $ids = $this->linkedRecordIds($tenantId, $links['rules'], self::RECORD_WINDOW);
+
+        if ($ids === []) {
+            return collect();
+        }
+
+        return $this->recordsByIds($tenantId, $ids)
             ->orderByDesc('occurred_at')
             ->orderByDesc('created_date')
-            ->limit(self::RECORD_WINDOW)
             ->get([
                 'id', 'dataset', 'natural_key', 'source_file', 'source_row', 'occurred_at', 'closed_at',
                 'status', 'category', 'sub_category', 'owner_name', 'supervisor_name', 'subject_ref',
@@ -652,10 +775,12 @@ final class PersonProfileService
         // table with no index this predicate can use.
         $rows = ($links['records'] ?? 0) <= self::RECORD_WINDOW
             ? $window->filter(static fn ($r) => (string) $r->dataset === 'school_fee')->values()
-            : $this->recordQuery($tenantId, $links['rules'])
+            : $this->recordsByIds(
+                $tenantId,
+                $this->linkedRecordIds($tenantId, $links['rules'], self::FEE_WINDOW, 'school_fee'),
+            )
                 ->where('dataset', 'school_fee')
                 ->orderByDesc('occurred_at')
-                ->limit(self::FEE_WINDOW)
                 ->get(['natural_key', 'occurred_at', 'closed_at', 'status', 'category', 'sub_category', 'area', 'zone', 'metric_value', 'metric_unit', 'payload']);
 
         if ($rows->isEmpty()) {

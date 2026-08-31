@@ -1,0 +1,67 @@
+2:13:32 PM [vite] Internal server error: C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\src\components\department\DepartmentScoreRing.tsx: Unexpected token, expected "," (101:0)
+
+   99 |  * is the most actionable line on the page, and hiding the row hides it.
+  100 |  */
+> 101 | export function DepartmentMeter({
+      | ^
+  102 |   label,
+  103 |   score,
+  104 |   status,
+  Plugin: vite:react-babel
+  File: C:/Users/omshivay/Desktop/ADK/hp-enterprise-brain/web/src/components/department/DepartmentScoreRing.tsx:101:0
+  99 |   * is the most actionable line on the page, and hiding the row hides it.
+  100|   */
+  101|  export function DepartmentMeter({
+     |  ^
+  102|    label,
+  103|    score,
+      at constructor (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:365:19)
+      at TypeScriptParserMixin.raise (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:6616:19)
+      at TypeScriptParserMixin.unexpected (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:6636:16)
+      at TypeScriptParserMixin.expect (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:6916:12)
+      at TypeScriptParserMixin.parseParenAndDistinguishExpression (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:11678:14)
+      at TypeScriptParserMixin.parseExprAtom (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:11348:23)
+      at TypeScriptParserMixin.parseExprAtom (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:4776:20)
+      at TypeScriptParserMixin.parseExprSubscripts (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:11098:23)
+      at TypeScriptParserMixin.parseUpdate (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:11083:21)
+      at TypeScriptParserMixin.parseMaybeUnary (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:11063:23)
+      at TypeScriptParserMixin.parseMaybeUnary (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:9854:18)
+      at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:10916:61)
+      at TypeScriptParserMixin.parseExprOps (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:10921:23)
+      at TypeScriptParserMixin.parseMaybeConditional (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:10898:23)
+      at TypeScriptParserMixin.parseMaybeAssign (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:10848:21)
+      at TypeScriptParserMixin.parseMaybeAssign (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:9803:20)
+      at TypeScriptParserMixin.parseExpressionBase (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:10801:23)
+      at C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:10797:39
+      at TypeScriptParserMixin.allowInAnd (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12438:16)
+      at TypeScriptParserMixin.parseExpression (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:10797:17)
+      at TypeScriptParserMixin.parseReturnStatement (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13159:28)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12815:21)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseStatementListItem (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12764:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13333:61)
+      at TypeScriptParserMixin.parseBlockBody (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseBlock (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13314:10)
+      at TypeScriptParserMixin.parseFunctionBody (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12117:24)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12103:10)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:9189:18)
+      at C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13462:12
+      at TypeScriptParserMixin.withSmartMixTopicForbiddingContext (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12420:14)
+      at TypeScriptParserMixin.parseFunction (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13461:10)
+      at TypeScriptParserMixin.parseFunctionStatement (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13142:17)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12808:21)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseStatementListItem (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12764:17)
+      at TypeScriptParserMixin.parseExportDeclaration (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13951:17)
+      at TypeScriptParserMixin.parseExportDeclaration (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:9646:85)
+      at TypeScriptParserMixin.maybeParseExportDeclaration (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13910:31)
+      at TypeScriptParserMixin.parseExport (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13829:29)
+      at TypeScriptParserMixin.parseExport (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:9402:20)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12895:27)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseModuleItem (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:12761:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13333:36)
+      at TypeScriptParserMixin.parseBlockBody (C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\web\node_modules\@babel\parser\lib\index.js:13326:10)

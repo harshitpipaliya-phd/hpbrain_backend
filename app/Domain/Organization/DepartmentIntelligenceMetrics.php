@@ -146,6 +146,7 @@ final class DepartmentIntelligenceMetrics
             $dec = $decisions['perDepartment'][$id] ?? ['total' => 0, 'approved' => 0, 'withOutcome' => 0];
             $act = $activity['perDepartment'][$id] ?? ['total' => 0, 'recent' => 0];
             $ops = $operational['perDepartment'][$id] ?? null;
+            $counterpart = $operational['counterparts'][$id] ?? null;
 
             $departments[$id] = [
                 'people' => $people,
@@ -168,6 +169,19 @@ final class DepartmentIntelligenceMetrics
                 'peopleWithRole' => $complete['withRole'] ?? null,
                 'peopleWithContact' => $complete['withContact'] ?? null,
                 'peopleWithReference' => $complete['withReference'] ?? null,
+
+                /*
+                  A LABEL CARRYING THIS UNIT'S WORK THAT THE REGISTER DOES NOT
+                  CLAIM.
+
+                  Null for almost every organization. It is populated only where
+                  the source system holds two rows for one real unit — the
+                  workforce on one, the imported work booked against the other —
+                  which is the case on this ERP and the reason a department with
+                  111 people can show no work at all. Reported, never merged:
+                  attribution stays as the source states it.
+                */
+                'unclaimedWork' => $counterpart,
 
                 'capabilityAssessedPeople' => (int) $caps['assessedPeople'],
                 'capabilityCount' => (int) $caps['capabilities'],
@@ -214,6 +228,16 @@ final class DepartmentIntelligenceMetrics
                 'operationalCompletionRate' => $ops === null ? null : $ops['completionRate'],
                 'operationalShare' => $ops === null ? null : $ops['share'],
                 'operationalDatasets' => $ops === null ? null : (int) $ops['datasets'],
+                'operationalPrimaryDataset' => $ops['primaryDataset'] ?? null,
+                'operationalDatasetBreakdown' => $ops['datasetBreakdown'] ?? [],
+                'operationalCancellationRate' => $ops['cancellationRate'] ?? null,
+                'operationalClassified' => $ops === null ? null : (int) $ops['classifiedRecords'],
+                'operationalTurnaroundHours' => $ops['averageTurnaroundHours'] ?? null,
+                'operationalTurnaroundMeasured' => (int) ($ops['turnaroundMeasured'] ?? 0),
+                'operationalTrend' => $ops['trend'] ?? [],
+                'operationalMomentum' => $ops['momentum'] ?? null,
+                'operationalRank' => $ops['activityRank'] ?? null,
+                'operationalRankOf' => $ops['activityOf'] ?? null,
             ];
         }
 
@@ -800,6 +824,7 @@ final class DepartmentIntelligenceMetrics
         // The register's own names, normalised, so each source label is one
         // array lookup rather than a comparison against every unit.
         $byName = [];
+        $displayNames = [];
 
         foreach (DB::table($unit->table)
             ->where($unit->tenantKey, $tenant)
@@ -809,10 +834,12 @@ final class DepartmentIntelligenceMetrics
 
             if ($key !== '') {
                 $byName[$key] = (string) $id;
+                $displayNames[(string) $id] = (string) $name;
             }
         }
 
         $perDepartment = [];
+        $unmatched = [];
         $total = 0;
         $attributed = 0;
 
@@ -823,6 +850,7 @@ final class DepartmentIntelligenceMetrics
             $id = $byName[$this->normaliseUnitName((string) $entry['label'])] ?? null;
 
             if ($id === null) {
+                $unmatched[] = $entry;
                 continue;
             }
 
@@ -835,6 +863,20 @@ final class DepartmentIntelligenceMetrics
                 'backlog' => (int) $entry['backlog'],
                 'classified' => (int) $entry['classified'],
                 'datasets' => (int) $entry['datasets'],
+                // Forwarded from the cached operational aggregate rather than
+                // recomputed: it already holds the trend, momentum, turnaround
+                // and dataset mix per unit, and a second pass over 200k+ rows
+                // to rebuild them here would be the whole cost of the screen.
+                'primaryDataset' => $entry['primaryDataset'] ?? null,
+                'datasetBreakdown' => $entry['datasetBreakdown'] ?? [],
+                'cancellationRate' => $entry['cancellationRate'] ?? null,
+                'averageTurnaroundHours' => $entry['averageTurnaroundHours'] ?? null,
+                'turnaroundMeasured' => (int) ($entry['turnaroundMeasured'] ?? 0),
+                'trend' => $entry['trend'] ?? [],
+                'momentum' => $entry['momentum'] ?? null,
+                'activityRank' => $entry['rank'] ?? null,
+                'activityOf' => $entry['of'] ?? null,
+                'classifiedRecords' => (int) ($entry['classified'] ?? 0),
                 // Published as the aggregate computed it, including its null:
                 // a unit with too few classified records has no rate, and
                 // manufacturing one here would defeat the floor.
@@ -852,6 +894,59 @@ final class DepartmentIntelligenceMetrics
             ];
         }
 
+        /*
+          THE SPLIT REGISTER, NAMED.
+
+          This ERP carries TWO rows for the same real unit — one the workforce is
+          assigned to, one the work is booked against. "CST - FVCPL" holds 111
+          people and no records; "CST" holds 47,693 records and nobody. Both
+          halves look broken on screen and neither says why.
+
+          This does NOT merge them. Attribution stays exactly as the source
+          states it: a screen that quietly moved 47,693 records onto a unit the
+          source never named would be inventing the organization's structure.
+          It reports the pairing as an OBSERVATION against the staffed row —
+          here is another unit on your own register, whose name is this one's
+          name plus a suffix, carrying the work this one has none of.
+
+          The test is deliberately narrow: one normalised name must be the other
+          plus a whole extra word. "Sales" pairs with "Sales - FVCPL"; it does
+          not pair with "Salesforce", and two unrelated units never pair.
+        */
+        $counterparts = [];
+
+        foreach ($byName as $name => $id) {
+            // Only a unit with no work of its own has work to explain.
+            if (isset($perDepartment[$id])) {
+                continue;
+            }
+
+            foreach ($byName as $otherName => $otherId) {
+                if ($otherId === $id || ! isset($perDepartment[$otherId])) {
+                    continue;
+                }
+
+                $isExtension = str_starts_with($name, $otherName.' ') || str_starts_with($otherName, $name.' ');
+
+                if (! $isExtension) {
+                    continue;
+                }
+
+                // A unit paired with two candidates has an ambiguity the reader
+                // must resolve; the largest is kept and the rest are dropped
+                // rather than a pairing being invented from a tie.
+                if (($counterparts[$id]['records'] ?? -1) < $perDepartment[$otherId]['records']) {
+                    $counterparts[$id] = [
+                        'unitId' => (string) $otherId,
+                        'label' => (string) ($displayNames[$otherId] ?? $otherName),
+                        'records' => (int) $perDepartment[$otherId]['records'],
+                        'completed' => (int) $perDepartment[$otherId]['completed'],
+                        'backlog' => (int) $perDepartment[$otherId]['backlog'],
+                    ];
+                }
+            }
+        }
+
         foreach ($perDepartment as $id => $entry) {
             $perDepartment[$id]['share'] = $attributed > 0
                 ? round($entry['records'] / $attributed, 4)
@@ -860,6 +955,7 @@ final class DepartmentIntelligenceMetrics
 
         return [
             'perDepartment' => $perDepartment,
+            'counterparts' => $counterparts,
             'supported' => $attributed > 0,
             'total' => $total,
             'attributed' => $attributed,

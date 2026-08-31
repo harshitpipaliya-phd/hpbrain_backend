@@ -71,3 +71,9 @@
   2026-08-31 14:15:02 /api/v1/terminology/test-tenant ..................................................... ~ 16.91ms
   2026-08-31 14:15:02 /api/v1/terminology/test-tenant .................................................... ~ 512.50ms
   2026-08-31 14:15:04 /api/v1/feature-flags/test-tenant .................................................... ~ 0.57ms
+  2026-08-31 15:48:39 /api/v1/auth/login ................................................................. ~ 511.58ms
+  2026-08-31 15:48:40 /api/v1/auth/login ................................................................. ~ 517.38ms
+  2026-08-31 15:50:06 /api/v1/organizations/1000018 ....................................................... ~ 16.21ms
+  2026-08-31 15:50:06 /api/v1/organizations/1000018 ...................................................... ~ 523.46ms
+  PHP Fatal error:  Maximum execution time of 60 seconds exceeded in C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\vendor\laravel\framework\src\Illuminate\Filesystem\LockableFile.php on line 69
+  2026-08-31 15:50:06 /api/v1/departments/1000018/intelligence ................................................ ~ 59s

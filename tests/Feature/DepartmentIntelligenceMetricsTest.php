@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Support\Jwt;
 use Database\Seeders\EntityMappingSeeder;
+use App\Domain\Organization\DepartmentProfile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\BuildsBrainSchema;
@@ -431,6 +432,136 @@ final class DepartmentIntelligenceMetricsTest extends TestCase
         // unit, not a missing measurement about the organization.
         $this->assertSame(0, $body['departments']['3']['operationalRecords'] ?? 0);
     }
+
+    /**
+     * ONLY MEASURABLE DIMENSIONS PARTICIPATE IN THE SCORE.
+     *
+     * The defect this replaces: a dimension the organization does not record was
+     * averaged in as a zero, so a unit with a complete roster and no capability
+     * module published a low grade that described the SOFTWARE rather than the
+     * department. An unrecorded dimension must leave the mean entirely.
+     */
+    public function test_the_profile_scores_only_what_can_be_measured(): void
+    {
+        Cache::store('file')->flush();
+
+        $this->seedUnitWorkload(self::TENANT, 'Nursing', completed: 90, open: 10);
+
+        $profile = app(DepartmentProfile::class)->forDepartment(self::TENANT, '1');
+
+        self::assertNotNull($profile);
+        self::assertNotNull($profile['score']);
+        self::assertSame(7, $profile['dimensionCount']);
+        self::assertLessThan(7, $profile['measuredCount']);
+
+        $measured = array_values(array_filter($profile['dimensions'], static fn ($d) => $d['score'] !== null));
+        self::assertCount($profile['measuredCount'], $measured);
+
+        // The composite is the weighted mean of the survivors, and nothing else.
+        $weight = array_sum(array_column($measured, 'weight'));
+        $sum = array_sum(array_map(static fn ($d) => $d['weight'] * $d['score'], $measured));
+        self::assertSame((int) round($sum / $weight), $profile['score']);
+
+        // Every dimension that could not be measured says so and carries no zero.
+        foreach ($profile['dimensions'] as $d) {
+            if ($d['score'] === null) {
+                self::assertNotSame('', $d['basis']);
+            }
+        }
+    }
+
+    /**
+     * A UNIT THAT IS NOT THIS TENANT'S IS A 404, NOT AN EMPTY PROFILE.
+     *
+     * "No such department for you" and "a department with nothing recorded" are
+     * different answers, and a blank profile would make the second look like the
+     * first to anyone probing ids.
+     */
+    public function test_the_profile_refuses_a_department_outside_the_tenant(): void
+    {
+        Cache::store('file')->flush();
+
+        DB::table('hrms_departments')->insert([
+            'id' => 980, 'sub_institute_id' => self::OTHER_TENANT, 'department' => 'Other Org Unit',
+            'parent_id' => 0, 'status' => 1, 'is_calculated' => 0,
+        ]);
+
+        self::assertNull(app(DepartmentProfile::class)->forDepartment(self::TENANT, '980'));
+
+        $this->withHeaders($this->auth())
+            ->getJson('/api/v1/departments/'.self::TENANT.'/980/profile')
+            ->assertNotFound();
+    }
+
+    /**
+     * THE PROFILE RANKS AGAINST PEERS, AND THE RANK IS REAL.
+     *
+     * Ranking is why this is composed on the server: a rank needs every peer's
+     * metrics, which no single department's page could hold. Pinned because the
+     * first implementation compared a string id against integer array keys and
+     * silently reported "unranked" for every unit on the register.
+     */
+    public function test_the_profile_ranks_the_unit_against_its_peers(): void
+    {
+        Cache::store('file')->flush();
+
+        $this->seedUnitWorkload(self::TENANT, 'Nursing', completed: 90, open: 10);
+
+        $profile = app(DepartmentProfile::class)->forDepartment(self::TENANT, '1');
+
+        self::assertNotNull($profile['position']['score']['rank']);
+        self::assertGreaterThan(0, $profile['position']['score']['of']);
+        self::assertLessThanOrEqual($profile['position']['score']['of'], $profile['position']['score']['rank']);
+
+        // And the narrative is generated, not canned.
+        self::assertNotEmpty($profile['narrative']);
+        self::assertNotSame('', $profile['nextAction']['title']);
+    }
+
+
+    /**
+     * THE SPLIT REGISTER IS REPORTED, NEVER MERGED.
+     *
+     * This ERP carries two rows for one real unit — the workforce on
+     * "CST - FVCPL", the imported work booked against "CST" — so a department
+     * with 111 people shows no work at all and its sibling shows work and
+     * nobody. The pairing is published as an observation on the staffed row so
+     * the reader can see the cause, and attribution is left exactly as the
+     * source states it.
+     */
+    public function test_a_sibling_unit_carrying_the_work_is_named_but_not_absorbed(): void
+    {
+        Cache::store('file')->flush();
+
+        DB::table('hrms_departments')->insert([
+            'id' => 950, 'sub_institute_id' => self::TENANT, 'department' => 'Nursing - FVCPL',
+            'parent_id' => 0, 'status' => 1, 'is_calculated' => 0,
+            'created_by' => 1, 'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00',
+        ]);
+
+        // The work names "Nursing" — the row that has no people.
+        $this->seedUnitWorkload(self::TENANT, 'Nursing', completed: 40, open: 10);
+
+        $body = $this->withHeaders($this->auth())
+            ->getJson('/api/v1/departments/'.self::TENANT.'/intelligence')
+            ->assertOk()
+            ->json();
+
+        // NOT MERGED: the records stay on the unit the source named.
+        self::assertSame(50, $body['departments']['1']['operationalRecords']);
+        self::assertNull($body['departments']['950']['operationalRecords']);
+
+        // REPORTED: the staffed row names the sibling holding its work.
+        $unclaimed = $body['departments']['950']['unclaimedWork'];
+        self::assertNotNull($unclaimed);
+        self::assertSame('Nursing', $unclaimed['label']);
+        self::assertSame(50, $unclaimed['records']);
+        self::assertSame(40, $unclaimed['completed']);
+
+        // The unit that HAS the work is not told its work lives elsewhere.
+        self::assertNull($body['departments']['1']['unclaimedWork']);
+    }
+
 
     /**
      * A LABEL THAT MATCHES NO REGISTERED UNIT IS NOT PUSHED ONTO THE NEAREST ONE.

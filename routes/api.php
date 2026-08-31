@@ -506,6 +506,9 @@ Route::prefix('v1')->group(function () {
         Route::post('departments/{tenantId}/{id}/archive', [DepartmentController::class, 'archive'])->middleware('permission:update');
         Route::get('departments/{tenantId}/{id}/audit', [DepartmentController::class, 'audit']);
         Route::get('departments/{tenantId}/{id}/twin', [DepartmentController::class, 'twin']);
+        // Before nothing and after `{id}` — a distinct sub-path, so it cannot
+        // be swallowed by the id route the way /summary and /intelligence were.
+        Route::get('departments/{tenantId}/{id}/profile', [DepartmentController::class, 'profile']);
 
         Route::patch('people/{tenantId}/{id}', [PersonController::class, 'update'])->middleware('permission:update');
         Route::post('people/{tenantId}/{id}/archive', [PersonController::class, 'archive'])->middleware('permission:update');
