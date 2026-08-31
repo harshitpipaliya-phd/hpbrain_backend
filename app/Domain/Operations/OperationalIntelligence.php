@@ -109,8 +109,8 @@ final class OperationalIntelligence
      */
     private const RATE_FLOOR = 30;
 
-    /** @var array<string, bool> index name => exists. Per instance, which is per request. */
-    private array $indexCache = [];
+    /** @var array<int, string>|null Every index on the table, read once per request. */
+    private ?array $indexNames = null;
 
     /**
      * Everything, for one organization.
@@ -177,7 +177,9 @@ final class OperationalIntelligence
      * The fingerprint of everything this class reads.
      *
      * Row count and high-water update mark, which together change on any insert,
-     * update or delete. Cheap: both ride `idx_oprec_tenant_updated`.
+     * update or delete, and ride `(tenant_id, updated_date)` as an index-only
+     * scan. The count of department-attributed rows is a SEPARATE query on a
+     * SEPARATE index, and the separation is the whole point: see below.
      */
     public function dataVersion(string $tenantId): string
     {
@@ -185,16 +187,59 @@ final class OperationalIntelligence
             return 'no-table';
         }
 
-        $row = DB::table(self::TABLE)
+        $row = DB::table(DB::raw($this->from('idx_oprec_tenant_updated')))
             ->where('tenant_id', $tenantId)
             ->selectRaw('COUNT(*) AS n, MAX(updated_date) AS high')
             ->first();
 
-        return substr(hash('sha256', ($row->n ?? 0).'|'.($row->high ?? '')), 0, 16);
+        return substr(hash('sha256', ($row->n ?? 0).'|'.($row->high ?? '').'|'.$this->labelledFingerprint($tenantId)), 0, 16);
     }
 
     /**
-     * @param  array<string, mixed>  $payload
+     * The count of department-attributed rows, as a fingerprint component.
+     *
+     * WHY THIS IS IN THE FINGERPRINT. Department attribution is backfilled onto
+     * `department_label` after the records already exist, and that write does not
+     * necessarily move the row's `updated_date`. A fingerprint made only from
+     * count and high-water update time therefore keeps serving the pre-backfill
+     * aggregate: no departments, no per-unit work, every department card
+     * unscored.
+     *
+     * WHY IT IS NOT A THIRD COLUMN ON THE QUERY ABOVE. It was, and it cost this
+     * screen minutes. One query can only ride one index: adding
+     * `COUNT(department_label)` beside `MAX(updated_date)` leaves the optimizer
+     * no index carrying both, so it abandons the index-only scan and reads all
+     * 700k+ rows off the clustered index, each dragging its inline JSON payload
+     * with it. EXPLAIN goes from `type: ref, Using index` to `type: ALL,
+     * key: NULL`. Two index-covered queries beat one covered by nothing.
+     *
+     * WHY THE INDEX IS CHECKED AND NOT ASSUMED. Without
+     * `(tenant_id, department_label, ...)` this count is that same full scan, and
+     * the fingerprint is the one query here that runs on EVERY request, cache
+     * hit included. Where the index has not been created the component is
+     * dropped rather than paid for: that installation cannot serve the
+     * department aggregate either, so there is no backfill for it to miss.
+     */
+    private function labelledFingerprint(string $tenantId): string
+    {
+        if (! Schema::hasColumn(self::TABLE, 'department_label')) {
+            return 'no-department-label';
+        }
+
+        if (! SqlDialect::isSqlite() && ! $this->hasIndex('idx_oprec_tenant_department_status')) {
+            return 'no-department-index';
+        }
+
+        $row = DB::table(DB::raw($this->from('idx_oprec_tenant_department_status')))
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('department_label')
+            ->selectRaw('COUNT(*) AS labelled')
+            ->first();
+
+        return (string) ($row->labelled ?? 0);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function computeAndStore(string $tenantId, string $version, string $key, Repository $store): array
@@ -499,7 +544,15 @@ final class OperationalIntelligence
      * fatal query.
      *
      * The department indexes arrive with a migration a given installation may
-     * not have run yet. Memoised per instance, which is per request.
+     * not have run yet.
+     *
+     * READ AS ONE LIST, NOT ONE PROBE PER NAME. `dataVersion` asks about two
+     * indexes and runs on every request, cache hit included; against a database
+     * on the far side of a network each probe is another round trip spent
+     * deciding how to ask the real question. The table's index names are one
+     * small query, and there is no case where knowing one of them is worth a
+     * round trip but knowing all of them is not. Memoised per instance, which
+     * is per request.
      */
     private function hasIndex(string $name): bool
     {
@@ -507,17 +560,18 @@ final class OperationalIntelligence
             return false;
         }
 
-        if (array_key_exists($name, $this->indexCache)) {
-            return $this->indexCache[$name];
+        if ($this->indexNames === null) {
+            $this->indexNames = array_map(
+                static fn ($row) => (string) $row->INDEX_NAME,
+                DB::select(
+                    'SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
+                      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                    [self::TABLE],
+                ),
+            );
         }
 
-        $row = DB::selectOne(
-            'SELECT COUNT(*) AS n FROM information_schema.STATISTICS
-              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?',
-            [self::TABLE, $name],
-        );
-
-        return $this->indexCache[$name] = $row !== null && (int) $row->n > 0;
+        return in_array($name, $this->indexNames, true);
     }
 
     /**
