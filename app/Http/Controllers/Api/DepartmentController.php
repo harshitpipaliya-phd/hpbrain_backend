@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Organization\DepartmentIntelligenceMetrics;
+use App\Domain\Organization\DepartmentProfile;
 use App\Domain\Organization\DepartmentVisibilityScope;
 use App\Domain\School\AcademicSections;
 use App\Domain\Organization\FoundationCounts;
@@ -307,6 +308,30 @@ final class DepartmentController extends Controller
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'department_not_found'], 404);
     }
+
+    /**
+     * Everything the department detail screen shows, for one unit.
+     *
+     * COMPOSED, NOT QUERIED. DepartmentProfile derives the whole page from the
+     * aggregates DepartmentIntelligenceMetrics already computes and caches for
+     * the tenant, so opening a department costs the same as opening the list.
+     * The alternative — a per-unit query set — is the N+1 this codebase forbids,
+     * moved into a detail page where a profiler would never look for it.
+     *
+     * Tenant scope comes from the token via authTenantId(), never from the path,
+     * as on every other method here. A unit that is not this tenant's is a 404
+     * rather than an empty profile: "no such department for you" and "a
+     * department with nothing recorded" are different answers.
+     */
+    public function profile(Request $request, string $tenantId, string $id, DepartmentProfile $profiles): JsonResponse
+    {
+        $profile = $profiles->forDepartment($this->authTenantId($request), $id);
+
+        return $profile === null
+            ? response()->json(['error' => 'department_not_found'], 404)
+            : response()->json($profile);
+    }
+
 
     public function twin(Request $request, string $tenantId, string $id): JsonResponse
     {

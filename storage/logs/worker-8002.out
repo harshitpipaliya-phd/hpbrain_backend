@@ -73,3 +73,10 @@
   2026-08-31 14:15:02 /api/v1/terminology/test-tenant ...................................................... ~ 4.77ms
   2026-08-31 14:15:02 /api/v1/terminology/test-tenant .................................................... ~ 516.31ms
   2026-08-31 14:15:04 /api/v1/feature-flags/test-tenant .................................................... ~ 0.50ms
+  2026-08-31 15:48:39 /api/v1/auth/login .................................................................. ~ 17.39ms
+  2026-08-31 15:48:40 /api/v1/auth/login ................................................................... ~ 0.47ms
+  2026-08-31 15:49:07 /api/v1/notifications/1000018/unread-count .......................................... ~ 17.38ms
+  2026-08-31 15:50:06 /api/v1/departments/1000018 .......................................................... ~ 0.43ms
+  2026-08-31 15:50:06 /api/v1/departments/1000018/summary ................................................ ~ 502.47ms
+  PHP Fatal error:  Maximum execution time of 60 seconds exceeded in C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain\vendor\laravel\framework\src\Illuminate\Support\Sleep.php on line 342
+  2026-08-31 15:50:21 /api/v1/departments/1000018/intelligence ................................................. ~ 1m
