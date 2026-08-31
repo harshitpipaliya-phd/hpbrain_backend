@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\MeasurementPlanController;
 use App\Http\Controllers\Api\MentalModelController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ObservabilityController;
+use App\Http\Controllers\Api\OperationalIntelligenceController;
 use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\OrganizationDeletionController;
 use App\Http\Controllers\Api\OrganizationIntelligenceController;
@@ -164,6 +165,9 @@ Route::prefix('v1')->group(function () {
         // and look for a department whose id is the word.
         Route::get('departments/{tenantId}/summary', [DepartmentController::class, 'summary']);
         Route::get('departments/{tenantId}/sections', [DepartmentController::class, 'sections']);
+        // Same reason as `summary` above: a literal segment must be registered
+        // before `{id}` or the router hands "intelligence" to show() as an id.
+        Route::get('departments/{tenantId}/intelligence', [DepartmentController::class, 'intelligence']);
         Route::get('departments/{tenantId}/{id}', [DepartmentController::class, 'show']);
 
         Route::get('people/{tenantId}/search', [PersonController::class, 'search']);
@@ -346,6 +350,24 @@ Route::prefix('v1')->group(function () {
         Route::get('organization-intelligence/{tenantId}/recommendations', [OrganizationIntelligenceController::class, 'recommendations']);
         Route::get('organization-intelligence/{tenantId}/profile', [OrganizationIntelligenceController::class, 'profile']);
         Route::get('organization-intelligence/{tenantId}', [OrganizationIntelligenceController::class, 'index']);
+
+        // ---- Derived operational intelligence --------------------------------
+        // Aggregates over hpbrain_operational_records — the largest and least-read
+        // thing this product holds. Every endpoint is a computed aggregate and
+        // none of them writes, so they sit under the group's plain `read` floor
+        // alongside the block above.
+        //
+        // ORDER MATTERS, for the same reason it does above: a bare
+        // `operations/{tenantId}` pattern registered first would capture
+        // 'overview' and 'datasets' as tenant ids, and EnsureTenantScope would
+        // reject the request as a tenant mismatch rather than as a routing
+        // mistake. There is deliberately no bare pattern here at all.
+        Route::get('operations/{tenantId}/overview', [OperationalIntelligenceController::class, 'overview']);
+        Route::get('operations/{tenantId}/scorecard', [OperationalIntelligenceController::class, 'scorecard']);
+        Route::get('operations/{tenantId}/datasets', [OperationalIntelligenceController::class, 'datasets']);
+        Route::get('operations/{tenantId}/departments', [OperationalIntelligenceController::class, 'departments']);
+        Route::get('operations/{tenantId}/trends', [OperationalIntelligenceController::class, 'trends']);
+        Route::get('operations/{tenantId}/loop', [OperationalIntelligenceController::class, 'loop']);
 
         Route::get('knowledge-library/{tenantId}/search', [KnowledgeLibraryController::class, 'search']);
         Route::get('knowledge-library/{tenantId}', [KnowledgeLibraryController::class, 'index']);

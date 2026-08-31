@@ -72,3 +72,19 @@ Schedule::command('intelligence:warm')
     ->hourlyAt(25)
     ->withoutOverlapping()
     ->runInBackground();
+
+// Derived operational intelligence, on the same principle and for the same
+// reason: the aggregates are cached against a fingerprint of the records, so
+// this is a no-op for an organization whose imports have not changed, and a
+// multi-minute set of scans for one whose have.
+//
+// Forty past the hour, after intelligence:warm at :25 rather than beside it.
+// Both walk hpbrain_operational_records, and running them together on the same
+// tenant means two large scans competing for the same I/O and both finishing
+// later than either would alone — measured on the live database, where a
+// concurrent scan and bulk update turned a sixty-second aggregate into one that
+// exceeded the client's timeout.
+Schedule::command('operations:warm')
+    ->hourlyAt(40)
+    ->withoutOverlapping()
+    ->runInBackground();

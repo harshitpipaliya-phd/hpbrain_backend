@@ -63,24 +63,84 @@ final class PersonController extends Controller
         return array_values(array_unique($columns));
     }
 
+    /**
+     * The roster, optionally narrowed and paged ON THE SERVER.
+     *
+     * WHAT THIS FIXES. Every caller used to receive the tenant's entire
+     * workforce and narrow it in the browser — `person.ts` still contains the
+     * client-side `scope()` that did it. The Department page then rendered ten
+     * of them: on Fiber Valley that is 768 rows serialised, sent and discarded
+     * to show a first page of ten, on every department switch.
+     *
+     * BACKWARD COMPATIBLE BY CONSTRUCTION. With no query string this returns
+     * exactly what it always returned — a bare JSON array of every active
+     * person. The paged envelope appears only when a caller asks for a page, so
+     * the screens that still consume the array keep working unchanged. That is
+     * why the return shape is conditional rather than always an envelope.
+     *
+     * `unitId` is applied in SQL against the mapped unit column, so a department
+     * of ten costs ten rows regardless of how large the organization is.
+     */
     public function index(Request $request): JsonResponse
     {
         $t = $this->authTenantId($request);
         $person = $this->resolver->resolve($t, 'Person');
 
-        $rows = DB::table($person->table)
-            ->select($this->listColumns($person))
+        $unitId = trim((string) $request->query('unitId', ''));
+        $search = trim((string) $request->query('q', ''));
+        $paged = $request->query('page') !== null || $request->query('perPage') !== null;
+
+        $query = DB::table($person->table)
             ->where($person->tenantKey, $t)
             ->where($person->field('status'), 1)
-            ->tap(fn ($query) => $this->activeSourceRows($query, $person))
+            ->tap(fn ($q) => $this->activeSourceRows($q, $person));
+
+        if ($unitId !== '' && $person->has('unit')) {
+            $query->where($person->field('unit'), $unitId);
+        }
+
+        if ($search !== '') {
+            // The same fields search() offers, so a name that is findable there
+            // is findable here rather than in a second, subtly different set.
+            $searchable = $person->columns(['firstName', 'lastName', 'email', 'externalRef']);
+            $query->where(function ($w) use ($search, $searchable) {
+                foreach ($searchable as $column) {
+                    $w->orWhere($column, 'like', "%{$search}%");
+                }
+            });
+        }
+
+        if (! $paged) {
+            $rows = $query->select($this->listColumns($person))->get();
+            $roles = $this->profileNames($rows, $person);
+
+            return response()->json($rows->map(fn ($r) => $this->map((array) $r, $person, $roles))->all());
+        }
+
+        // COUNT BEFORE THE PAGE, on the same builder, so "page 3 of 77" and the
+        // rows on page 3 can never describe different filters.
+        $total = (int) (clone $query)->count();
+
+        $perPage = max(1, min(100, (int) $request->query('perPage', 20)));
+        $page = max(1, (int) $request->query('page', 1));
+        $pages = max(1, (int) ceil($total / $perPage));
+        $page = min($page, $pages);
+
+        $rows = $query
+            ->select($this->listColumns($person))
+            ->orderBy($person->primaryKey)
+            ->forPage($page, $perPage)
             ->get();
 
-        // One query for every role name on the page, before mapping begins.
         $roles = $this->profileNames($rows, $person);
 
-        return response()->json(
-            $rows->map(fn ($r) => $this->map((array) $r, $person, $roles))->all()
-        );
+        return response()->json([
+            'people' => $rows->map(fn ($r) => $this->map((array) $r, $person, $roles))->all(),
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
+            'pages' => $pages,
+        ]);
     }
 
     public function search(Request $request): JsonResponse
