@@ -95,12 +95,42 @@ return new class extends Migration
             return;
         }
 
-        foreach (self::INDEXES as $name => $columns) {
-            if ($this->hasIndex($name)) {
-                continue;
-            }
+        /*
+          A BLOCKED `ALTER` BLOCKS THE WHOLE APPLICATION, INCLUDING LOGIN.
 
-            DB::unprepared('ALTER TABLE '.self::TABLE.' ADD INDEX '.$name.' ('.$columns.')');
+          Adding an index needs a brief exclusive metadata lock on the table. If
+          a long-running SELECT already holds a shared one, the ALTER waits — and
+          because metadata-lock waits are served in order, EVERY query that
+          arrives after it queues behind it too, even the ones the running SELECT
+          would not have blocked on its own. On this table, whose aggregates take
+          minutes until these very indexes exist, that turned a routine migration
+          into a total outage: sessions could not be read, so nobody could log in.
+
+          `lock_wait_timeout` bounds that. The ALTER now gives up after ten
+          seconds and this migration reports it, instead of parking at the head
+          of the lock queue for as long as the longest reader runs. Re-running it
+          is safe and picks up where it left off: `hasIndex()` skips whatever
+          already exists.
+
+          LOCK=NONE keeps readers and writers running for the build itself, which
+          is the long part. It is the acquisition, not the build, that has to be
+          fought for.
+        */
+        $previous = DB::selectOne('SELECT @@SESSION.lock_wait_timeout AS t');
+        DB::unprepared('SET SESSION lock_wait_timeout = 10');
+
+        try {
+            foreach (self::INDEXES as $name => $columns) {
+                if ($this->hasIndex($name)) {
+                    continue;
+                }
+
+                DB::unprepared(
+                    'ALTER TABLE '.self::TABLE.' ADD INDEX '.$name.' ('.$columns.'), ALGORITHM=INPLACE, LOCK=NONE',
+                );
+            }
+        } finally {
+            DB::unprepared('SET SESSION lock_wait_timeout = '.(int) ($previous->t ?? 31536000));
         }
     }
 

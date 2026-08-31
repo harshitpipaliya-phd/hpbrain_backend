@@ -172,6 +172,25 @@ final class OperationalIntelligenceTest extends TestCase
         self::assertSame(0.6, $result['execution']['completionRate']);
     }
 
+    public function test_department_backfill_changes_the_operational_cache_fingerprint(): void
+    {
+        $this->seedWorkload(self::TENANT, 'job_order', completed: 60, open: 30, cancelled: 10);
+
+        $before = $this->engine()->dataVersion(self::TENANT);
+
+        $ids = DB::table('hpbrain_operational_records')
+            ->where('tenant_id', self::TENANT)
+            ->limit(10)
+            ->pluck('id')
+            ->all();
+
+        DB::table('hpbrain_operational_records')
+            ->whereIn('id', $ids)
+            ->update(['department_label' => 'Field Operations']);
+
+        self::assertNotSame($before, $this->engine()->dataVersion(self::TENANT));
+    }
+
     public function test_no_aggregate_crosses_organizations(): void
     {
         $this->seedWorkload(self::TENANT, 'job_order', completed: 60, open: 30, cancelled: 10);
