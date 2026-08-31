@@ -69,6 +69,28 @@ final class OperationalRecordLoader implements RecordLoader
             'sub_category'    => $this->clip($fields['sub_category'] ?? null, 191),
             'owner_name'      => $this->clip($fields['owner_name'] ?? null, 191),
             'supervisor_name' => $this->clip($fields['supervisor_name'] ?? null, 191),
+            /*
+              THE OWNING UNIT, STATED BY THE SOURCE — not derived here.
+
+              Source exports name the department the record belongs to, and the
+              payload has always preserved it. Nothing could query it: it sat
+              inside a longtext blob with no index, so every department-level
+              figure in the product had to be computed without operational data.
+
+              Promoted to a column so it can be grouped on. The value is copied
+              verbatim from whatever the profile mapped to `department` — no
+              matching against the department register, no fuzzy join, no
+              default. A source that does not name a department writes NULL, and
+              the intelligence layer suppresses department-attributed metrics for
+              that tenant rather than reporting them as zero.
+
+              See the 2026_08_30 migration and `operations:backfill-departments`
+              for the historical rows.
+            */
+            'department_label' => $this->clip(
+                $fields['department_label'] ?? (is_array($payload) ? ($payload['department'] ?? null) : null),
+                191,
+            ),
             'zone'            => $this->clip($fields['zone'] ?? null, 128),
             'area'            => $this->clip($fields['area'] ?? null, 128),
             'subject_ref'     => $this->clip($fields['subject_ref'] ?? null, 191),

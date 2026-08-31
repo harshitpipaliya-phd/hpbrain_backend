@@ -1438,6 +1438,12 @@ trait BuildsBrainSchema
             $t->string('sub_category', 191)->nullable();
             $t->string('owner_name', 191)->nullable();
             $t->string('supervisor_name', 191)->nullable();
+            // The owning unit the SOURCE EXPORT named, promoted out of `payload`
+            // by 2026_08_30_000100 so it can be grouped on. Mirrored here because
+            // the department-attribution behaviour is asserted by the suite, and
+            // a test schema without the column would pass while production
+            // depended on one the test never exercised.
+            $t->string('department_label', 191)->nullable();
             $t->string('zone', 128)->nullable();
             $t->string('area', 128)->nullable();
             $t->string('subject_ref', 191)->nullable();

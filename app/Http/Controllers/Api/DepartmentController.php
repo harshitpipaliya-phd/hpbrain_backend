@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Organization\DepartmentIntelligenceMetrics;
 use App\Domain\Organization\DepartmentVisibilityScope;
 use App\Domain\School\AcademicSections;
 use App\Domain\Organization\FoundationCounts;
@@ -34,6 +35,7 @@ final class DepartmentController extends Controller
         private readonly FoundationCounts $foundation,
         private readonly DepartmentVisibilityScope $visibility,
         private readonly AcademicSections $sections,
+        private readonly DepartmentIntelligenceMetrics $metrics,
     ) {
     }
 
@@ -54,6 +56,46 @@ final class DepartmentController extends Controller
      * Tenant scope comes from the authenticated token via authTenantId(), the
      * same as every other method on this controller — never from the path.
      */
+    /**
+     * Every department's measurable facts, for the whole organization, at once.
+     *
+     * WHY THIS ENDPOINT EXISTS. The Departments screen scored each unit by
+     * calling `twin` once per department — 13 HTTP round trips on Fiber Valley,
+     * each running six queries of its own, before a single card could show a
+     * number. This is the same information in one request and eight grouped
+     * queries, and it is the only thing the list needs: the twin stays for the
+     * detail page, where its timeline and per-capability heatmap are actually
+     * rendered.
+     *
+     * `support` travels with the counts and is the load-bearing part of the
+     * response. It says whether the ORGANIZATION records each kind of data at
+     * all, so the client can drop a dimension it cannot measure instead of
+     * scoring the absence as a zero. Without it, an organization that has never
+     * recorded a capability assessment would read as one whose every department
+     * fails capability.
+     *
+     * Tenant scope comes from the token via authTenantId(), never from the path,
+     * exactly as every other method here.
+     */
+    public function intelligence(Request $request): JsonResponse
+    {
+        $t = $this->authTenantId($request);
+        $metrics = $this->metrics->forTenant($t);
+
+        return response()->json([
+            /*
+              CAST TO AN OBJECT, for the same reason `summary` casts
+              `peoplePerDepartment`. PHP turns a numeric string key into an
+              integer, so a tenant whose department ids happen to run 0,1,2…
+              would json_encode as a JSON ARRAY and every client lookup by id
+              would silently miss. An object is what the key means.
+            */
+            'departments' => (object) $metrics['departments'],
+            'support' => $metrics['support'],
+            'tenant' => $metrics['tenant'],
+        ]);
+    }
+
     public function summary(Request $request): JsonResponse
     {
         $t = $this->authTenantId($request);
