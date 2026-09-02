@@ -673,6 +673,15 @@ export type DepartmentStorePostDepartmentsResponse = unknown;
 /** UNVERIFIED: App\Http\Controllers\Api\DepartmentController@index returns a raw database row. */
 export type DepartmentIndexGetDepartmentsTenantIdResponse = unknown;
 
+/** UNVERIFIED: App\Http\Controllers\Api\DepartmentController@intelligence returns a raw database row. */
+export type DepartmentIntelligenceGetDepartmentsTenantIdIntelligenceResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\DepartmentController@sections returns a raw database row. */
+export type DepartmentSectionsGetDepartmentsTenantIdSectionsResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\DepartmentController@summary returns a raw database row. */
+export type DepartmentSummaryGetDepartmentsTenantIdSummaryResponse = unknown;
+
 /** UNVERIFIED: App\Http\Controllers\Api\DepartmentController@show returns a raw database row. */
 export type DepartmentShowGetDepartmentsTenantIdIdResponse = unknown;
 export type DepartmentShowGetDepartmentsTenantIdIdError = 'department_not_found';
@@ -690,10 +699,18 @@ export type DepartmentUpdatePatchDepartmentsTenantIdIdError = 'department_not_fo
 export type DepartmentArchivePostDepartmentsTenantIdIdArchiveRequest = unknown;
 /** UNVERIFIED: App\Http\Controllers\Api\DepartmentController@archive returns a raw database row. */
 export type DepartmentArchivePostDepartmentsTenantIdIdArchiveResponse = unknown;
-export type DepartmentArchivePostDepartmentsTenantIdIdArchiveError = 'department_not_found';
+export type DepartmentArchivePostDepartmentsTenantIdIdArchiveError = 'department_not_found' | 'archive_not_supported_by_source';
 
 /** UNVERIFIED: App\Http\Controllers\Api\DepartmentController@audit returns a raw database row. */
 export type DepartmentAuditGetDepartmentsTenantIdIdAuditResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\DepartmentController@departmentIntelligence returns a raw database row. */
+export type DepartmentDepartmentIntelligenceGetDepartmentsTenantIdIdIntelligenceResponse = unknown;
+export type DepartmentDepartmentIntelligenceGetDepartmentsTenantIdIdIntelligenceError = 'department_not_found';
+
+/** UNVERIFIED: App\Http\Controllers\Api\DepartmentController@profile returns a raw database row. */
+export type DepartmentProfileGetDepartmentsTenantIdIdProfileResponse = unknown;
+export type DepartmentProfileGetDepartmentsTenantIdIdProfileError = 'department_not_found';
 
 /** UNVERIFIED: App\Http\Controllers\Api\DepartmentController@twin returns a raw database row. */
 export type DepartmentTwinGetDepartmentsTenantIdIdTwinResponse = unknown;
@@ -934,8 +951,25 @@ export type GraphEntityGetGraphTenantIdEntityLabelIdError = 'entity_not_found' |
 export type GraphRelatedGetGraphTenantIdEntityLabelIdRelatedResponse = unknown;
 export type GraphRelatedGetGraphTenantIdEntityLabelIdRelatedError = 'unknown_label';
 
+/** UNVERIFIED: App\Http\Controllers\Api\GraphController@expand returns a raw database row. */
+export type GraphExpandGetGraphTenantIdExpandResponse = unknown;
+export type GraphExpandGetGraphTenantIdExpandError = 'label_and_id_required';
+
+/** UNVERIFIED: App\Http\Controllers\Api\GraphController@node returns a raw database row. */
+export type GraphNodeGetGraphTenantIdNodeResponse = unknown;
+export type GraphNodeGetGraphTenantIdNodeError = 'entity_not_found' | 'label_and_id_required' | 'unknown_label';
+
+/** UNVERIFIED: App\Http\Controllers\Api\GraphController@overview returns a raw database row. */
+export type GraphOverviewGetGraphTenantIdOverviewResponse = unknown;
+
 /** UNVERIFIED: App\Http\Controllers\Api\GraphController@search returns a raw database row. */
 export type GraphSearchGetGraphTenantIdSearchResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\GraphController@summary returns a raw database row. */
+export type GraphSummaryGetGraphTenantIdSummaryResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\GraphController@vocabulary returns a raw database row. */
+export type GraphVocabularyGetGraphTenantIdVocabularyResponse = unknown;
 
 export type HypothesisStorePostHypothesesRequest = {
   caseId: string;
@@ -1482,6 +1516,24 @@ export type OnboardingValidateStepPostOnboardingTenantIdIdValidateStepRequest = 
 /** UNVERIFIED: App\Http\Controllers\Api\OnboardingController@validateStep returns a raw database row. */
 export type OnboardingValidateStepPostOnboardingTenantIdIdValidateStepResponse = unknown;
 
+/** UNVERIFIED: App\Http\Controllers\Api\OperationalIntelligenceController@datasets returns a raw database row. */
+export type OperationalIntelligenceDatasetsGetOperationsTenantIdDatasetsResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OperationalIntelligenceController@departments returns a raw database row. */
+export type OperationalIntelligenceDepartmentsGetOperationsTenantIdDepartmentsResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OperationalIntelligenceController@loop returns a raw database row. */
+export type OperationalIntelligenceLoopGetOperationsTenantIdLoopResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OperationalIntelligenceController@overview returns a raw database row. */
+export type OperationalIntelligenceOverviewGetOperationsTenantIdOverviewResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OperationalIntelligenceController@scorecard returns a raw database row. */
+export type OperationalIntelligenceScorecardGetOperationsTenantIdScorecardResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\OperationalIntelligenceController@trends returns a raw database row. */
+export type OperationalIntelligenceTrendsGetOperationsTenantIdTrendsResponse = unknown;
+
 export type OrganizationConfigStorePostOrganizationConfigsRequest = {
   org_id: string;
   config_key: string;
@@ -1674,16 +1726,32 @@ export type OrganizationUpdatePatchOrganizationsTenantIdIdRequest = {
   name?: string;
   orgCode?: string;
   industry?: string;
+  legalName?: string;
+  logo?: string;
+  country?: string;
+  address?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  contactPerson?: string;
+  registrationNumber?: string;
+  taxId?: string;
+  employeeCount?: string;
+  workWeek?: string;
 };
 /** UNVERIFIED: App\Http\Controllers\Api\OrganizationController@update returns a raw database row. */
 export type OrganizationUpdatePatchOrganizationsTenantIdIdResponse = unknown;
-export type OrganizationUpdatePatchOrganizationsTenantIdIdError = 'organization_not_found' | 'no_fields_to_update';
+export type OrganizationUpdatePatchOrganizationsTenantIdIdError = 'organization_not_found' | 'no_editable_fields_for_tenant';
+
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationDeletionController@destroy returns a raw database row. */
+export type OrganizationDeletionDestroyDeleteOrganizationsTenantIdIdResponse = unknown;
+export type OrganizationDeletionDestroyDeleteOrganizationsTenantIdIdError = 'deletion_failed';
 
 /** UNVERIFIED: no validate() in App\Http\Controllers\Api\OrganizationController@archive; body shape not derivable. */
 export type OrganizationArchivePostOrganizationsTenantIdIdArchiveRequest = unknown;
 /** UNVERIFIED: App\Http\Controllers\Api\OrganizationController@archive returns a raw database row. */
 export type OrganizationArchivePostOrganizationsTenantIdIdArchiveResponse = unknown;
-export type OrganizationArchivePostOrganizationsTenantIdIdArchiveError = 'organization_not_found';
+export type OrganizationArchivePostOrganizationsTenantIdIdArchiveError = 'organization_not_found' | 'archive_not_supported_by_source';
 
 /** UNVERIFIED: App\Http\Controllers\Api\OrganizationController@audit returns a raw database row. */
 export type OrganizationAuditGetOrganizationsTenantIdIdAuditResponse = unknown;
@@ -1691,6 +1759,9 @@ export type OrganizationAuditGetOrganizationsTenantIdIdAuditResponse = unknown;
 /** UNVERIFIED: App\Http\Controllers\Api\OrganizationController@dataQuality returns a raw database row. */
 export type OrganizationDataQualityGetOrganizationsTenantIdIdDataQualityResponse = unknown;
 export type OrganizationDataQualityGetOrganizationsTenantIdIdDataQualityError = 'organization_not_found';
+
+/** UNVERIFIED: App\Http\Controllers\Api\OrganizationDeletionController@preview returns a raw database row. */
+export type OrganizationDeletionPreviewGetOrganizationsTenantIdIdDeletionPreviewResponse = unknown;
 
 /** UNVERIFIED: App\Http\Controllers\Api\OrganizationController@structure returns a raw database row. */
 export type OrganizationStructureGetOrganizationsTenantIdIdStructureResponse = unknown;
@@ -1755,6 +1826,10 @@ export type PersonArchivePostPeopleTenantIdIdArchiveError = 'person_not_found';
 
 /** UNVERIFIED: App\Http\Controllers\Api\PersonController@audit returns a raw database row. */
 export type PersonAuditGetPeopleTenantIdIdAuditResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\PersonController@intelligence returns a raw database row. */
+export type PersonIntelligenceGetPeopleTenantIdIdIntelligenceResponse = unknown;
+export type PersonIntelligenceGetPeopleTenantIdIdIntelligenceError = 'person_not_found';
 
 /** UNVERIFIED: App\Http\Controllers\Api\PersonController@twin returns a raw database row. */
 export type PersonTwinGetPeopleTenantIdIdTwinResponse = unknown;
@@ -2217,6 +2292,38 @@ export type SkillUpdatePatchSkillsTenantIdIdError = 'skill_not_found';
 /** UNVERIFIED: App\Http\Controllers\Api\SkillController@destroy returns a raw database row. */
 export type SkillDestroyDeleteSkillsTenantIdIdResponse = unknown;
 export type SkillDestroyDeleteSkillsTenantIdIdError = 'skill_not_found';
+
+/** UNVERIFIED: App\Http\Controllers\Api\StudentController@index returns a raw database row. */
+export type StudentIndexGetStudentsTenantIdResponse = unknown;
+export type StudentIndexGetStudentsTenantIdError = 'unknown_section';
+
+/** UNVERIFIED: App\Http\Controllers\Api\StudentController@byRef returns a raw database row. */
+export type StudentByRefGetStudentsTenantIdByRefStudentRefResponse = unknown;
+export type StudentByRefGetStudentsTenantIdByRefStudentRefError = 'student_not_found';
+
+/** UNVERIFIED: App\Http\Controllers\Api\StudentController@intelligence returns a raw database row. */
+export type StudentIntelligenceGetStudentsTenantIdIntelligenceResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\StudentController@search returns a raw database row. */
+export type StudentSearchGetStudentsTenantIdSearchResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\StudentController@structure returns a raw database row. */
+export type StudentStructureGetStudentsTenantIdStructureResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\StudentController@summary returns a raw database row. */
+export type StudentSummaryGetStudentsTenantIdSummaryResponse = unknown;
+
+/** UNVERIFIED: App\Http\Controllers\Api\StudentController@show returns a raw database row. */
+export type StudentShowGetStudentsTenantIdIdResponse = unknown;
+export type StudentShowGetStudentsTenantIdIdError = 'student_not_found';
+
+/** UNVERIFIED: App\Http\Controllers\Api\StudentController@academicRecords returns a raw database row. */
+export type StudentAcademicRecordsGetStudentsTenantIdIdAcademicRecordsResponse = unknown;
+export type StudentAcademicRecordsGetStudentsTenantIdIdAcademicRecordsError = 'student_not_found';
+
+/** UNVERIFIED: App\Http\Controllers\Api\StudentController@feeRecords returns a raw database row. */
+export type StudentFeeRecordsGetStudentsTenantIdIdFeeRecordsResponse = unknown;
+export type StudentFeeRecordsGetStudentsTenantIdIdFeeRecordsError = 'student_not_found';
 
 /** UNVERIFIED: App\Http\Controllers\Api\TaskController@registry returns a raw database row. */
 export type TaskRegistryGetTasksRegistryResponse = unknown;
@@ -3590,6 +3697,36 @@ export const OPERATIONS = [
     "unverifiedResponse": true
   },
   {
+    "name": "DepartmentIntelligenceGetDepartmentsTenantIdIntelligence",
+    "method": "GET",
+    "path": "/departments/{tenantId}/intelligence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@intelligence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentSectionsGetDepartmentsTenantIdSections",
+    "method": "GET",
+    "path": "/departments/{tenantId}/sections",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@sections",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentSummaryGetDepartmentsTenantIdSummary",
+    "method": "GET",
+    "path": "/departments/{tenantId}/summary",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@summary",
+    "unverifiedResponse": true
+  },
+  {
     "name": "DepartmentShowGetDepartmentsTenantIdId",
     "method": "GET",
     "path": "/departments/{tenantId}/{id}",
@@ -3629,6 +3766,26 @@ export const OPERATIONS = [
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\DepartmentController@audit",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentDepartmentIntelligenceGetDepartmentsTenantIdIdIntelligence",
+    "method": "GET",
+    "path": "/departments/{tenantId}/{id}/intelligence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@departmentIntelligence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentProfileGetDepartmentsTenantIdIdProfile",
+    "method": "GET",
+    "path": "/departments/{tenantId}/{id}/profile",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@profile",
     "unverifiedResponse": true
   },
   {
@@ -4030,6 +4187,36 @@ export const OPERATIONS = [
     "unverifiedResponse": true
   },
   {
+    "name": "GraphExpandGetGraphTenantIdExpand",
+    "method": "GET",
+    "path": "/graph/{tenantId}/expand",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@expand",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphNodeGetGraphTenantIdNode",
+    "method": "GET",
+    "path": "/graph/{tenantId}/node",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@node",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphOverviewGetGraphTenantIdOverview",
+    "method": "GET",
+    "path": "/graph/{tenantId}/overview",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@overview",
+    "unverifiedResponse": true
+  },
+  {
     "name": "GraphSearchGetGraphTenantIdSearch",
     "method": "GET",
     "path": "/graph/{tenantId}/search",
@@ -4037,6 +4224,26 @@ export const OPERATIONS = [
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\GraphController@search",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphSummaryGetGraphTenantIdSummary",
+    "method": "GET",
+    "path": "/graph/{tenantId}/summary",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@summary",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphVocabularyGetGraphTenantIdVocabulary",
+    "method": "GET",
+    "path": "/graph/{tenantId}/vocabulary",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@vocabulary",
     "unverifiedResponse": true
   },
   {
@@ -4970,6 +5177,66 @@ export const OPERATIONS = [
     "unverifiedResponse": true
   },
   {
+    "name": "OperationalIntelligenceDatasetsGetOperationsTenantIdDatasets",
+    "method": "GET",
+    "path": "/operations/{tenantId}/datasets",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@datasets",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OperationalIntelligenceDepartmentsGetOperationsTenantIdDepartments",
+    "method": "GET",
+    "path": "/operations/{tenantId}/departments",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@departments",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OperationalIntelligenceLoopGetOperationsTenantIdLoop",
+    "method": "GET",
+    "path": "/operations/{tenantId}/loop",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@loop",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OperationalIntelligenceOverviewGetOperationsTenantIdOverview",
+    "method": "GET",
+    "path": "/operations/{tenantId}/overview",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@overview",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OperationalIntelligenceScorecardGetOperationsTenantIdScorecard",
+    "method": "GET",
+    "path": "/operations/{tenantId}/scorecard",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@scorecard",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OperationalIntelligenceTrendsGetOperationsTenantIdTrends",
+    "method": "GET",
+    "path": "/operations/{tenantId}/trends",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@trends",
+    "unverifiedResponse": true
+  },
+  {
     "name": "OrganizationConfigStorePostOrganizationConfigs",
     "method": "POST",
     "path": "/organization-configs",
@@ -5340,6 +5607,18 @@ export const OPERATIONS = [
     "unverifiedResponse": true
   },
   {
+    "name": "OrganizationDeletionDestroyDeleteOrganizationsTenantIdId",
+    "method": "DELETE",
+    "path": "/organizations/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "delete",
+      "tenant.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationDeletionController@destroy",
+    "unverifiedResponse": true
+  },
+  {
     "name": "OrganizationArchivePostOrganizationsTenantIdIdArchive",
     "method": "POST",
     "path": "/organizations/{tenantId}/{id}/archive",
@@ -5368,6 +5647,18 @@ export const OPERATIONS = [
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\OrganizationController@dataQuality",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationDeletionPreviewGetOrganizationsTenantIdIdDeletionPreview",
+    "method": "GET",
+    "path": "/organizations/{tenantId}/{id}/deletion-preview",
+    "permissions": [
+      "read",
+      "delete",
+      "tenant.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationDeletionController@preview",
     "unverifiedResponse": true
   },
   {
@@ -5472,6 +5763,16 @@ export const OPERATIONS = [
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\PersonController@audit",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonIntelligenceGetPeopleTenantIdIdIntelligence",
+    "method": "GET",
+    "path": "/people/{tenantId}/{id}/intelligence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonController@intelligence",
     "unverifiedResponse": true
   },
   {
@@ -6234,6 +6535,96 @@ export const OPERATIONS = [
       "settings.manage"
     ],
     "controller": "App\\Http\\Controllers\\Api\\SkillController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentIndexGetStudentsTenantId",
+    "method": "GET",
+    "path": "/students/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentByRefGetStudentsTenantIdByRefStudentRef",
+    "method": "GET",
+    "path": "/students/{tenantId}/by-ref/{studentRef}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@byRef",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentIntelligenceGetStudentsTenantIdIntelligence",
+    "method": "GET",
+    "path": "/students/{tenantId}/intelligence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@intelligence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentSearchGetStudentsTenantIdSearch",
+    "method": "GET",
+    "path": "/students/{tenantId}/search",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@search",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentStructureGetStudentsTenantIdStructure",
+    "method": "GET",
+    "path": "/students/{tenantId}/structure",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@structure",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentSummaryGetStudentsTenantIdSummary",
+    "method": "GET",
+    "path": "/students/{tenantId}/summary",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@summary",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentShowGetStudentsTenantIdId",
+    "method": "GET",
+    "path": "/students/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentAcademicRecordsGetStudentsTenantIdIdAcademicRecords",
+    "method": "GET",
+    "path": "/students/{tenantId}/{id}/academic-records",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@academicRecords",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentFeeRecordsGetStudentsTenantIdIdFeeRecords",
+    "method": "GET",
+    "path": "/students/{tenantId}/{id}/fee-records",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@feeRecords",
     "unverifiedResponse": true
   },
   {

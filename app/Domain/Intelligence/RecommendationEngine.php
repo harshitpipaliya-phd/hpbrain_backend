@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Intelligence;
 
+use App\Domain\Eso\EsoCatalogue;
+
 /**
  * What this organization should do next, and why, and what it would buy.
  *
@@ -95,11 +97,15 @@ final class RecommendationEngine
      * Which of the four execution capabilities the action needs.
      *
      * Architecture Invariant 3 binds every recommendation to something runnable.
-     * This organization has no ESO definitions, so nothing can be bound — but the
-     * TYPE of execution required is derivable from the kind of finding, and naming
-     * it is what makes the eventual binding mechanical rather than a fresh
-     * judgement. Every recommendation therefore ships `esoType` with `esoId: null`
-     * and says why.
+     * The TYPE of execution required is derivable from the kind of finding, and
+     * naming it is what makes the binding mechanical rather than a fresh
+     * judgement. Every recommendation therefore ships `esoType`.
+     *
+     * Whether it also ships an `esoId` depends on the organization's own
+     * catalogue, read at composition time — see bindExecutables(). This table
+     * used to be accompanied by a hardcoded `esoId: null` and a fixed sentence
+     * claiming the organization had no ESO definitions, which was printed
+     * unchanged to organizations that had several.
      *
      * @var array<string, string>
      */
@@ -146,11 +152,17 @@ final class RecommendationEngine
      * @param array<string, mixed> $risks
      * @param array<string, mixed> $state
      * @param array<string, mixed> $knowledge
+     * @param EsoCatalogue|null    $catalogue this organization's executable objects,
+     *                                        or null where no tenant context is
+     *                                        available (an empty catalogue, which
+     *                                        produces the honest "none exist" note)
      *
      * @return array<string, mixed>
      */
-    public function recommend(array $gaps, array $risks, array $state, array $knowledge): array
+    public function recommend(array $gaps, array $risks, array $state, array $knowledge, ?EsoCatalogue $catalogue = null): array
     {
+        $catalogue ??= EsoCatalogue::empty();
+
         $recommendations = [];
 
         foreach ($gaps['gaps'] as $gap) {
@@ -197,6 +209,8 @@ final class RecommendationEngine
         }
         unset($ranked);
 
+        $this->bindExecutables($recommendations, $catalogue);
+
         return [
             'recommendations' => $recommendations,
             'total'           => count($recommendations),
@@ -210,7 +224,7 @@ final class RecommendationEngine
             'method'          => [
                 'priority'  => 'priorityScore = (severity / 5) x confidence x tractability. Severity and confidence are inherited from the finding; tractability is fixed per finding kind, so the ordering cannot be tuned per item.',
                 'benefit'   => 'Labelled Observed, Estimated, Projected or Unknown. Estimated benefits ship both endpoints. No monetary benefit is produced anywhere, because this organization has recorded no cost, revenue or penalty data — a currency figure could only be invented.',
-                'binding'   => 'Each recommendation names the execution type it needs (Assessment, Learning, Workflow or Communication). Binding to a specific executable object requires definitions in hpbrain_eso_definitions, and this organization has none.',
+                'binding'   => $this->bindingMethodNote($catalogue),
                 'noLlm'     => 'Every figure, ranking and category here is computed from the organization\'s records. No language model contributed to any of them.',
             ],
         ];
@@ -252,8 +266,6 @@ final class RecommendationEngine
             'benefit'       => $this->benefit($gap),
             'effort'        => $this->effort($gap),
             'esoType'       => self::ESO_TYPE[$kind] ?? 'Workflow',
-            'esoId'         => null,
-            'esoNote'       => 'No executable object definitions exist for this organization, so this cannot yet be bound to something runnable. The execution type it needs is stated instead.',
             'nextAction'    => (string) $gap['closedWhen'],
             'dependencies'  => [],
             'provenance'    => $gap['provenance'],
@@ -368,8 +380,6 @@ final class RecommendationEngine
             ],
             'effort'        => ['measurable' => false, 'basis' => 'Registering a risk is a single record. The mitigation behind it cannot be sized until it is chosen.'],
             'esoType'       => 'Workflow',
-            'esoId'         => null,
-            'esoNote'       => 'No executable object definitions exist for this organization, so this cannot yet be bound to something runnable.',
             'nextAction'    => 'Create the register entry with likelihood '.number_format((float) ($risk['likelihood'] ?? 0), 2).' and impact class '.($risk['impactBand'] ?? 'unknown').', assign an owner, then choose a mitigation.',
             'dependencies'  => [],
             'provenance'    => $risk['provenance'],
@@ -441,8 +451,6 @@ final class RecommendationEngine
                 ],
                 'effort'        => ['measurable' => false, 'basis' => 'Depends on whether the weak component is a recording change, a process change, or simply more elapsed time.'],
                 'esoType'       => 'Learning',
-                'esoId'         => null,
-                'esoNote'       => 'No executable object definitions exist for this organization, so this cannot yet be bound to something runnable.',
                 'nextAction'    => 'Address `'.$weakest['key'].'` for this domain, then re-read this screen — the confidence is recomputed from records on every request, so the change will show without any manual update.',
                 'dependencies'  => [],
                 'provenance'    => Provenance::of('exposure = records x (1 - confidence), ranked; weakest component = largest weighted shortfall')
@@ -576,6 +584,52 @@ final class RecommendationEngine
             $score >= 0.15 => 'medium',
             default        => 'low',
         };
+    }
+
+    /**
+     * Bind every recommendation to a real executable object, where one exists.
+     *
+     * ONE WRITER. This is the only place `esoId` and `esoNote` are set. They
+     * were previously written at three separate construction sites, each with
+     * the same hardcoded null and the same fixed sentence asserting the
+     * organization had no ESO definitions — a claim the code was in no position
+     * to make, and which was false for every tenant that had authored any. With
+     * one writer the three kinds of recommendation cannot describe the
+     * catalogue differently.
+     *
+     * The match itself is EsoCatalogue's: an ESO whose own gap_types name this
+     * recommendation's finding. Nothing here guesses.
+     *
+     * @param array<int, array<string, mixed>> $recommendations
+     */
+    private function bindExecutables(array &$recommendations, EsoCatalogue $catalogue): void
+    {
+        foreach ($recommendations as &$recommendation) {
+            $recommendation += $catalogue->bindingFor(
+                $recommendation['sourceKind'] ?? null,
+                (string) ($recommendation['esoType'] ?? 'Workflow'),
+            );
+        }
+
+        unset($recommendation);
+    }
+
+    /**
+     * How binding worked on this read, stated against what the catalogue
+     * actually holds rather than against an assumption baked in at authoring
+     * time.
+     */
+    private function bindingMethodNote(EsoCatalogue $catalogue): string
+    {
+        $base = 'Each recommendation names the execution type it needs (Assessment, Learning, Workflow or Communication).';
+
+        if ($catalogue->total() === 0) {
+            return $base.' Binding to a specific executable object requires definitions in hpbrain_eso_definitions, and this organization has none.';
+        }
+
+        return $base.' It is bound to a specific executable object only where an ESO in this organization\'s catalogue ('
+            .$catalogue->total().' defined, '.$catalogue->inServiceCount().' in service) declares that finding in its own gap types. '
+            .'No match is inferred from wording or category, so an unbound recommendation means no ESO claims this finding — not that none could.';
     }
 
     private function because(?string $kind, string $prerequisite): string

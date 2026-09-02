@@ -8,6 +8,7 @@ use App\Domain\Events\LoopEvent;
 use App\Support\Jwt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Testing\TestResponse;
 use Ramsey\Uuid\Uuid;
 use Tests\Support\BuildsBrainSchema;
 use Tests\TestCase;
@@ -31,9 +32,11 @@ final class MeasurementPlanTest extends TestCase
     use BuildsBrainSchema;
 
     private const TENANT = 'tenant-alpha';
-    private const ACTOR  = 'user-manager';
+
+    private const ACTOR = 'user-manager';
 
     private string $decisionId;
+
     private string $esoId;
 
     protected function setUp(): void
@@ -44,7 +47,7 @@ final class MeasurementPlanTest extends TestCase
         $this->buildPhase2Schema();
 
         $this->decisionId = Uuid::uuid4()->toString();
-        $this->esoId      = Uuid::uuid4()->toString();
+        $this->esoId = Uuid::uuid4()->toString();
 
         DB::table('hpbrain_decisions')->insert([
             'id' => $this->decisionId, 'tenant_id' => self::TENANT,
@@ -55,6 +58,9 @@ final class MeasurementPlanTest extends TestCase
         DB::table('hpbrain_eso_definitions')->insert([
             'id' => $this->esoId, 'tenant_id' => self::TENANT,
             'eso_code' => 'ESO-FEE-REMIND', 'name' => 'Targeted fee reminder',
+            // See EsoExecutionTest: the status column defaults to 'draft', and a
+            // draft ESO is not runnable.
+            'status' => 'active',
         ]);
     }
 
@@ -78,29 +84,29 @@ final class MeasurementPlanTest extends TestCase
         $id = Uuid::uuid4()->toString();
 
         DB::table('hpbrain_measurement_plans')->insert(array_replace([
-            'id'              => $id,
-            'tenant_id'       => self::TENANT,
-            'decision_id'     => $this->decisionId,
+            'id' => $id,
+            'tenant_id' => self::TENANT,
+            'decision_id' => $this->decisionId,
             'baseline_metric' => 'Grade 9 collection rate',
-            'baseline_value'  => 0.51,
-            'target_value'    => 0.70,
-            'metric_unit'     => 'ratio',
+            'baseline_value' => 0.51,
+            'target_value' => 0.70,
+            'metric_unit' => 'ratio',
             'measurement_window_days' => 14,
-            'owner_id'        => self::ACTOR,
-            'created_by'      => self::ACTOR,
-            'created_date'    => '2026-07-21 09:00:00',
+            'owner_id' => self::ACTOR,
+            'created_by' => self::ACTOR,
+            'created_date' => '2026-07-21 09:00:00',
         ], $overrides));
 
         return $id;
     }
 
     /** @param array<string, mixed> $overrides */
-    private function execute(array $overrides = []): \Illuminate\Testing\TestResponse
+    private function execute(array $overrides = []): TestResponse
     {
         return $this->postJson('/api/v1/eso-executions', array_replace([
-            'decisionId'      => $this->decisionId,
+            'decisionId' => $this->decisionId,
             'esoDefinitionId' => $this->esoId,
-            'executorType'    => 'human',
+            'executorType' => 'human',
         ], $overrides), $this->auth());
     }
 
@@ -173,6 +179,81 @@ final class MeasurementPlanTest extends TestCase
         self::assertSame(0, DB::table('hpbrain_eso_executions')->count());
     }
 
+    public function test_an_execution_for_an_unknown_or_cross_tenant_eso_is_refused(): void
+    {
+        $this->seedPlan();
+
+        $this->execute(['esoDefinitionId' => Uuid::uuid4()->toString()])
+            ->assertStatus(422)
+            ->assertJson(['error' => 'eso_not_found']);
+
+        $otherTenantEso = Uuid::uuid4()->toString();
+        DB::table('hpbrain_eso_definitions')->insert([
+            'id' => $otherTenantEso,
+            'tenant_id' => 'tenant-beta',
+            'eso_code' => 'ESO-OTHER',
+            'name' => 'Other tenant action',
+        ]);
+
+        $this->execute(['esoDefinitionId' => $otherTenantEso])
+            ->assertStatus(422)
+            ->assertJson(['error' => 'eso_not_found']);
+
+        self::assertSame(0, DB::table('hpbrain_eso_executions')->count());
+    }
+
+    public function test_an_execution_for_a_non_approved_decision_is_refused(): void
+    {
+        DB::table('hpbrain_decisions')->where('id', $this->decisionId)->update(['status' => 'proposed']);
+        $this->seedPlan();
+
+        $this->execute()
+            ->assertStatus(422)
+            ->assertJson(['error' => 'decision_not_approved']);
+
+        self::assertSame(0, DB::table('hpbrain_eso_executions')->count());
+    }
+
+    public function test_execution_records_available_evidence_and_transition_output(): void
+    {
+        $this->seedPlan();
+
+        $evidenceId = Uuid::uuid4()->toString();
+        DB::table('hpbrain_evidence')->insert([
+            'id' => $evidenceId,
+            'tenant_id' => self::TENANT,
+            'source' => 'test',
+            'evidence_type' => 'observation',
+            'content' => json_encode(['statement' => 'Reminder batch basis.']),
+            'provenance' => json_encode(['method' => 'test']),
+            'confidence' => 0.8,
+            'hash' => 'hash-'.$evidenceId,
+            'status' => 'active',
+            'created_by' => self::ACTOR,
+            'created_date' => now()->format('Y-m-d H:i:s'),
+        ]);
+
+        $response = $this->execute(['evidenceIds' => [$evidenceId]]);
+        $response->assertStatus(201);
+
+        $executionId = $response->json('id');
+        self::assertSame(1, DB::table('hpbrain_eso_execution_evidence')
+            ->where('tenant_id', self::TENANT)
+            ->where('execution_id', $executionId)
+            ->where('evidence_id', $evidenceId)
+            ->count());
+
+        $this->patchJson('/api/v1/eso-executions/'.self::TENANT.'/'.$executionId.'/transition', [
+            'status' => 'completed',
+            'output' => ['batchId' => 'B-1'],
+        ], $this->auth())->assertStatus(200);
+
+        $row = DB::table('hpbrain_eso_executions')->where('id', $executionId)->first();
+        self::assertSame('completed', $row->status);
+        self::assertSame(['batchId' => 'B-1'], json_decode((string) $row->output, true));
+        self::assertNotNull($row->completed_date);
+    }
+
     public function test_the_legacy_inline_plan_is_refused_under_strict_invariant_4(): void
     {
         // Invariant 4 strict: a plan must be created via POST /measurement-plans
@@ -191,8 +272,8 @@ final class MeasurementPlanTest extends TestCase
         // The strict path: caller creates a plan in a separate request, then
         // starts the execution. The plan's created_date pre-dates the run.
         $this->postJson('/api/v1/measurement-plans', [
-            'decisionId'            => $this->decisionId,
-            'baselineMetric'        => 'Grade 9 collection rate, 14 days after the reminder.',
+            'decisionId' => $this->decisionId,
+            'baselineMetric' => 'Grade 9 collection rate, 14 days after the reminder.',
             'measurementWindowDays' => 14,
         ], $this->auth())->assertStatus(201);
 

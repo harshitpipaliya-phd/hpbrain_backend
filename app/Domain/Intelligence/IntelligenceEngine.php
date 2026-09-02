@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Intelligence;
 
+use App\Domain\Eso\EsoCatalogue;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 
@@ -241,7 +242,12 @@ final class IntelligenceEngine
         $capability = $this->capability->analyse($tenantId, $profile);
         $gaps       = $this->gaps->detect($tenantId, $profile, $knowledge, $capability, $decisions, $risks);
         $state      = $this->state->analyse($tenantId, $profile, $knowledge, $capability, $decisions, $risks, $gaps);
-        $recommendations = $this->recommendations->recommend($gaps, $risks, $state, $knowledge);
+        // The tenant's own executable objects, so a recommendation can name a
+        // real ESO where one declares its finding. hpbrain_eso_definitions is
+        // already in OrganizationDataProfiler::LOOP_TABLES, so authoring an ESO
+        // changes the data version and this composition is recomputed — a new
+        // definition binds on the next read without a manual cache flush.
+        $recommendations = $this->recommendations->recommend($gaps, $risks, $state, $knowledge, EsoCatalogue::forTenant($tenantId));
 
         return [
             'tenantId'    => $tenantId,

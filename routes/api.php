@@ -3,85 +3,86 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\AiController;
+use App\Http\Controllers\Api\AiEvaluationController;
+use App\Http\Controllers\Api\AiFeedbackController;
+use App\Http\Controllers\Api\AiPromptTemplateController;
+use App\Http\Controllers\Api\AiProviderController;
+use App\Http\Controllers\Api\AiQuotaController;
+use App\Http\Controllers\Api\AiWorkspaceController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AuditController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BrandingController;
 use App\Http\Controllers\Api\CapabilityController;
 use App\Http\Controllers\Api\CaseController;
 use App\Http\Controllers\Api\CaseSignalEvidenceController;
-use App\Http\Controllers\Api\RecommendationCaseContextController;
+use App\Http\Controllers\Api\CompetencyController;
+use App\Http\Controllers\Api\ConfigVersionController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DashboardWidgetController;
 use App\Http\Controllers\Api\DecisionController;
 use App\Http\Controllers\Api\DepartmentController;
+use App\Http\Controllers\Api\EntityMappingController;
 use App\Http\Controllers\Api\EsoExecutionController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\EvidenceController;
 use App\Http\Controllers\Api\ExecutorController;
+use App\Http\Controllers\Api\FeatureFlagController;
+use App\Http\Controllers\Api\FormController;
 use App\Http\Controllers\Api\GraphController;
 use App\Http\Controllers\Api\HypothesisController;
+use App\Http\Controllers\Api\ImportController;
+use App\Http\Controllers\Api\IndustryController;
+use App\Http\Controllers\Api\IndustryTemplateController;
+use App\Http\Controllers\Api\IngestionController;
+use App\Http\Controllers\Api\IntelligenceOverviewController;
 use App\Http\Controllers\Api\KasbaController;
 use App\Http\Controllers\Api\KnowledgeLibraryController;
 use App\Http\Controllers\Api\LearningController;
+use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\LocationTypeController;
 use App\Http\Controllers\Api\MeasurementPlanController;
 use App\Http\Controllers\Api\MentalModelController;
+use App\Http\Controllers\Api\ModuleController;
+use App\Http\Controllers\Api\NavigationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ObservabilityController;
+use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\OperationalIntelligenceController;
+use App\Http\Controllers\Api\OrganizationalMemoryController;
+use App\Http\Controllers\Api\OrganizationConfigController;
 use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\OrganizationDeletionController;
 use App\Http\Controllers\Api\OrganizationIntelligenceController;
+use App\Http\Controllers\Api\OrganizationModuleController;
+use App\Http\Controllers\Api\OrganizationTypeController;
+use App\Http\Controllers\Api\OrganizationUnitController;
 use App\Http\Controllers\Api\OutcomeController;
+use App\Http\Controllers\Api\PersonCompetencyController;
 use App\Http\Controllers\Api\PersonController;
-use App\Http\Controllers\Api\StudentController;
+use App\Http\Controllers\Api\PersonRoleController;
+use App\Http\Controllers\Api\PersonSkillController;
 use App\Http\Controllers\Api\PolicyController;
+use App\Http\Controllers\Api\PositionController;
+use App\Http\Controllers\Api\ReadinessCheckController;
 use App\Http\Controllers\Api\ReasoningController;
 use App\Http\Controllers\Api\ReasoningEngineController;
+use App\Http\Controllers\Api\RecommendationCaseContextController;
 use App\Http\Controllers\Api\RecommendationController;
+use App\Http\Controllers\Api\ReportingStructureController;
 use App\Http\Controllers\Api\RiskController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SignalController;
-use App\Http\Controllers\Api\TaskController;
-use App\Http\Controllers\Api\WorkspaceController;
-use App\Http\Controllers\Api\IndustryController;
-use App\Http\Controllers\Api\IntelligenceOverviewController;
-use App\Http\Controllers\Api\OrganizationConfigController;
-use App\Http\Controllers\Api\TerminologyController;
-use App\Http\Controllers\Api\EntityMappingController;
-use App\Http\Controllers\Api\FeatureFlagController;
-use App\Http\Controllers\Api\ModuleController;
-use App\Http\Controllers\Api\OrganizationModuleController;
-use App\Http\Controllers\Api\NavigationController;
-use App\Http\Controllers\Api\DashboardController;
-use App\Http\Controllers\Api\DashboardWidgetController;
-use App\Http\Controllers\Api\BrandingController;
-use App\Http\Controllers\Api\ThemeController;
-use App\Http\Controllers\Api\FormController;
-use App\Http\Controllers\Api\ConfigVersionController;
-use App\Http\Controllers\Api\IndustryTemplateController;
-use App\Http\Controllers\Api\OrganizationTypeController;
-use App\Http\Controllers\Api\OrganizationUnitController;
-use App\Http\Controllers\Api\RoleController;
-use App\Http\Controllers\Api\PositionController;
 use App\Http\Controllers\Api\SkillController;
-use App\Http\Controllers\Api\CompetencyController;
-use App\Http\Controllers\Api\PersonRoleController;
-use App\Http\Controllers\Api\PersonSkillController;
-use App\Http\Controllers\Api\PersonCompetencyController;
-use App\Http\Controllers\Api\LocationTypeController;
-use App\Http\Controllers\Api\LocationController;
-use App\Http\Controllers\Api\ReportingStructureController;
-use App\Http\Controllers\Api\OnboardingController;
-use App\Http\Controllers\Api\ImportController;
-use App\Http\Controllers\Api\IngestionController;
-use App\Http\Controllers\Api\ReadinessCheckController;
+use App\Http\Controllers\Api\StudentController;
+use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TemplateOverrideController;
-use App\Http\Controllers\Api\AiProviderController;
-use App\Http\Controllers\Api\AiPromptTemplateController;
-use App\Http\Controllers\Api\AiEvaluationController;
-use App\Http\Controllers\Api\AiFeedbackController;
-use App\Http\Controllers\Api\AiQuotaController;
-use App\Http\Controllers\Api\AiWorkspaceController;
+use App\Http\Controllers\Api\TerminologyController;
+use App\Http\Controllers\Api\ThemeController;
+use App\Http\Controllers\Api\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -174,6 +175,7 @@ Route::prefix('v1')->group(function () {
         Route::get('people/{tenantId}', [PersonController::class, 'index']);
         Route::post('people', [PersonController::class, 'store'])->middleware('permission:create');
         Route::get('people/{tenantId}/{id}', [PersonController::class, 'show']);
+        Route::get('people/{tenantId}/{id}/intelligence', [PersonController::class, 'intelligence']);
 
         /*
           EVERY LITERAL SEGMENT BEFORE /{id}. Laravel matches in registration
@@ -235,6 +237,10 @@ Route::prefix('v1')->group(function () {
         // `eso-executions/{tenantId}` only in spirit — it is a distinct path — but is
         // registered first so the two stay adjacent and legible.
         Route::get('eso-definitions/{tenantId}', [EsoExecutionController::class, 'definitions']);
+        // BEFORE `{id}`, or Laravel resolves an ESO whose id is the literal
+        // string "runnable-decisions".
+        Route::get('eso-definitions/{tenantId}/runnable-decisions', [EsoExecutionController::class, 'runnableDecisions']);
+        Route::get('eso-definitions/{tenantId}/{id}', [EsoExecutionController::class, 'definition']);
 
         Route::get('eso-executions/{tenantId}', [EsoExecutionController::class, 'index']);
         Route::post('eso-executions', [EsoExecutionController::class, 'store'])->middleware('permission:eso.execute');
@@ -369,10 +375,24 @@ Route::prefix('v1')->group(function () {
         Route::get('operations/{tenantId}/trends', [OperationalIntelligenceController::class, 'trends']);
         Route::get('operations/{tenantId}/loop', [OperationalIntelligenceController::class, 'loop']);
 
+        /*
+         * Knowledge Library — the RETRIEVE surface.
+         *
+         * ORDER MATTERS. `/summary` and `/search` are declared before the
+         * `{id}` route, or Laravel matches them as an asset whose id is the
+         * literal string "summary".
+         */
         Route::get('knowledge-library/{tenantId}/search', [KnowledgeLibraryController::class, 'search']);
+        Route::get('knowledge-library/{tenantId}/summary', [KnowledgeLibraryController::class, 'summary']);
         Route::get('knowledge-library/{tenantId}', [KnowledgeLibraryController::class, 'index']);
+        Route::get('knowledge-library/{tenantId}/{id}', [KnowledgeLibraryController::class, 'show']);
         Route::post('knowledge-library', [KnowledgeLibraryController::class, 'store'])->middleware('permission:create');
         Route::post('knowledge-library/{tenantId}/{id}/reuse', [KnowledgeLibraryController::class, 'markReused'])->middleware('permission:update');
+
+        // ---- Organizational Memory — the LEARN surface -----------------------
+        Route::get('organizational-memory/{tenantId}/summary', [OrganizationalMemoryController::class, 'summary']);
+        Route::get('organizational-memory/{tenantId}', [OrganizationalMemoryController::class, 'index']);
+        Route::get('organizational-memory/{tenantId}/{id}', [OrganizationalMemoryController::class, 'show']);
 
         // ---- Conversations ---------------------------------------------------
         Route::get('conversations/sessions/{tenantId}/search', [ConversationController::class, 'search']);
@@ -509,6 +529,10 @@ Route::prefix('v1')->group(function () {
         // Before nothing and after `{id}` — a distinct sub-path, so it cannot
         // be swallowed by the id route the way /summary and /intelligence were.
         Route::get('departments/{tenantId}/{id}/profile', [DepartmentController::class, 'profile']);
+        // The whole department intelligence screen in ONE request — verdict,
+        // evidence, blind spots and a page of the roster. Distinct sub-path for
+        // the same reason as /profile above.
+        Route::get('departments/{tenantId}/{id}/intelligence', [DepartmentController::class, 'departmentIntelligence']);
 
         Route::patch('people/{tenantId}/{id}', [PersonController::class, 'update'])->middleware('permission:update');
         Route::post('people/{tenantId}/{id}/archive', [PersonController::class, 'archive'])->middleware('permission:update');
@@ -834,4 +858,3 @@ Route::prefix('v1')->group(function () {
         });
     });
 });
-

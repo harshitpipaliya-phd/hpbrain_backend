@@ -150,6 +150,9 @@ final class ExecutionOutcomeLearningFlowTest extends TestCase
             'tenant_id' => self::TENANT,
             'eso_code' => 'ESO-FEE-FOLLOWUP',
             'name' => 'Targeted fee collection follow-up',
+            // A published ESO. The column defaults to 'draft', which
+            // EsoPreflight refuses to run.
+            'status' => 'active',
         ]);
 
         return $id;
