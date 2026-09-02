@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\Organization\DepartmentIntelligenceMetrics;
 use App\Domain\Organization\DepartmentProfile;
+use App\Domain\Organization\DepartmentVerdict;
 use App\Domain\Organization\DepartmentVisibilityScope;
 use App\Domain\School\AcademicSections;
 use App\Domain\Organization\FoundationCounts;
@@ -332,6 +333,56 @@ final class DepartmentController extends Controller
             : response()->json($profile);
     }
 
+
+    /**
+     * The department intelligence screen, whole, in one request.
+     *
+     * ONE ENDPOINT BECAUSE IT IS ONE JUDGEMENT. The screen opens with a verdict
+     * and then shows what the verdict rests on; assembled in the browser from the
+     * profile, the twin, the roster and the signal list, those four would
+     * eventually disagree about the same unit and the reader would have no way to
+     * tell which was right. DepartmentVerdict composes them from one set of
+     * cached aggregates, so they cannot.
+     *
+     * PAGING IS THE SERVER'S. `page` and `pageSize` cut the roster here rather
+     * than in the client, because a unit of 770 people is a real shape on this
+     * data and a screen that downloads all of them to show five stops working on
+     * the largest unit — the one most worth looking at.
+     *
+     * `fresh=1` bypasses the aggregate caches for a deliberate refresh. It is not
+     * the default: the caches are keyed on a fingerprint of the source rows, so
+     * an import invalidates them immediately and a reader never sees stale work.
+     *
+     * Tenant scope comes from the token via authTenantId(), never from the path,
+     * as on every other method here. A unit that is not this tenant's is a 404
+     * rather than an empty screen: "no such department for you" and "a department
+     * with nothing recorded" are different answers and the second one is a
+     * finding.
+     */
+    public function departmentIntelligence(
+        Request $request,
+        string $tenantId,
+        string $id,
+        DepartmentVerdict $verdicts,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'page' => 'sometimes|integer|min:1',
+            'pageSize' => 'sometimes|integer|min:1|max:50',
+            'fresh' => 'sometimes|boolean',
+        ]);
+
+        $payload = $verdicts->forDepartment(
+            $this->authTenantId($request),
+            $id,
+            (int) ($validated['page'] ?? 1),
+            (int) ($validated['pageSize'] ?? 5),
+            (bool) ($validated['fresh'] ?? false),
+        );
+
+        return $payload === null
+            ? response()->json(['error' => 'department_not_found'], 404)
+            : response()->json($payload);
+    }
 
     public function twin(Request $request, string $tenantId, string $id): JsonResponse
     {

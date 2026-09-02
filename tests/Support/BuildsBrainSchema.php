@@ -253,8 +253,42 @@ trait BuildsBrainSchema
         Schema::create('hpbrain_eso_definitions', function ($t) {
             $t->string('id', 36)->primary();
             $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
             $t->string('eso_code');
             $t->string('name');
+            $t->integer('version')->default(1);
+            $t->string('status', 50)->default('draft');
+            $t->string('owner', 36)->nullable();
+            $t->string('provenance', 100)->default('authored');
+            $t->string('kasba_node_id', 36)->nullable();
+            $t->string('kasba_node_type', 100)->nullable();
+            $t->boolean('is_cognitive_primitive')->default(false);
+            $t->text('trigger_description')->nullable();
+            $t->text('applicable_contexts')->default('[]');
+            $t->text('gap_types')->default('[]');
+            $t->string('objective', 50)->nullable();
+            $t->text('inputs')->default('[]');
+            $t->text('outputs')->default('[]');
+            $t->text('preconditions')->default('[]');
+            $t->text('prerequisites')->default('[]');
+            $t->text('constraints_policies')->default('[]');
+            $t->text('procedure_steps')->default('[]');
+            $t->text('allowed_executor_classes')->default('[]');
+            $t->string('trust_level', 50)->default('observe');
+            $t->text('routing_criteria')->default('{}');
+            $t->text('escalation_path')->default('[]');
+            $t->text('scaffolding')->default('{}');
+            $t->text('gotchas')->default('[]');
+            $t->text('assessment')->default('{}');
+            $t->text('evidence_hooks')->default('{}');
+            $t->text('resources')->default('[]');
+            $t->text('composed_of')->default('[]');
+            $t->text('composes_into')->default('[]');
+            $t->string('supersedes', 36)->nullable();
+            $t->string('superseded_by', 36)->nullable();
+            $t->string('created_by', 36)->nullable();
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
         });
 
         // Invariant 4 (2026_07_30_000100). An ESO run is refused without one.
@@ -308,6 +342,14 @@ trait BuildsBrainSchema
             $t->timestamp('completed_date')->nullable();
             $t->timestamp('created_date')->nullable();
             $t->string('eso_definition_id', 36)->nullable();
+        });
+
+        Schema::create('hpbrain_eso_execution_evidence', function ($t) {
+            $t->string('tenant_id', 36);
+            $t->string('execution_id', 36);
+            $t->string('evidence_id', 36);
+            $t->timestamp('linked_date')->nullable();
+            $t->primary(['execution_id', 'evidence_id']);
         });
 
         Schema::create('hpbrain_outcomes', function ($t) {

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Repositories\MeasurementPlanRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Ramsey\Uuid\Uuid;
 
 /**
@@ -19,40 +20,47 @@ use Ramsey\Uuid\Uuid;
  */
 final class MeasurementPlanController extends Controller
 {
-    public function __construct(private readonly MeasurementPlanRepository $repository)
-    {
-    }
+    public function __construct(private readonly MeasurementPlanRepository $repository) {}
 
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'decisionId'             => ['required', 'string'],
-            'baselineMetric'         => ['required', 'string', 'min:1'],
-            'baselineValue'          => ['nullable', 'numeric'],
-            'targetValue'            => ['nullable', 'numeric'],
-            'metricUnit'             => ['nullable', 'string', 'max:50'],
-            'measurementWindowDays'  => ['nullable', 'integer', 'min:1'],
-            'ownerId'                => ['nullable', 'string'],
+            'decisionId' => ['required', 'string'],
+            'baselineMetric' => ['required', 'string', 'min:1'],
+            'baselineValue' => ['nullable', 'numeric'],
+            'targetValue' => ['nullable', 'numeric'],
+            'metricUnit' => ['nullable', 'string', 'max:50'],
+            'measurementWindowDays' => ['nullable', 'integer', 'min:1'],
+            'ownerId' => ['nullable', 'string'],
         ]);
 
         $tenant = $this->tenantId($request);
-        $actor  = $this->actorId($request);
-        $now    = now()->format('Y-m-d H:i:s');
+        $actor = $this->actorId($request);
+        $now = now()->format('Y-m-d H:i:s');
+
+        $decision = DB::table('hpbrain_decisions')
+            ->where('tenant_id', $tenant)
+            ->where('id', $data['decisionId'])
+            ->first();
+
+        if (! $decision) {
+            return response()->json(['error' => 'decision_not_found'], 422);
+        }
 
         $id = Uuid::uuid4()->toString();
 
         $plan = [
-            'id'                      => $id,
-            'tenant_id'               => $tenant,
-            'decision_id'             => $data['decisionId'],
-            'baseline_metric'         => $data['baselineMetric'],
-            'baseline_value'          => $data['baselineValue'] ?? null,
-            'target_value'            => $data['targetValue'] ?? null,
-            'metric_unit'             => $data['metricUnit'] ?? null,
+            'id' => $id,
+            'tenant_id' => $tenant,
+            'decision_id' => $data['decisionId'],
+            'baseline_metric' => $data['baselineMetric'],
+            'baseline_value' => $data['baselineValue'] ?? null,
+            'target_value' => $data['targetValue'] ?? null,
+            'metric_unit' => $data['metricUnit'] ?? null,
             'measurement_window_days' => $data['measurementWindowDays'] ?? 14,
-            'owner_id'                => $data['ownerId'] ?? null,
-            'created_by'              => $actor,
-            'created_date'            => $now,
+            'owner_id' => $data['ownerId'] ?? null,
+            'created_by' => $actor,
+            'created_date' => $now,
         ];
 
         $this->repository->insert($plan);

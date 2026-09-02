@@ -69,14 +69,30 @@ final class DepartmentProfile
     /** Backlog above this share of a unit's work reads as pressure, not flow. */
     private const BACKLOG_PRESSURE = 0.35;
 
+    /**
+     * The turnaround that scores zero on service health: one full week.
+     *
+     * Named rather than inlined because it is the only place the service
+     * dimension's shape is decided, and a reader checking why a five-day average
+     * scored 29% has to be able to find it.
+     */
+    private const SERVICE_WEEK_HOURS = 168;
+
     public function __construct(private readonly DepartmentIntelligenceMetrics $metrics)
     {
     }
 
     /**
+     * @param  array<string, array<string, mixed>>  $ownerWork
+     *   Owner-attributed work per department id, from DepartmentWorkAttribution.
+     *   Optional and EMPTY BY DEFAULT, so every existing caller keeps the exact
+     *   score it had. Where it is supplied it fills dimensions the label
+     *   attribution could not measure — and it is supplied for EVERY department
+     *   at once or for none, because a unit scored on one basis inside a league
+     *   table built on another is not a ranking. See DepartmentWorkAttribution.
      * @return array<string, mixed>|null null when the unit is not this tenant's
      */
-    public function forDepartment(string $tenant, string $departmentId): ?array
+    public function forDepartment(string $tenant, string $departmentId, array $ownerWork = []): ?array
     {
         $all = $this->metrics->forTenant($tenant);
         $departments = $all['departments'] ?? [];
@@ -88,11 +104,12 @@ final class DepartmentProfile
         $m = $departments[$departmentId];
         $support = $all['support'] ?? [];
         $tenantTotals = $all['tenant'] ?? [];
+        $owner = $ownerWork[$departmentId] ?? null;
 
-        $dimensions = $this->dimensions($m, $support);
+        $dimensions = $this->dimensions($m, $support, $owner);
         $measured = array_values(array_filter($dimensions, static fn ($d) => $d['score'] !== null));
         $score = $this->composite($measured);
-        $position = $this->position($departmentId, $departments, $support);
+        $position = $this->position($departmentId, $departments, $support, $ownerWork);
         $performance = $this->performance($m);
         $workload = $this->workload($m);
         $people = $this->people($m);
@@ -123,7 +140,25 @@ final class DepartmentProfile
             'narrative' => $this->narrative($m, $performance, $workload, $contribution, $position),
             'nextAction' => $this->nextAction($m, $performance, $workload, $dimensions),
             'unclaimedWork' => $m['unclaimedWork'] ?? null,
+            // Published alongside, never folded in: the reader is entitled to see
+            // which records were counted as this unit's because a person on its
+            // roster handled them, rather than because an export said so.
+            'ownerWork' => $owner,
         ];
+    }
+
+    /**
+     * The weights, so one place decides them.
+     *
+     * The screen renders whatever this returns; it does not carry a copy. A
+     * second table of weights in the client is how a "how this score is
+     * calculated" panel comes to explain a formula the server is not using.
+     *
+     * @return array<string, array{label: string, weight: float}>
+     */
+    public static function weights(): array
+    {
+        return self::DIMENSIONS;
     }
 
     /**
@@ -133,11 +168,26 @@ final class DepartmentProfile
      * that kind, or when the unit's sample is too small for a rate to mean
      * anything. Both are reported with the reason, and neither is a zero.
      *
+     * TWO ATTRIBUTION BASES, TRIED IN A FIXED ORDER, NEVER BLENDED.
+     *
+     * The label basis — the owning unit the source export stated — is preferred
+     * wherever it exists, because it is the organization's own declaration of who
+     * owns the work. Only where it is silent does the owner basis speak: records
+     * handled by someone on this unit's roster. Each dimension's `basis` sentence
+     * names which one produced the number and, for the owner basis, which dataset
+     * and how much of it the unit owns, so the two can never be mistaken for each
+     * other. `attribution` carries the same fact as a machine-readable field.
+     *
+     * They are never averaged, and the owner basis never adjusts a label figure.
+     * Two ways of counting the same work will disagree, and a screen that split
+     * the difference would be reporting a number that neither source supports.
+     *
      * @param  array<string, mixed>  $m
      * @param  array<string, mixed>  $support
+     * @param  array<string, mixed>|null  $owner
      * @return array<int, array<string, mixed>>
      */
-    private function dimensions(array $m, array $support): array
+    private function dimensions(array $m, array $support, ?array $owner = null): array
     {
         $out = [];
 
@@ -146,48 +196,103 @@ final class DepartmentProfile
         $completion = $m['operationalCompletionRate'] ?? null;
         $people = (int) ($m['people'] ?? 0);
 
+        $work = ($owner['work'] ?? null);
+        $work = ($work['supported'] ?? false) === true ? $work : null;
+
+        // How the owner basis names itself in a basis sentence. One phrase, so
+        // every dimension that falls back to it says so identically.
+        $handled = $work === null ? '' : sprintf(
+            ' Attributed by owner: %s records in %s handled by people on this roster.',
+            number_format((int) $work['records']),
+            (string) $work['label'],
+        );
+
         // ---- operational performance: what share of measurable work completed
+        $ownerCompletion = ($work !== null && (int) $work['classified'] >= self::RATE_FLOOR)
+            ? $work['completionRate']
+            : null;
+
         $out[] = $this->dimension(
             'operational',
-            $completion === null ? null : (float) $completion * 100,
+            $completion !== null
+                ? (float) $completion * 100
+                : ($ownerCompletion === null ? null : (float) $ownerCompletion * 100),
             $completion !== null
                 ? sprintf('%s%% of %s classified records completed.', round((float) $completion * 100), number_format((int) $classified))
-                : ($records === null
-                    ? 'This organization does not attribute operational records to a department, so completion cannot be measured here.'
-                    : sprintf('Only %s classified records — below the %d needed for a rate to mean anything.', number_format((int) $classified), self::RATE_FLOOR)),
+                : ($ownerCompletion !== null
+                    ? sprintf('%s%% of %s classified records completed.', round((float) $ownerCompletion * 100), number_format((int) $work['classified'])).$handled
+                    : ($records === null
+                        ? 'No imported record names this unit as its owning department, and none is handled by anyone on its roster, so completion cannot be measured here.'
+                        : sprintf('Only %s classified records — below the %d needed for a rate to mean anything.', number_format((int) $classified), self::RATE_FLOOR))),
+            $completion !== null ? 'label' : ($ownerCompletion !== null ? 'owner' : null),
         );
 
         // ---- workload health: backlog as a share of the unit's own work
         $backlog = $m['operationalBacklog'] ?? null;
         $backlogShare = ($records !== null && $records > 0 && $backlog !== null) ? $backlog / $records : null;
+
+        $ownerBacklogShare = ($work !== null && (int) $work['classified'] > 0)
+            ? (int) $work['open'] / (int) $work['classified']
+            : null;
+
+        $share = $backlogShare ?? $ownerBacklogShare;
+
         $out[] = $this->dimension(
             'workload',
-            $backlogShare === null ? null : max(0, 100 - ($backlogShare / self::BACKLOG_PRESSURE) * 100),
-            $backlogShare === null
-                ? 'No imported record names this unit, so open workload cannot be measured.'
-                : sprintf('%s of %s records are still open (%s%%).', number_format((int) $backlog), number_format((int) $records), round($backlogShare * 100)),
+            $share === null ? null : max(0, 100 - ($share / self::BACKLOG_PRESSURE) * 100),
+            $backlogShare !== null
+                ? sprintf('%s of %s records are still open (%s%%).', number_format((int) $backlog), number_format((int) $records), round($backlogShare * 100))
+                : ($ownerBacklogShare !== null
+                    ? sprintf('%s of %s classified records are still open (%s%%).', number_format((int) $work['open']), number_format((int) $work['classified']), round($ownerBacklogShare * 100)).$handled
+                    : 'No imported record names this unit, and none is handled by anyone on its roster, so open workload cannot be measured.'),
+            $backlogShare !== null ? 'label' : ($ownerBacklogShare !== null ? 'owner' : null),
         );
 
         // ---- execution reliability: work that ended in a result, not a cancel
         $cancellation = $m['operationalCancellationRate'] ?? null;
+        $ownerCancellation = ($work !== null && (int) $work['classified'] >= self::RATE_FLOOR)
+            ? $work['cancellationRate']
+            : null;
+
+        $rate = $cancellation ?? $ownerCancellation;
+
         $out[] = $this->dimension(
             'execution',
-            $cancellation === null ? null : max(0, 100 - (float) $cancellation * 100 * 2),
-            $cancellation === null
-                ? 'Cancellation cannot be measured without enough classified records.'
-                : sprintf('%s%% of classified work was cancelled rather than completed.', round((float) $cancellation * 100, 1)),
+            $rate === null ? null : max(0, 100 - (float) $rate * 100 * 2),
+            $cancellation !== null
+                ? sprintf('%s%% of classified work was cancelled rather than completed.', round((float) $cancellation * 100, 1))
+                : ($ownerCancellation !== null
+                    ? sprintf('%s%% of classified work was cancelled rather than completed.', round((float) $ownerCancellation * 100, 1)).$handled
+                    : 'Cancellation cannot be measured without enough classified records.'),
+            $cancellation !== null ? 'label' : ($ownerCancellation !== null ? 'owner' : null),
         );
 
         // ---- people coverage: how completely the roster is recorded
-        $probes = array_values(array_filter([
-            $m['peopleWithRole'] ?? null,
-            $m['peopleWithContact'] ?? null,
-            $m['peopleWithReference'] ?? null,
-        ], static fn ($v) => $v !== null));
+        $probes = [];
+
+        foreach (['peopleWithRole' => 'a role', 'peopleWithContact' => 'contact details', 'peopleWithReference' => 'a reference'] as $key => $label) {
+            if (($m[$key] ?? null) !== null) {
+                $probes[$label] = (int) $m[$key];
+            }
+        }
 
         $coverage = ($people > 0 && $probes !== [])
             ? array_sum(array_map(static fn ($v) => min(1, $v / $people), $probes)) / count($probes) * 100
             : null;
+
+        /*
+          THE SENTENCE NAMES THE FIELDS, because the score is a mean over them and
+          a reader cannot check a mean they cannot see the terms of. It read
+          "3 of 3 recorded fields are filled across 111 people" for a roster where
+          two of the three fields were empty for every one of those 111 — it was
+          counting the PROBES that ran, and phrasing that count as coverage. The
+          number beside it said 33% and the sentence said everything was filled.
+        */
+        $filled = [];
+
+        foreach ($probes as $label => $have) {
+            $filled[] = sprintf('%s for %s of %s', $label, number_format($have), number_format($people));
+        }
 
         $out[] = $this->dimension(
             'people',
@@ -196,20 +301,34 @@ final class DepartmentProfile
                 ? ($people === 0
                     ? 'No people are assigned to this unit, so there is no roster to measure.'
                     : 'This roster carries none of the fields coverage is measured from.')
-                : sprintf('%d of %s recorded fields are filled across %s people.', count($probes), count($probes), number_format($people)),
+                : ucfirst(implode('; ', $filled)).'.',
+            'label',
         );
 
         // ---- service health: how quickly work closes
         $turnaround = $m['operationalTurnaroundHours'] ?? null;
         $measuredTurn = (int) ($m['operationalTurnaroundMeasured'] ?? 0);
+        $labelTurn = ($turnaround !== null && $measuredTurn >= self::RATE_FLOOR) ? (float) $turnaround : null;
+
+        $ownerTurn = null;
+        $ownerTurnMeasured = 0;
+
+        if ($work !== null && ($work['turnaround']['supported'] ?? false)) {
+            $ownerTurnMeasured = (int) $work['turnaround']['measured'];
+            $ownerTurn = $ownerTurnMeasured >= self::RATE_FLOOR ? (float) $work['turnaround']['averageHours'] : null;
+        }
+
+        $hours = $labelTurn ?? $ownerTurn;
+
         $out[] = $this->dimension(
             'service',
-            ($turnaround === null || $measuredTurn < self::RATE_FLOOR)
-                ? null
-                : max(0, 100 - min(100, ((float) $turnaround / 168) * 100)),
-            ($turnaround === null || $measuredTurn < self::RATE_FLOOR)
-                ? 'Too few records carry both an opened and a closed timestamp for turnaround to be measured.'
-                : sprintf('Work closes in %s hours on average, measured over %s records.', number_format((float) $turnaround, 1), number_format($measuredTurn)),
+            $hours === null ? null : max(0, 100 - min(100, ($hours / self::SERVICE_WEEK_HOURS) * 100)),
+            $labelTurn !== null
+                ? sprintf('Work closes in %s hours on average, measured over %s records.', number_format($labelTurn, 1), number_format($measuredTurn))
+                : ($ownerTurn !== null
+                    ? sprintf('Work closes in %s hours on average, measured over %s records.', number_format($ownerTurn, 1), number_format($ownerTurnMeasured)).$handled
+                    : 'Too few records carry both an opened and a closed timestamp for turnaround to be measured.'),
+            $labelTurn !== null ? 'label' : ($ownerTurn !== null ? 'owner' : null),
         );
 
         // ---- signal health: what is open against this unit
@@ -224,6 +343,7 @@ final class DepartmentProfile
                 : ($signalsTotal === 0
                     ? 'No signal has been raised against this unit.'
                     : sprintf('%d of %d signals against this unit are still open.', $signalsOpen, $signalsTotal)),
+            'label',
         );
 
         // ---- data confidence: how much of the model this unit can answer
@@ -238,19 +358,32 @@ final class DepartmentProfile
             }
         }
 
+        /*
+          OWNER ATTRIBUTION COUNTS TOWARDS THIS TOO. `support.operational` says
+          whether the organization's exports NAME a department. Where they do not
+          but the roster still reaches the records through their owner, this unit
+          can answer the operational question — and a confidence figure that said
+          otherwise would be describing the column rather than the knowledge.
+        */
+        if (($support['operational'] ?? false) !== true && $work !== null) {
+            $answerable++;
+        }
+
         $out[] = $this->dimension(
             'confidence',
             $possible > 0 ? ($answerable / $possible) * 100 : null,
             sprintf('This organization records %d of %d kinds of data this model reads.', $answerable, $possible),
+            'label',
         );
 
         return $out;
     }
 
     /**
+     * @param  string|null  $attribution  'label', 'owner', or null when unmeasured
      * @return array<string, mixed>
      */
-    private function dimension(string $key, ?float $score, string $basis): array
+    private function dimension(string $key, ?float $score, string $basis, ?string $attribution = null): array
     {
         $rounded = $score === null ? null : (int) round(max(0, min(100, $score)));
 
@@ -261,6 +394,10 @@ final class DepartmentProfile
             'score' => $rounded,
             'status' => $rounded === null ? null : $this->band($rounded),
             'basis' => $basis,
+            // Which of the two attribution bases produced the score, so the
+            // screen can label it and a reader can tell them apart. Null where
+            // the dimension is not measured at all.
+            'attribution' => $rounded === null ? null : $attribution,
         ];
     }
 
@@ -465,9 +602,10 @@ final class DepartmentProfile
      *
      * @param  array<string, array<string, mixed>>  $departments
      * @param  array<string, mixed>  $support
+     * @param  array<string, array<string, mixed>>  $ownerWork
      * @return array<string, mixed>
      */
-    private function position(string $id, array $departments, array $support): array
+    private function position(string $id, array $departments, array $support, array $ownerWork = []): array
     {
         $rank = function (callable $value) use ($id, $departments): array {
             $scored = [];
@@ -508,7 +646,15 @@ final class DepartmentProfile
         $peers = [];
 
         foreach ($departments as $key => $row) {
-            $dims = $this->dimensions($row, $support);
+            /*
+              EVERY PEER SCORED THE SAME WAY, INCLUDING ON ATTRIBUTION. `$ownerWork`
+              is passed whole rather than for this unit alone, so a rank compares
+              thirteen numbers built by one method. Scoring the opened unit on
+              owner attribution while its peers stayed on label attribution would
+              move it up the table for reasons that have nothing to do with its
+              performance.
+            */
+            $dims = $this->dimensions($row, $support, $ownerWork[(string) $key] ?? null);
             $measured = array_values(array_filter($dims, static fn ($d) => $d['score'] !== null));
             $composite = $this->composite($measured);
 
@@ -769,7 +915,9 @@ final class DepartmentProfile
         }
 
         // ---- opportunity
-        foreach (['peopleWithRole' => 'a role', 'peopleWithReference' => 'a reference', 'peopleWithContact' => 'contact details'] as $key => $label) {
+        // Bare nouns, because the sentence already supplies the article: the
+        // labelled forms ("a role") produced "have no a role recorded".
+        foreach (['peopleWithRole' => 'role', 'peopleWithReference' => 'reference', 'peopleWithContact' => 'contact details'] as $key => $label) {
             $have = $m[$key] ?? null;
             $people = (int) ($m['people'] ?? 0);
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\People\PersonIntelligenceService;
 use App\Domain\People\PersonProfileService;
 use App\Domain\Universal\EntityResolver;
 use App\Domain\Universal\ResolvedSource;
@@ -508,12 +509,35 @@ final class PersonController extends Controller
             'learningContributions' => $intelligence['learnings'],
             'recentActivity'        => array_map(static fn ($a) => [
                 'type'       => $a['action'],
-                'entityType' => $a['entityType'],
-                'createdAt'  => $a['createdAt'],
+                'entityType' => $a->entityType ?? null,
+                'createdAt'  => $a->createdAt ?? null,
             ], $profile['audit']),
             'guardians'             => $profile['contacts']['guardians'],
             'executionHistory'      => $intelligence['executions'],
             'individualScore'       => $intelligence['score'],
         ]);
+    }
+
+    /**
+     * GET /api/v1/people/{tenantId}/{id}/intelligence
+     *
+     * The redesigned Person Profile screen reads this single endpoint. It
+     * returns the verdict (band + score + reason), the data confidence ring,
+     * since-refresh changes, contribution, presence, consistency (including
+     * the cross-source mismatch detection D3), capability, loop involvement,
+     * the paginated records list, blind spots, and a full score explanation.
+     */
+    public function intelligence(Request $request, string $tenantId, string $id, PersonIntelligenceService $service): JsonResponse
+    {
+        $tenant = $this->authTenantId($request);
+        $page = max(1, (int) $request->query('page', 1));
+        $pageSize = max(1, min(100, (int) $request->query('page_size', 25)));
+
+        $payload = $service->buildWithPage($tenant, $id, $page, $pageSize);
+        if ($payload === null) {
+            return response()->json(['error' => 'person_not_found'], 404);
+        }
+
+        return response()->json($payload);
     }
 }

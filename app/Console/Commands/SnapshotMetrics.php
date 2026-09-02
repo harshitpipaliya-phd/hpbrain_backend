@@ -6,6 +6,10 @@ namespace App\Console\Commands;
 
 use App\Domain\Capability\DemandService;
 use App\Domain\Metrics\SnapshotWriter;
+use App\Domain\Organization\DepartmentIntelligenceMetrics;
+use App\Domain\Organization\DepartmentProfile;
+use App\Domain\Organization\DepartmentRosterReader;
+use App\Domain\Organization\DepartmentVerdict;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -97,6 +101,57 @@ final class SnapshotMetrics extends Command
         $this->snapshotMemory($writer, $tenantId);
         $this->snapshotCapabilities($writer, $tenantId);
         $this->snapshotDecisionLatency($writer, $tenantId);
+        $this->snapshotDepartmentHealth($writer, $tenantId);
+    }
+
+    /**
+     * Each department's health score, one row per unit per day.
+     *
+     * WHY THIS IS HERE AND NOT ON THE SCREEN. The department intelligence screen
+     * opens with "down 4 points since the last refresh", and that sentence needs
+     * two measurements. Computing it on the read path would mean either writing
+     * on a GET — so the delta would depend on who opened the page and when — or
+     * inventing a baseline, which is the one thing this product does not do. The
+     * scheduled snapshot is the only honest source of movement, and until it has
+     * run twice the screen says so rather than showing a zero.
+     *
+     * NULL WHERE THE UNIT CANNOT BE SCORED, never zero: an unscorable department
+     * and a department scoring zero are opposite findings, and a series that
+     * converted one into the other would draw a flat line along the bottom of the
+     * chart and present it as a measurement.
+     *
+     * Scored on the SAME BASIS the screen uses — owner attribution included, for
+     * every unit at once — so a delta compares like with like. A snapshot taken on
+     * the label basis against a screen reading the owner basis would report
+     * movement that never happened.
+     */
+    private function snapshotDepartmentHealth(SnapshotWriter $w, string $tenantId): void
+    {
+        $metrics = app(DepartmentIntelligenceMetrics::class)->forTenant($tenantId);
+        $departments = array_keys($metrics['departments'] ?? []);
+
+        if ($departments === []) {
+            return;
+        }
+
+        $profiles = app(DepartmentProfile::class);
+        $ownerWork = app(DepartmentRosterReader::class)->ownerWorkFor($tenantId);
+
+        foreach ($departments as $departmentId) {
+            $profile = $profiles->forDepartment($tenantId, (string) $departmentId, $ownerWork);
+
+            if ($profile === null) {
+                continue;
+            }
+
+            $w->write(
+                $tenantId,
+                DepartmentVerdict::HEALTH_METRIC,
+                $profile['score'] === null ? null : (float) $profile['score'],
+                dimensionKey: (string) $departmentId,
+                sampleN: (int) ($profile['measuredCount'] ?? 0),
+            );
+        }
     }
 
     private function snapshotSignals(SnapshotWriter $w, string $t): void

@@ -49,6 +49,11 @@ final class EsoExecutionTest extends TestCase
         DB::table('hpbrain_eso_definitions')->insert([
             'id' => $this->esoId, 'tenant_id' => self::TENANT,
             'eso_code' => 'ESO-FEE-REMIND', 'name' => 'Targeted fee reminder',
+            // Published, because that is what a runnable ESO is. The column
+            // defaults to 'draft' and EsoPreflight refuses to execute a draft,
+            // so a fixture without this was exercising the run path against a
+            // definition nobody had released.
+            'status' => 'active',
         ]);
 
         DB::table('hpbrain_measurement_plans')->insert([

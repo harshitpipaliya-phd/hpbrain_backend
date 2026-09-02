@@ -1230,6 +1230,36 @@
     "unverifiedResponse": true
   },
   {
+    "name": "DepartmentIntelligenceGetDepartmentsTenantIdIntelligence",
+    "method": "GET",
+    "path": "/departments/{tenantId}/intelligence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@intelligence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentSectionsGetDepartmentsTenantIdSections",
+    "method": "GET",
+    "path": "/departments/{tenantId}/sections",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@sections",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentSummaryGetDepartmentsTenantIdSummary",
+    "method": "GET",
+    "path": "/departments/{tenantId}/summary",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@summary",
+    "unverifiedResponse": true
+  },
+  {
     "name": "DepartmentShowGetDepartmentsTenantIdId",
     "method": "GET",
     "path": "/departments/{tenantId}/{id}",
@@ -1269,6 +1299,26 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\DepartmentController@audit",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentDepartmentIntelligenceGetDepartmentsTenantIdIdIntelligence",
+    "method": "GET",
+    "path": "/departments/{tenantId}/{id}/intelligence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@departmentIntelligence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "DepartmentProfileGetDepartmentsTenantIdIdProfile",
+    "method": "GET",
+    "path": "/departments/{tenantId}/{id}/profile",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\DepartmentController@profile",
     "unverifiedResponse": true
   },
   {
@@ -1670,6 +1720,36 @@
     "unverifiedResponse": true
   },
   {
+    "name": "GraphExpandGetGraphTenantIdExpand",
+    "method": "GET",
+    "path": "/graph/{tenantId}/expand",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@expand",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphNodeGetGraphTenantIdNode",
+    "method": "GET",
+    "path": "/graph/{tenantId}/node",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@node",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphOverviewGetGraphTenantIdOverview",
+    "method": "GET",
+    "path": "/graph/{tenantId}/overview",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@overview",
+    "unverifiedResponse": true
+  },
+  {
     "name": "GraphSearchGetGraphTenantIdSearch",
     "method": "GET",
     "path": "/graph/{tenantId}/search",
@@ -1677,6 +1757,26 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\GraphController@search",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphSummaryGetGraphTenantIdSummary",
+    "method": "GET",
+    "path": "/graph/{tenantId}/summary",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@summary",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "GraphVocabularyGetGraphTenantIdVocabulary",
+    "method": "GET",
+    "path": "/graph/{tenantId}/vocabulary",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\GraphController@vocabulary",
     "unverifiedResponse": true
   },
   {
@@ -2610,6 +2710,66 @@
     "unverifiedResponse": true
   },
   {
+    "name": "OperationalIntelligenceDatasetsGetOperationsTenantIdDatasets",
+    "method": "GET",
+    "path": "/operations/{tenantId}/datasets",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@datasets",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OperationalIntelligenceDepartmentsGetOperationsTenantIdDepartments",
+    "method": "GET",
+    "path": "/operations/{tenantId}/departments",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@departments",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OperationalIntelligenceLoopGetOperationsTenantIdLoop",
+    "method": "GET",
+    "path": "/operations/{tenantId}/loop",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@loop",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OperationalIntelligenceOverviewGetOperationsTenantIdOverview",
+    "method": "GET",
+    "path": "/operations/{tenantId}/overview",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@overview",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OperationalIntelligenceScorecardGetOperationsTenantIdScorecard",
+    "method": "GET",
+    "path": "/operations/{tenantId}/scorecard",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@scorecard",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OperationalIntelligenceTrendsGetOperationsTenantIdTrends",
+    "method": "GET",
+    "path": "/operations/{tenantId}/trends",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OperationalIntelligenceController@trends",
+    "unverifiedResponse": true
+  },
+  {
     "name": "OrganizationConfigStorePostOrganizationConfigs",
     "method": "POST",
     "path": "/organization-configs",
@@ -2980,6 +3140,18 @@
     "unverifiedResponse": true
   },
   {
+    "name": "OrganizationDeletionDestroyDeleteOrganizationsTenantIdId",
+    "method": "DELETE",
+    "path": "/organizations/{tenantId}/{id}",
+    "permissions": [
+      "read",
+      "delete",
+      "tenant.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationDeletionController@destroy",
+    "unverifiedResponse": true
+  },
+  {
     "name": "OrganizationArchivePostOrganizationsTenantIdIdArchive",
     "method": "POST",
     "path": "/organizations/{tenantId}/{id}/archive",
@@ -3008,6 +3180,18 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\OrganizationController@dataQuality",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "OrganizationDeletionPreviewGetOrganizationsTenantIdIdDeletionPreview",
+    "method": "GET",
+    "path": "/organizations/{tenantId}/{id}/deletion-preview",
+    "permissions": [
+      "read",
+      "delete",
+      "tenant.manage"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\OrganizationDeletionController@preview",
     "unverifiedResponse": true
   },
   {
@@ -3112,6 +3296,16 @@
       "read"
     ],
     "controller": "App\\Http\\Controllers\\Api\\PersonController@audit",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "PersonIntelligenceGetPeopleTenantIdIdIntelligence",
+    "method": "GET",
+    "path": "/people/{tenantId}/{id}/intelligence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\PersonController@intelligence",
     "unverifiedResponse": true
   },
   {
@@ -3874,6 +4068,96 @@
       "settings.manage"
     ],
     "controller": "App\\Http\\Controllers\\Api\\SkillController@destroy",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentIndexGetStudentsTenantId",
+    "method": "GET",
+    "path": "/students/{tenantId}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@index",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentByRefGetStudentsTenantIdByRefStudentRef",
+    "method": "GET",
+    "path": "/students/{tenantId}/by-ref/{studentRef}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@byRef",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentIntelligenceGetStudentsTenantIdIntelligence",
+    "method": "GET",
+    "path": "/students/{tenantId}/intelligence",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@intelligence",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentSearchGetStudentsTenantIdSearch",
+    "method": "GET",
+    "path": "/students/{tenantId}/search",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@search",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentStructureGetStudentsTenantIdStructure",
+    "method": "GET",
+    "path": "/students/{tenantId}/structure",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@structure",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentSummaryGetStudentsTenantIdSummary",
+    "method": "GET",
+    "path": "/students/{tenantId}/summary",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@summary",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentShowGetStudentsTenantIdId",
+    "method": "GET",
+    "path": "/students/{tenantId}/{id}",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@show",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentAcademicRecordsGetStudentsTenantIdIdAcademicRecords",
+    "method": "GET",
+    "path": "/students/{tenantId}/{id}/academic-records",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@academicRecords",
+    "unverifiedResponse": true
+  },
+  {
+    "name": "StudentFeeRecordsGetStudentsTenantIdIdFeeRecords",
+    "method": "GET",
+    "path": "/students/{tenantId}/{id}/fee-records",
+    "permissions": [
+      "read"
+    ],
+    "controller": "App\\Http\\Controllers\\Api\\StudentController@feeRecords",
     "unverifiedResponse": true
   },
   {
