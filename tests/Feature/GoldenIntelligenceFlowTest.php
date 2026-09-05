@@ -295,9 +295,31 @@ final class GoldenIntelligenceFlowTest extends TestCase
         ], $this->manager())->assertStatus(201);
 
         // ---- Step 9. Execution. -----------------------------------------
+        // The ESO being run must be one the organization actually published.
+        // EsoExecutionController refuses an unknown definition (eso_not_found)
+        // and EsoPreflight refuses a draft one, so a random UUID here was
+        // asserting that the loop reaches stage 9 while never letting it. The
+        // columns set below are the ones the live table declares NOT NULL
+        // (2026_01_01_003300_eso_definition_library) plus a published status:
+        // 'active' is in EsoStatus::IN_SERVICE, 'draft' — the column default —
+        // is not. No inputs and no preconditions are declared, so the run needs
+        // neither values nor an attestation.
+        $esoDefinitionId = Uuid::uuid4()->toString();
+
+        DB::table('hpbrain_eso_definitions')->insert([
+            'id'         => $esoDefinitionId,
+            'tenant_id'  => self::TENANT,
+            'org_id'     => 'org-alpha',
+            'eso_code'   => 'ESO-FEE-REMIND',
+            'name'       => 'Targeted fee reminder',
+            'objective'  => 'improve',
+            'status'     => 'active',
+            'created_by' => self::MANAGER,
+        ]);
+
         $this->postJson('/api/v1/eso-executions', [
             'decisionId'      => $decisionId,
-            'esoDefinitionId' => Uuid::uuid4()->toString(),
+            'esoDefinitionId' => $esoDefinitionId,
             'executorType'    => 'human',            // EXECUTE stays dark: human only
         ], $this->manager())->assertStatus(201);
 

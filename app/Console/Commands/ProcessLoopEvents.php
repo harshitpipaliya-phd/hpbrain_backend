@@ -31,7 +31,9 @@ final class ProcessLoopEvents extends Command
     protected $signature = 'brain:process-events
         {--batch=100 : Events to claim in one pass}
         {--max-retries=3 : Attempts before an event is dead-lettered}
-        {--once : Process one batch and exit (how the scheduler runs it)}';
+        {--once : Process one batch and exit (how the scheduler runs it)}
+        {--tenant=* : Only process events for these tenant ids (repeatable; default all)}
+        {--type=* : Only process these event types (repeatable; default all)}';
 
     protected $description = 'Process pending loop events from the transactional outbox.';
 
@@ -42,6 +44,47 @@ final class ProcessLoopEvents extends Command
         $batch      = max(1, (int) $this->option('batch'));
         $maxRetries = max(1, (int) $this->option('max-retries'));
 
+        /*
+          SCOPING EXISTS BECAUSE THE QUEUE IS STRICTLY OLDEST-FIRST. Selection
+          is ORDER BY created_at, and the backlog on this deployment reached
+          26,197 events, so the one event with a live handler sat at position
+          26,197 and could not be reached without processing everything ahead of
+          it — an hour of round-trips against a shared database, almost all of
+          it no-op status updates, to write one learning row.
+
+          Both filters default to EMPTY, which means no filtering. The scheduled
+          invocation (`brain:process-events --once`, routes/console.php) passes
+          neither and is therefore completely unchanged: same query, same order,
+          same behaviour. These narrow the SELECT and nothing else — the claim,
+          the handlers, the retry and dead-letter paths never see them, so a
+          scoped run cannot process an event differently from an unscoped one.
+        */
+        $tenants = array_values(array_filter((array) $this->option('tenant'), static fn ($t): bool => (string) $t !== ''));
+        $types   = array_values(array_filter((array) $this->option('type'), static fn ($t): bool => (string) $t !== ''));
+
+        // A MISTYPED TYPE MUST NOT LOOK LIKE AN EMPTY QUEUE. Without this,
+        // `--type=OutcomeRecorded ` or a wrong case matches no rows and the
+        // command reports "0 processed" — indistinguishable from "there was
+        // nothing to do", which is the one answer an operator must not be
+        // given wrongly about a backlog.
+        $known = array_map(static fn (LoopEvent $e): string => $e->value, LoopEvent::cases());
+        $unknown = array_values(array_diff($types, $known));
+
+        if ($unknown !== []) {
+            $this->error('Unknown event type(s): '.implode(', ', $unknown));
+            $this->line('Known types: '.implode(', ', $known));
+
+            return self::FAILURE;
+        }
+
+        if ($tenants !== [] || $types !== []) {
+            $this->info(sprintf(
+                'loop-consumer: scoped to tenant(s) [%s], type(s) [%s].',
+                $tenants === [] ? 'all' : implode(', ', $tenants),
+                $types === [] ? 'all' : implode(', ', $types),
+            ));
+        }
+
         $processed = 0;
         $failed    = 0;
 
@@ -50,6 +93,8 @@ final class ProcessLoopEvents extends Command
         do {
             $events = DB::table('hpbrain_event_store')
                 ->where('status', 'pending')
+                ->when($tenants !== [], fn ($q) => $q->whereIn('tenant_id', $tenants))
+                ->when($types !== [], fn ($q) => $q->whereIn('type', $types))
                 ->orderBy('created_at')
                 ->orderBy('id')
                 ->limit($batch)
