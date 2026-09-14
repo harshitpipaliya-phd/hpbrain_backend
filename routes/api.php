@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\CaseController;
 use App\Http\Controllers\Api\CaseSignalEvidenceController;
 use App\Http\Controllers\Api\CompetencyController;
 use App\Http\Controllers\Api\ConfigVersionController;
+use App\Http\Controllers\Api\ContextController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DashboardWidgetController;
@@ -206,6 +207,21 @@ Route::prefix('v1')->group(function () {
         Route::get('capabilities/{tenantId}/search', [CapabilityController::class, 'search']);
         Route::post('capabilities', [CapabilityController::class, 'store'])->middleware('permission:create');
         Route::get('capabilities/{tenantId}/{id}', [CapabilityController::class, 'show']);
+
+        /*
+          CURRENT CONTEXT — what the caller is looking at, right now.
+
+          One route, GET only, no {id}: the resolved context IS the resource,
+          and `screen` plus `objectId` narrow it. It sits under the group's
+          plain `permission:read` floor because it reads nothing a Viewer could
+          not already open on the screen the request names — the object's
+          identity columns, the caller's own identity, the organization's name,
+          and the signals already served by GET signals/{tenantId}.
+
+          NOT A SCREEN OF ITS OWN. Nothing in the SPA navigates here; the AI
+          Assistant calls it when it opens over an object.
+        */
+        Route::get('context/{tenantId}', [ContextController::class, 'show']);
 
         // The Organizational Intelligence Loop, in stage order.
         Route::get('signals/{tenantId}', [SignalController::class, 'index']);
