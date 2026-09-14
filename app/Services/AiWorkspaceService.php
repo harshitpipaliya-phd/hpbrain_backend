@@ -23,9 +23,35 @@ use Ramsey\Uuid\Uuid;
  */
 final class AiWorkspaceService
 {
-    /** @return array<string, mixed> */
-    public function createSession(string $tenantId, string $userId, string $title): array
-    {
+    /**
+     * Open a conversation, optionally bound to the object it was opened over.
+     *
+     * THE TWO CONTEXT COLUMNS HAVE EXISTED SINCE 2026_01_01_001600 AND NOTHING
+     * HAS EVER WRITTEN THEM. hpbrain_conversation_sessions declares
+     * context_type and context_entity_id, both nullable, and every session in
+     * the database has them null — so a conversation started from a person's
+     * profile was indistinguishable afterwards from one started from the home
+     * screen. That is the fact this parameter records.
+     *
+     * IT RECORDS A RESOLVED OBJECT, NOT A REQUESTED ONE. Both values come from
+     * ContextEngine's object layer, which found an actual row by primary key AND
+     * tenant key. The caller's `objectId` never reaches this method: if it did,
+     * an id from another organization — or one that does not exist — would be
+     * stored as the subject of a conversation, and every later read of the
+     * session would present it as the thing being discussed. AiWorkspaceController
+     * passes null unless object.present is true.
+     *
+     * @param  string|null  $contextType  universal entity name, server-resolved
+     * @param  string|null  $contextEntityId  primary key, server-resolved
+     * @return array<string, mixed>
+     */
+    public function createSession(
+        string $tenantId,
+        string $userId,
+        string $title,
+        ?string $contextType = null,
+        ?string $contextEntityId = null,
+    ): array {
         $sessionId = Uuid::uuid4()->toString();
         $now       = now()->format('Y-m-d H:i:s');
 
@@ -47,16 +73,26 @@ final class AiWorkspaceService
           names against this table; only this service disagreed.
         */
         DB::table('hpbrain_conversation_sessions')->insert([
-            'id'           => $sessionId,
-            'tenant_id'    => $tenantId,
-            'created_by'   => $userId,
-            'title'        => $title,
-            'pinned'       => false,
-            'created_date' => $now,
-            'updated_date' => $now,
+            'id'                => $sessionId,
+            'tenant_id'         => $tenantId,
+            'created_by'        => $userId,
+            'title'             => $title,
+            // Null when the conversation was not opened over an object, or when
+            // the object it named did not resolve. Both are honest nulls: the
+            // session has no subject.
+            'context_type'      => $contextType,
+            'context_entity_id' => $contextEntityId,
+            'pinned'            => false,
+            'created_date'      => $now,
+            'updated_date'      => $now,
         ]);
 
-        return ['id' => $sessionId, 'title' => $title];
+        return [
+            'id'              => $sessionId,
+            'title'           => $title,
+            'contextType'     => $contextType,
+            'contextEntityId' => $contextEntityId,
+        ];
     }
 
     /**
