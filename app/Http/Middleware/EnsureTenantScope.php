@@ -9,17 +9,30 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Tenant isolation. Non-negotiable and CI-enforced in the Node build; kept
- * that way here. Resolves the tenant from the authenticated token, never from
- * a client-supplied body or query parameter, so a caller cannot read another
- * tenant's data by changing a URL segment.
+ * Tenant isolation.
+ *
+ * The tenant in the authenticated token is the only tenant a request may use.
+ * Route parameters can narrow to that same tenant, but they cannot switch the
+ * request to another organization, including for admin users.
  */
 final class EnsureTenantScope
 {
     public function handle(Request $request, Closure $next): Response
     {
-        // Tenant scope is fixed to demo-tenant.
-        $request->attributes->set('tenantId', '6');
+        $tokenTenant = $request->attributes->get('auth.tenantId');
+
+        if (! is_string($tokenTenant) || $tokenTenant === '') {
+            return response()->json(['error' => 'tenant_unresolved'], 401);
+        }
+
+        $routeTenant = $request->route('tenantId');
+
+        if (is_string($routeTenant) && $routeTenant !== $tokenTenant) {
+            return response()->json(['error' => 'tenant_mismatch'], 403);
+        }
+
+        $request->attributes->set('tenantId', $tokenTenant);
+
         return $next($request);
     }
 }

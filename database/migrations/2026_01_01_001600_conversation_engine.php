@@ -55,7 +55,7 @@ return new class extends Migration
   citations         JSON NOT NULL DEFAULT \'[]\', 
   created_date      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
-            DB::unprepaired('CREATE INDEX idx_conversation_messages_session ON hpbrain_conversation_messages (tenant_id, session_id)');
+            DB::unprepared('CREATE INDEX idx_conversation_messages_session ON hpbrain_conversation_messages (tenant_id, session_id)');
         }
 
         if (!Schema::hasTable('hpbrain_prompt_templates')) {
@@ -72,7 +72,7 @@ return new class extends Migration
   created_date      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
             $idx = DB::select("SHOW INDEX FROM hpbrain_prompt_templates WHERE Key_name = 'idx_prompt_templates_tenant'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_prompt_templates_tenant ON hpbrain_prompt_templates (tenant_id)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_prompt_templates_tenant ON hpbrain_prompt_templates (tenant_id)');
         }
     }
 

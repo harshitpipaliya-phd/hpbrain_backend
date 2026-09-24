@@ -9,6 +9,21 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Settings.
+ *
+ * hpbrain_settings is (tenant_id, user_id, key, value, updated_date) — five
+ * columns, no surrogate id. This controller previously addressed it as
+ * (id, scope, setting_key, setting_value, created_by, created_date), none of
+ * which exist, so every read and every write raised a 500. The table is the
+ * source of truth here; the queries are what were wrong.
+ *
+ * `scope` is expressed through user_id rather than a column of its own:
+ *   personal -> the caller's own row  (user_id = actor)
+ *   org      -> the tenant-wide row   (user_id IS NULL)
+ * which is the distinction the UI actually needs, and it keeps one person's
+ * preferences from overwriting everyone else's.
+ */
 final class SettingsController extends Controller
 {
     private const TABLE = 'hpbrain_settings';
@@ -17,42 +32,46 @@ final class SettingsController extends Controller
     {
         $q = DB::table(self::TABLE)->where('tenant_id', $this->tenantId($request));
 
-        if ($scope = $request->query('scope')) {
-            $q->where('scope', $scope);
+        $scope = (string) $request->query('scope', '');
+
+        if ($scope === 'personal') {
+            $q->where('user_id', $this->actorId($request));
+        } elseif ($scope === 'org') {
+            $q->whereNull('user_id');
         }
 
-        return response()->json($q->orderBy('setting_key')->get());
+        return response()->json($q->orderBy('key')->get());
     }
 
-    /** Upsert. Settings are keyed (tenant, scope, key) — never duplicated. */
+    /** Upsert, keyed on (tenant_id, user_id, key). */
     public function set(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'scope' => ['required', 'string', 'max:100'],
+            'scope' => ['nullable', 'string', 'max:100'],
             'key'   => ['required', 'string', 'max:190'],
             'value' => ['present'],
         ]);
 
         $tenant = $this->tenantId($request);
-        $now = now()->format('Y-m-d H:i:s');
-        $value = is_scalar($data['value']) ? (string) $data['value'] : json_encode($data['value']);
+        $userId = ($data['scope'] ?? 'personal') === 'org' ? null : $this->actorId($request);
+        $value  = is_scalar($data['value']) ? (string) $data['value'] : json_encode($data['value']);
+        $now    = now()->format('Y-m-d H:i:s');
 
-        $existing = DB::table(self::TABLE)
-            ->where('tenant_id', $tenant)->where('scope', $data['scope'])->where('setting_key', $data['key'])
-            ->first();
+        $q = DB::table(self::TABLE)->where('tenant_id', $tenant)->where('key', $data['key']);
+        $userId === null ? $q->whereNull('user_id') : $q->where('user_id', $userId);
 
-        if ($existing) {
-            DB::table(self::TABLE)->where('id', $existing->id)
-                ->update(['setting_value' => $value, 'updated_date' => $now]);
+        if ($q->exists()) {
+            $q->update(['value' => $value, 'updated_date' => $now]);
         } else {
             DB::table(self::TABLE)->insert([
-                'id' => \Ramsey\Uuid\Uuid::uuid4()->toString(),
-                'tenant_id' => $tenant, 'scope' => $data['scope'], 'setting_key' => $data['key'],
-                'setting_value' => $value, 'created_by' => $this->actorId($request),
-                'created_date' => $now, 'updated_date' => $now,
+                'tenant_id'    => $tenant,
+                'user_id'      => $userId,
+                'key'          => $data['key'],
+                'value'        => $value,
+                'updated_date' => $now,
             ]);
         }
 
-        return response()->json(['ok' => true, 'scope' => $data['scope'], 'key' => $data['key']]);
+        return response()->json(['ok' => true, 'key' => $data['key'], 'scope' => $data['scope'] ?? 'personal']);
     }
 }

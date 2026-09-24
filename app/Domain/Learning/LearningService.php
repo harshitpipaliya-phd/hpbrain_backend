@@ -13,11 +13,11 @@ namespace App\Domain\Learning;
  * too — but is not marked reusable, so it is never surfaced as a pattern to
  * repeat.
  *
- * Known gap carried over from the Node build, deliberately not papered over
- * here: ADR-005 requires an idempotent handler that derives a Learning
- * automatically on OutcomeRecorded, and requires reasoning to ground on prior
- * Learnings. Neither exists yet in either implementation. Until they do, the
- * flywheel does not turn.
+ * The flywheel now has both halves. ProcessLoopEvents derives a Learning
+ * idempotently from OutcomeRecorded, and MemoryGrounding feeds reusable
+ * learnings back into the implemented verbs. This class keeps the small policy
+ * decision those writers share: which outcomes are safe to offer as reusable
+ * organizational knowledge.
  */
 final class LearningService
 {

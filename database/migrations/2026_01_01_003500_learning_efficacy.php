@@ -44,9 +44,9 @@ return new class extends Migration
         }
         if (Schema::hasTable('hpbrain_eso_efficacy_records')) {
             $idx = DB::select("SHOW INDEX FROM hpbrain_eso_efficacy_records WHERE Key_name = 'idx_eso_efficacy_eso'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_eso_efficacy_eso ON hpbrain_eso_efficacy_records (tenant_id, eso_definition_id)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_eso_efficacy_eso ON hpbrain_eso_efficacy_records (tenant_id, eso_definition_id)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_eso_efficacy_records WHERE Key_name = 'idx_eso_efficacy_gap_type'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_eso_efficacy_gap_type ON hpbrain_eso_efficacy_records (tenant_id, gap_type)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_eso_efficacy_gap_type ON hpbrain_eso_efficacy_records (tenant_id, gap_type)');
         }
     }
 

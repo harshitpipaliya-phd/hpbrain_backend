@@ -43,7 +43,7 @@ return new class extends Migration
             $idx = DB::select("SHOW INDEX FROM hpbrain_notifications WHERE Key_name = 'idx_notifications_user'");
             if (empty($idx)) DB::unprepared('CREATE INDEX idx_notifications_user ON hpbrain_notifications (tenant_id, user_id, created_date DESC)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_notifications WHERE Key_name = 'idx_notifications_unread'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_notifications_unread ON hpbrain_notifications (tenant_id, user_id)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_notifications_unread ON hpbrain_notifications (tenant_id, user_id)');
         }
 
         if (!Schema::hasTable('hpbrain_settings')) {

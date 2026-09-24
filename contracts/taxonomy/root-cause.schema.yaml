@@ -1,0 +1,23 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://contracts.hp-enterprise-brain/taxonomy/v1.0/root-cause.schema.yaml"
+title: RootCauseFamily
+version: 1.0.0
+# SOURCE OF TRUTH: HP Enterprise Brain Product Bible -- Diagnostic Intelligence.
+#   "Each hypothesis is classified against the root-cause taxonomy
+#    (Capability, Capacity, Process, Information, Motivation, Coordination,
+#     External, Policy)."
+#
+# NOTE: the Product Bible does NOT number these C1-C8 and does NOT use the term
+# "UODM" -- it says "root-cause taxonomy" and "Hypothesis Ledger". Numbering and
+# UODM terminology were added downstream. Reconcile the vocabulary or drop it.
+description: The eight root-cause families a hypothesis is classified against.
+type: string
+enum:
+  - Capability
+  - Capacity
+  - Process
+  - Information
+  - Motivation
+  - Coordination
+  - External
+  - Policy

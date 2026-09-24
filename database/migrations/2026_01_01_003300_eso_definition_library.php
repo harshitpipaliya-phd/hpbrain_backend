@@ -26,7 +26,7 @@ return new class extends Migration
     public function up(): void
     {
         if (!Schema::hasTable('hpbrain_eso_definitions')) {
-            DB::unprepaired('CREATE TABLE IF NOT EXISTS hpbrain_eso_definitions (
+            DB::unprepared('CREATE TABLE IF NOT EXISTS hpbrain_eso_definitions (
    
   id                      VARCHAR(36) PRIMARY KEY,
   tenant_id               VARCHAR(36) NOT NULL,
@@ -90,18 +90,18 @@ return new class extends Migration
         }
         if (Schema::hasTable('hpbrain_eso_definitions')) {
             $idx = DB::select("SHOW INDEX FROM hpbrain_eso_definitions WHERE Key_name = 'idx_eso_definitions_org'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_eso_definitions_org ON hpbrain_eso_definitions (tenant_id, org_id)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_eso_definitions_org ON hpbrain_eso_definitions (tenant_id, org_id)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_eso_definitions WHERE Key_name = 'idx_eso_definitions_objective'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_eso_definitions_objective ON hpbrain_eso_definitions (tenant_id, objective)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_eso_definitions_objective ON hpbrain_eso_definitions (tenant_id, objective)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_eso_definitions WHERE Key_name = 'idx_eso_definitions_status'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_eso_definitions_status ON hpbrain_eso_definitions (tenant_id, status)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_eso_definitions_status ON hpbrain_eso_definitions (tenant_id, status)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_eso_definitions WHERE Key_name = 'idx_eso_definitions_kasba_node'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_eso_definitions_kasba_node ON hpbrain_eso_definitions (tenant_id, kasba_node_id)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_eso_definitions_kasba_node ON hpbrain_eso_definitions (tenant_id, kasba_node_id)');
         }
         if (Schema::hasTable('hpbrain_eso_executions') && !Schema::hasColumn('hpbrain_eso_executions', 'eso_definition_id')) {
-            DB::unprepaired('ALTER TABLE hpbrain_eso_executions ADD COLUMN eso_definition_id VARCHAR(36)');
+            DB::unprepared('ALTER TABLE hpbrain_eso_executions ADD COLUMN eso_definition_id VARCHAR(36)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_eso_executions WHERE Key_name = 'idx_eso_executions_definition'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_eso_executions_definition ON hpbrain_eso_executions (eso_definition_id)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_eso_executions_definition ON hpbrain_eso_executions (eso_definition_id)');
         }
     }
 

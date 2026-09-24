@@ -42,6 +42,16 @@ return [
      | KASBA. Five dimensions, assessed 0-5. An unassessed dimension is null
      | and must never be defaulted to zero — "a fact the system hasn't
      | verified is null, never defaulted to 0" (Product Bible, Principles).
+     |
+     | FALLBACK ONLY since Phase 4. The authoritative assessment model is
+     | hpbrain_industry_templates.assessment_model, resolved per tenant by
+     | AssessmentModelResolver. These five apply when a tenant's industry has
+     | not declared one, which keeps every existing tenant where it was.
+     |
+     | KASBA models HUMAN capability. It is the right vocabulary for a nurse
+     | and the wrong one for a dialysis machine, whose dimensions are closer
+     | to Availability / Performance / Quality / Compliance. Scoring an
+     | asset's "attitude" produces a number that looks meaningful and is not.
      */
     'kasba' => [
         'dimensions' => ['knowledge', 'ability', 'skill', 'behaviour', 'attitude'],
@@ -72,15 +82,188 @@ return [
     ],
 
     /*
-     | The institute's existing ERP tables. The Brain reads Organization,
-     | Department and Person from these — it does not own them. Everything
-     | the Brain reasons WITH lives in hpbrain_* tables.
+     | AI (ADR-004). The provider is selected by NAME here and resolved to a
+     | driver in AiServiceProvider; business logic never names a vendor.
+     |
+     | Default is '' — no provider. That is not a placeholder waiting to be
+     | filled in: with no provider the reasoning verbs return UNDETERMINED
+     | naming the gap, which is the honest answer and the one the golden
+     | intelligence-flow test asserts. A missing key must degrade to "I don't
+     | know", never to a 500 and never to invented text.
+     |
+     | The API key is read from the environment HERE, in config, so that
+     | `php artisan config:cache` captures it. A provider that called env()
+     | at request time would work locally and return null in production.
+     | It is never committed: .env.example carries an empty value.
      */
-    'erp_tables' => [
-        'organization'   => 'institute_detail',
-        'organization_x' => 'org_details',
-        'department'     => 'hrms_departments',
-        'person'         => 'tbluser',
-        'person_profile' => 'tbluserprofilemaster',
+    'ai' => [
+        'provider' => env('AI_PROVIDER', ''),
+        'model'    => env('AI_MODEL', 'claude-sonnet-5'),
+
+        'anthropic' => [
+            'api_key' => env('ANTHROPIC_API_KEY', ''),
+            'timeout' => (int) env('AI_TIMEOUT_SECONDS', 30),
+        ],
+        'gemini' => [
+            'api_key' => env('GEMINI_API_KEY', ''),
+            'timeout' => (int) env('GEMINI_TIMEOUT_SECONDS', 30),
+        ],
+        'deepseek' => [
+            'api_key' => env('DEEPSEEK_API_KEY', ''),
+            'timeout' => (int) env('DEEPSEEK_TIMEOUT_SECONDS', 30),
+        ],
+
+        /*
+         | USD per MILLION tokens. Used only to estimate
+         | hpbrain_ai_executions.estimated_cost_usd — a model absent from this
+         | map records a NULL cost rather than zero, because "not priced" and
+         | "free" are different claims.
+         */
+        'pricing' => [
+            'claude-opus-5'   => ['input' => 15.00, 'output' => 75.00],
+            'claude-sonnet-5' => ['input' => 3.00,  'output' => 15.00],
+            'claude-haiku-4-5-20251001' => ['input' => 1.00, 'output' => 5.00],
+
+            /*
+             | deepseek-v4-flash, the model this installation actually runs
+             | RECOMMEND on. Rates read from DeepSeek's own published table
+             | (api-docs.deepseek.com/quick_start/pricing) on 2026-08-13.
+             |
+             | THE INPUT RATE IS THE CACHE-MISS ONE, DELIBERATELY. DeepSeek bills
+             | cached input an order of magnitude cheaper ($0.014), and nothing
+             | in AiResponse tells us which tokens hit the cache. Estimating at
+             | the miss rate can only ever OVERSTATE spend; using the hit rate
+             | would understate it, and a governance figure that reads low is
+             | the more dangerous of the two errors.
+             |
+             | DeepSeek's page carries a notice that overall pricing will rise
+             | "in the near future, with a significant increase expected", so
+             | this pair is a snapshot with a date on it, not a constant.
+             */
+            'deepseek-v4-flash' => ['input' => 0.14, 'output' => 0.28],
+        ],
+    ],
+
+    /*
+     | WHERE THE SOURCE TABLES ARE DECLARED — hpbrain_entity_mappings, not here.
+     |
+     | This key used to hold a fixed map of the institute ERP's tables. It had no
+     | readers, and since Phase 2 it would have been a second and stale answer to
+     | a question the vocabulary layer now owns: every table and column the Brain
+     | reads is resolved per tenant through EntityResolver. Two descriptions of
+     | where Person lives is one too many, and the wrong one is the one someone
+     | eventually edits.
+     |
+     | To point a tenant at different tables, write mapping rows — see
+     | database/seeders/EntityMappingSeeder.php for the institute ERP's set.
+     |
+     | The Brain still does not OWN any of it. Everything it reasons WITH lives
+     | in hpbrain_* tables; everything it reasons ABOUT is read from the source.
+     */
+
+    /*
+     | Thresholds for signal rules over IMPORTED operational data
+     | (App\Domain\Signals\OperationalSignalRules).
+     |
+     | Like everything else in this file these are product decisions, not tuning
+     | knobs — each states what the business considers acceptable, and changing
+     | one changes which conditions the Brain calls a problem. They are here
+     | rather than inline so a deployment can hold a different service target
+     | without a code change.
+     |
+     | Every default below was set against the real FY2025-26 distribution, so
+     | that each rule fires on a genuine outlier rather than on ordinary
+     | operation. A threshold that fires on everything trains people to ignore
+     | the screen.
+     */
+    'operational_signals' => [
+        // Complaints: hours before a resolution counts as a breach, and the
+        // minimum number of breaches worth raising a signal about.
+        'complaint_sla_hours'         => 24,
+        'complaint_sla_minimum'       => 25,
+
+        // Share of closed complaints with no root cause recorded before the
+        // gap is reportable. A quarter is generous; the observed figure is 68%.
+        'root_cause_blank_share'      => 0.25,
+
+        // A subscriber complaining this many times in one month is one
+        // unresolved fault, not several incidents.
+        'repeat_complaint_threshold'  => 4,
+        'repeat_complaint_minimum'    => 5,
+
+        // How many times an even split a single zone must carry before its
+        // concentration is treated as a network hotspot.
+        'zone_concentration_multiple' => 4.0,
+
+        // Provisioning: days pending before a job order is stalled.
+        'work_order_pending_days'     => 15,
+        'work_order_minimum'          => 5,
+
+        // Share of job orders cancelled before connection.
+        'cancellation_share'          => 0.04,
+
+        // Share of offered help-desk calls dropped rather than answered.
+        'call_drop_rate'              => 0.20,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Universal Platform Foundation (Prompt 3.1)
+    |--------------------------------------------------------------------------
+    |
+    | Industry codes, default terminology, feature flag keys, module keys,
+    | navigation structure, default dashboard layouts, and default themes.
+    |
+    */
+    'universal' => [
+        'industries' => [
+            'healthcare', 'k12_education', 'higher_education', 'corporate',
+            'manufacturing', 'retail', 'government', 'bfsi', 'ngo', 'technology',
+        ],
+
+        'default_terminology' => [
+            'Person'            => 'Employee',
+            'OrganizationUnit'   => 'Department',
+            'Role'               => 'Role',
+            'Skill'              => 'Skill',
+            'Competency'         => 'Competency',
+            'Capability'         => 'Capability',
+        ],
+
+        'feature_flags' => [
+            'ai_workspace',
+            'graph_explorer',
+            'advanced_analytics',
+            'beta_features',
+        ],
+
+        'modules' => [
+            'intelligence', 'capabilities', 'decisions', 'analytics',
+            'ai_workspace', 'graph_explorer', 'learning', 'policies',
+            'risks', 'notifications',
+        ],
+
+        'navigation' => [
+            'dashboard',
+            'intelligence',
+            'capabilities',
+            'decisions',
+            'analytics',
+            'settings',
+        ],
+
+        'default_dashboard_layouts' => [
+            'default' => [
+                'layout_type'  => 'grid',
+                'grid_columns' => 12,
+                'grid_rows'    => 12,
+                'widgets'      => [],
+            ],
+        ],
+
+        'default_themes' => [
+            'light',
+            'dark',
+        ],
     ],
 ];

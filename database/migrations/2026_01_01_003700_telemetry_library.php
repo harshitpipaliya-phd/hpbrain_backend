@@ -46,11 +46,11 @@ return new class extends Migration
             $idx = DB::select("SHOW INDEX FROM hpbrain_telemetry_events WHERE Key_name = 'idx_telemetry_events_org'");
             if (empty($idx)) DB::unprepared('CREATE INDEX idx_telemetry_events_org ON hpbrain_telemetry_events (tenant_id, org_id)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_telemetry_events WHERE Key_name = 'idx_telemetry_events_type'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_telemetry_events_type ON hpbrain_telemetry_events (tenant_id, event_type)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_telemetry_events_type ON hpbrain_telemetry_events (tenant_id, event_type)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_telemetry_events WHERE Key_name = 'idx_telemetry_events_entity'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_telemetry_events_entity ON hpbrain_telemetry_events (tenant_id, entity_type, entity_id)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_telemetry_events_entity ON hpbrain_telemetry_events (tenant_id, entity_type, entity_id)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_telemetry_events WHERE Key_name = 'idx_telemetry_events_metric'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_telemetry_events_metric ON hpbrain_telemetry_events (tenant_id, metric_name)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_telemetry_events_metric ON hpbrain_telemetry_events (tenant_id, metric_name)');
         }
     }
 

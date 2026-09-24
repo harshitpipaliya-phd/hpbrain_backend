@@ -1,0 +1,151 @@
+# Frontend → Backend API Matrix
+
+Generated 2026-07-27 by parsing `web/src/api/*.ts` against `routes/api.php`.
+Regenerate after any route change — do not hand-edit.
+
+- Frontend calls: **137**  ·  Laravel endpoints declared: **148**
+- Matched: **137**  ·  Missing: **0**
+
+> Routes are declared and syntax-checked but **not runtime-verified**:
+> `composer install` could not run in the build environment, so
+> `php artisan route:list` has never executed. See `docs/VERIFICATION_REPORT.md`.
+
+| Frontend File | Function | Method | Expected URL | Controller | Action | Status |
+|---|---|---|---|---|---|---|
+| `ai.ts` | `executions` | GET | `/ai/executions/{x}` | AiController | executions | IMPLEMENTED |
+| `ai.ts` | `providers` | GET | `/ai/providers` | AiController | providers | IMPLEMENTED |
+| `ai.ts` | `summarizeEvidence` | POST | `/ai/evidence/summarize` | AiController | summarizeEvidence | IMPLEMENTED |
+| `capability.ts` | `archiveCapability` | POST | `/capabilities/{x}/{x}/archive` | CapabilityController | archive | IMPLEMENTED |
+| `capability.ts` | `assignCapability` | POST | `/capabilities/{x}/{x}/assign` | CapabilityController | assign | IMPLEMENTED |
+| `capability.ts` | `createCapability` | POST | `/capabilities` | CapabilityController | store | IMPLEMENTED |
+| `capability.ts` | `createVersion` | POST | `/capabilities/{x}/{x}/version` | CapabilityController | createVersion | IMPLEMENTED |
+| `capability.ts` | `getAssignments` | GET | `/capabilities/{x}/{x}/assignments` | CapabilityController | assignments | IMPLEMENTED |
+| `capability.ts` | `getAuditLogs` | GET | `/capabilities/{x}/{x}/audit` | CapabilityController | audit | IMPLEMENTED |
+| `capability.ts` | `getCapability` | GET | `/capabilities/{x}/{x}` | CapabilityController | show | IMPLEMENTED |
+| `capability.ts` | `getVersions` | GET | `/capabilities/{x}/{x}/versions` | CapabilityController | versions | IMPLEMENTED |
+| `capability.ts` | `listCapabilities` | GET | `/capabilities/{x}` | CapabilityController | index | IMPLEMENTED |
+| `capability.ts` | `searchCapabilities` | GET | `/capabilities/{x}/search` | CapabilityController | search | IMPLEMENTED |
+| `capability.ts` | `updateCapability` | PATCH | `/capabilities/{x}/{x}` | CapabilityController | update | IMPLEMENTED |
+| `case.ts` | `attachEvidence` | POST | `/cases/{x}/{x}/evidence` | CaseController | attachEvidence | IMPLEMENTED |
+| `case.ts` | `confirmHypothesis` | POST | `/hypotheses/{x}/case/{x}/{x}/confirm` | HypothesisController | confirm | IMPLEMENTED |
+| `case.ts` | `createCase` | POST | `/cases` | CaseController | store | IMPLEMENTED |
+| `case.ts` | `getCase` | GET | `/cases/{x}/{x}` | CaseController | show | IMPLEMENTED |
+| `case.ts` | `getCaseEvidence` | GET | `/cases/{x}/{x}/evidence` | CaseController | evidence | IMPLEMENTED |
+| `case.ts` | `getLedger` | GET | `/hypotheses/{x}/case/{x}` | HypothesisController | forCase | IMPLEMENTED |
+| `case.ts` | `listCases` | GET | `/cases/{x}` | CaseController | index | IMPLEMENTED |
+| `case.ts` | `proposeHypothesis` | POST | `/hypotheses` | HypothesisController | store | IMPLEMENTED |
+| `case.ts` | `rejectHypothesis` | POST | `/hypotheses/{x}/case/{x}/{x}/reject` | HypothesisController | reject | IMPLEMENTED |
+| `case.ts` | `supportHypothesis` | POST | `/hypotheses/{x}/case/{x}/{x}/support` | HypothesisController | support | IMPLEMENTED |
+| `case.ts` | `transition` | PATCH | `/cases/{x}/{x}/transition` | CaseController | transition | IMPLEMENTED |
+| `conversation.ts` | `createPromptTemplate` | POST | `/conversations/prompt-templates` | ConversationController | storePromptTemplate | IMPLEMENTED |
+| `conversation.ts` | `createSession` | POST | `/conversations/sessions` | ConversationController | store | IMPLEMENTED |
+| `conversation.ts` | `deleteSession` | DELETE | `/conversations/sessions/{x}/{x}` | ConversationController | destroy | IMPLEMENTED |
+| `conversation.ts` | `getMessages` | GET | `/conversations/sessions/{x}/{x}/messages` | ConversationController | messages | IMPLEMENTED |
+| `conversation.ts` | `getSession` | GET | `/conversations/sessions/{x}/{x}` | ConversationController | show | IMPLEMENTED |
+| `conversation.ts` | `listPromptTemplates` | GET | `/conversations/prompt-templates/{x}` | ConversationController | promptTemplates | IMPLEMENTED |
+| `conversation.ts` | `listSessions` | GET | `/conversations/sessions/{x}` | ConversationController | index | IMPLEMENTED |
+| `conversation.ts` | `rename` | PATCH | `/conversations/sessions/{x}/{x}/rename` | ConversationController | rename | IMPLEMENTED |
+| `conversation.ts` | `searchSessions` | GET | `/conversations/sessions/{x}/search` | ConversationController | search | IMPLEMENTED |
+| `conversation.ts` | `sendMessage` | POST | `/conversations/sessions/{x}/{x}/messages` | ConversationController | sendMessage | IMPLEMENTED |
+| `conversation.ts` | `setPinned` | PATCH | `/conversations/sessions/{x}/{x}/pin` | ConversationController | setPinned | IMPLEMENTED |
+| `department.ts` | `archiveDepartment` | POST | `/departments/{x}/{x}/archive` | DepartmentController | archive | IMPLEMENTED |
+| `department.ts` | `createDepartment` | POST | `/departments` | DepartmentController | store | IMPLEMENTED |
+| `department.ts` | `getAuditLogs` | GET | `/departments/{x}/{x}/audit` | DepartmentController | audit | IMPLEMENTED |
+| `department.ts` | `getDepartment` | GET | `/departments/{x}/{x}` | DepartmentController | show | IMPLEMENTED |
+| `department.ts` | `getTwin` | GET | `/departments/{x}/{x}/twin` | DepartmentController | twin | IMPLEMENTED |
+| `department.ts` | `listDepartments` | GET | `/departments/{x}` | DepartmentController | index | IMPLEMENTED |
+| `department.ts` | `updateDepartment` | PATCH | `/departments/{x}/{x}` | DepartmentController | update | IMPLEMENTED |
+| `eso.ts` | `history` | GET | `/eso-executions/{x}/eso/{x}` | EsoExecutionController | history | IMPLEMENTED |
+| `eso.ts` | `listAll` | GET | `/eso-executions/{x}` | EsoExecutionController | index | IMPLEMENTED |
+| `eso.ts` | `rollback` | POST | `/eso-executions/{x}/{x}/rollback` | EsoExecutionController | rollback | IMPLEMENTED |
+| `eso.ts` | `transition` | PATCH | `/eso-executions/{x}/{x}/transition` | EsoExecutionController | complete | IMPLEMENTED |
+| `events.ts` | `deleteDLQ` | DELETE | `/events/dlq/{x}` | EventController | deleteDlq | IMPLEMENTED |
+| `events.ts` | `getConsumers` | GET | `/events/consumers` | EventController | consumers | IMPLEMENTED |
+| `events.ts` | `getDLQ` | GET | `/events/dlq` | EventController | dlq | IMPLEMENTED |
+| `events.ts` | `getEvent` | GET | `/events/{x}` | EventController | show | IMPLEMENTED |
+| `events.ts` | `getStats` | GET | `/events/stats/summary` | EventController | stats | IMPLEMENTED |
+| `events.ts` | `replayEvent` | POST | `/events/{x}/replay` | EventController | replay | IMPLEMENTED |
+| `events.ts` | `retryDLQ` | POST | `/events/dlq/{x}/retry` | EventController | retryDlq | IMPLEMENTED |
+| `events.ts` | `retryFailed` | POST | `/events/retry/failed` | EventController | retryFailed | IMPLEMENTED |
+| `graph.ts` | `getEntity` | GET | `/graph/{x}/entity/{x}/{x}` | GraphController | entity | IMPLEMENTED |
+| `graph.ts` | `getRelated` | GET | `/graph/{x}/entity/{x}/{x}/related` | GraphController | related | IMPLEMENTED |
+| `graph.ts` | `search` | GET | `/graph/{x}/search` | GraphController | search | IMPLEMENTED |
+| `intelligence.ts` | `approveRecommendation` | POST | `/decisions` | DecisionController | store | IMPLEMENTED |
+| `intelligence.ts` | `assessRisk` | POST | `/risks` | RiskController | assess | IMPLEMENTED |
+| `intelligence.ts` | `captureOutcome` | POST | `/outcomes` | OutcomeController | store | IMPLEMENTED |
+| `intelligence.ts` | `collectEvidence` | POST | `/evidence` | EvidenceController | store | IMPLEMENTED |
+| `intelligence.ts` | `extractLearning` | POST | `/learnings` | LearningController | store | IMPLEMENTED |
+| `intelligence.ts` | `generateRecommendation` | POST | `/recommendations` | RecommendationController | store | IMPLEMENTED |
+| `intelligence.ts` | `getAnalytics` | GET | `/analytics/{x}` | AnalyticsController | index | IMPLEMENTED |
+| `intelligence.ts` | `getDecisionIntelligence` | GET | `/analytics/{x}/decision-intelligence` | AnalyticsController | decisionIntelligence | IMPLEMENTED |
+| `intelligence.ts` | `getEvidenceForSignal` | GET | `/evidence/{x}/signal/{x}` | EvidenceController | forSignal | IMPLEMENTED |
+| `intelligence.ts` | `getExecutiveSummary` | GET | `/analytics/{x}/executive-summary` | AnalyticsController | executiveSummary | IMPLEMENTED |
+| `intelligence.ts` | `getReasoningForSignal` | GET | `/reasoning/{x}/signal/{x}` | ReasoningController | forSignal | IMPLEMENTED |
+| `intelligence.ts` | `getSignalChain` | GET | `/workspace/{x}/signal/{x}/chain` | SearchController | signalChain | IMPLEMENTED |
+| `intelligence.ts` | `getWorkspace` | GET | `/workspace/{x}` | WorkspaceController | summary | IMPLEMENTED |
+| `intelligence.ts` | `listDecisions` | GET | `/decisions/{x}` | DecisionController | index | IMPLEMENTED |
+| `intelligence.ts` | `listEvidence` | GET | `/evidence/{x}` | EvidenceController | index | IMPLEMENTED |
+| `intelligence.ts` | `listExecutors` | GET | `/executors/{x}` | ExecutorController | index | IMPLEMENTED |
+| `intelligence.ts` | `listLearnings` | GET | `/learnings/{x}` | LearningController | index | IMPLEMENTED |
+| `intelligence.ts` | `listOutcomes` | GET | `/outcomes/{x}` | OutcomeController | index | IMPLEMENTED |
+| `intelligence.ts` | `listPolicies` | GET | `/policies/{x}` | PolicyController | index | IMPLEMENTED |
+| `intelligence.ts` | `listRecommendations` | GET | `/recommendations/{x}` | RecommendationController | index | IMPLEMENTED |
+| `intelligence.ts` | `listRisks` | GET | `/risks/{x}` | RiskController | index | IMPLEMENTED |
+| `intelligence.ts` | `mitigateRisk` | POST | `/risks/{x}/{x}/mitigate` | RiskController | mitigate | IMPLEMENTED |
+| `intelligence.ts` | `reason` | POST | `/reasoning` | ReasoningController | store | IMPLEMENTED |
+| `intelligence.ts` | `search` | GET | `/search/{x}` | SearchController | search | IMPLEMENTED |
+| `kasba.ts` | `assessment` | GET | `/kasba/assessment/{x}/assignment/{x}/{x}` | KasbaController | assessment | IMPLEMENTED |
+| `kasba.ts` | `createTask` | POST | `/kasba/tasks` | KasbaController | storeTask | IMPLEMENTED |
+| `kasba.ts` | `heatmap` | GET | `/kasba/heatmap/{x}` | KasbaController | heatmap | IMPLEMENTED |
+| `kasba.ts` | `proficiencyHistory` | GET | `/kasba/proficiency/{x}/assignment/{x}/history` | KasbaController | proficiencyHistory | IMPLEMENTED |
+| `kasba.ts` | `proficiencyTrend` | GET | `/kasba/proficiency/{x}/assignment/{x}/trend` | KasbaController | proficiencyTrend | IMPLEMENTED |
+| `kasba.ts` | `tasksForCapability` | GET | `/kasba/tasks/{x}/capability/{x}` | KasbaController | tasksForCapability | IMPLEMENTED |
+| `knowledge-library.ts` | `create` | POST | `/knowledge-library` | KnowledgeLibraryController | store | IMPLEMENTED |
+| `knowledge-library.ts` | `list` | GET | `/knowledge-library/{x}` | KnowledgeLibraryController | index | IMPLEMENTED |
+| `knowledge-library.ts` | `markReused` | POST | `/knowledge-library/{x}/{x}/reuse` | KnowledgeLibraryController | markReused | IMPLEMENTED |
+| `knowledge-library.ts` | `search` | GET | `/knowledge-library/{x}/search` | KnowledgeLibraryController | search | IMPLEMENTED |
+| `notification.ts` | `changePassword` | POST | `/auth/change-password` | AuthController | changePassword | IMPLEMENTED |
+| `notification.ts` | `list` | GET | `/notifications/{x}` | NotificationController | index | IMPLEMENTED |
+| `notification.ts` | `list` | GET | `/settings/{x}` | SettingsController | index | IMPLEMENTED |
+| `notification.ts` | `markAllRead` | POST | `/notifications/{x}/read-all` | NotificationController | markAllRead | IMPLEMENTED |
+| `notification.ts` | `markRead` | PATCH | `/notifications/{x}/{x}/read` | NotificationController | markRead | IMPLEMENTED |
+| `notification.ts` | `set` | PUT | `/settings/{x}` | SettingsController | set | IMPLEMENTED |
+| `notification.ts` | `unreadCount` | GET | `/notifications/{x}/unread-count` | NotificationController | unreadCount | IMPLEMENTED |
+| `observability.ts` | `getActivityTimeline` | GET | `/audit/activity` | AuditController | activity | IMPLEMENTED |
+| `observability.ts` | `getAuditLogs` | GET | `/audit` | AuditController | index | IMPLEMENTED |
+| `observability.ts` | `getAuditStats` | GET | `/audit/stats` | AuditController | stats | IMPLEMENTED |
+| `observability.ts` | `getDatabaseHealth` | GET | `/observability/health/database` | ObservabilityController | database | IMPLEMENTED |
+| `observability.ts` | `getEventsHealth` | GET | `/observability/health/events` | ObservabilityController | events | IMPLEMENTED |
+| `observability.ts` | `getHealth` | GET | `/observability/health` | ObservabilityController | health | IMPLEMENTED |
+| `observability.ts` | `getMetrics` | GET | `/observability/metrics/{x}` | ObservabilityController | metrics | IMPLEMENTED |
+| `observability.ts` | `getNeo4jHealth` | GET | `/observability/health/neo4j` | ObservabilityController | neo4j | IMPLEMENTED |
+| `observability.ts` | `getSystemHealth` | GET | `/observability/health/system` | ObservabilityController | system | IMPLEMENTED |
+| `observability.ts` | `getSystemMetrics` | GET | `/observability/metrics/system` | ObservabilityController | systemMetrics | IMPLEMENTED |
+| `organization.ts` | `archiveOrganization` | POST | `/organizations/{x}/{x}/archive` | OrganizationController | archive | IMPLEMENTED |
+| `organization.ts` | `createOrganization` | POST | `/organizations` | OrganizationController | store | IMPLEMENTED |
+| `organization.ts` | `getAuditLogs` | GET | `/organizations/{x}/{x}/audit` | OrganizationController | audit | IMPLEMENTED |
+| `organization.ts` | `getOrganization` | GET | `/organizations/{x}/{x}` | OrganizationController | show | IMPLEMENTED |
+| `organization.ts` | `listOrganizations` | GET | `/organizations/{x}` | OrganizationController | index | IMPLEMENTED |
+| `organization.ts` | `updateOrganization` | PATCH | `/organizations/{x}/{x}` | OrganizationController | update | IMPLEMENTED |
+| `person.ts` | `archivePerson` | POST | `/people/{x}/{x}/archive` | PersonController | archive | IMPLEMENTED |
+| `person.ts` | `createPerson` | POST | `/people` | PersonController | store | IMPLEMENTED |
+| `person.ts` | `getAuditLogs` | GET | `/people/{x}/{x}/audit` | PersonController | audit | IMPLEMENTED |
+| `person.ts` | `getPerson` | GET | `/people/{x}/{x}` | PersonController | show | IMPLEMENTED |
+| `person.ts` | `getTwin` | GET | `/people/{x}/{x}/twin` | PersonController | twin | IMPLEMENTED |
+| `person.ts` | `searchPeople` | GET | `/people/{x}/search` | PersonController | search | IMPLEMENTED |
+| `person.ts` | `updatePerson` | PATCH | `/people/{x}/{x}` | PersonController | update | IMPLEMENTED |
+| `policy.ts` | `create` | POST | `/policies` | PolicyController | store | IMPLEMENTED |
+| `policy.ts` | `createVersion` | POST | `/policies/{x}/{x}/version` | PolicyController | createVersion | IMPLEMENTED |
+| `policy.ts` | `evaluate` | POST | `/policies/{x}/{x}/evaluate` | PolicyController | evaluate | IMPLEMENTED |
+| `policy.ts` | `get` | GET | `/policies/{x}/{x}` | PolicyController | show | IMPLEMENTED |
+| `policy.ts` | `getByDomain` | GET | `/mental-models/{x}/domain/{x}` | MentalModelController | byDomain | IMPLEMENTED |
+| `policy.ts` | `history` | GET | `/policies/{x}/{x}/history` | PolicyController | history | IMPLEMENTED |
+| `policy.ts` | `list` | GET | `/mental-models/{x}` | MentalModelController | index | IMPLEMENTED |
+| `policy.ts` | `list` | GET | `/policies/{x}` | PolicyController | index | IMPLEMENTED |
+| `reasoning-engine.ts` | `duplicateSignals` | GET | `/reasoning-engine/{x}/duplicate-signals` | ReasoningEngineController | duplicateSignals | IMPLEMENTED |
+| `reasoning-engine.ts` | `earlyWarnings` | GET | `/reasoning-engine/{x}/early-warnings` | ReasoningEngineController | earlyWarnings | IMPLEMENTED |
+| `reasoning-engine.ts` | `missingEvidence` | GET | `/reasoning-engine/{x}/missing-evidence` | ReasoningEngineController | missingEvidence | IMPLEMENTED |
+| `signal.ts` | `changeStatus` | PATCH | `/signals/{x}/{x}/status` | SignalController | changeStatus | IMPLEMENTED |
+| `signal.ts` | `getSignal` | GET | `/signals/{x}/{x}` | SignalController | show | IMPLEMENTED |
+| `task.ts` | `listRegistry` | GET | `/tasks/registry` | TaskController | registry | IMPLEMENTED |
+| `task.ts` | `runSequence` | POST | `/tasks/run` | TaskController | run | IMPLEMENTED |

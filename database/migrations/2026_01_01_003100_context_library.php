@@ -50,7 +50,7 @@ return new class extends Migration
             $idx = DB::select("SHOW INDEX FROM hpbrain_context_entities WHERE Key_name = 'idx_context_entities_org'");
             if (empty($idx)) DB::unprepared('CREATE INDEX idx_context_entities_org ON hpbrain_context_entities (tenant_id, org_id)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_context_entities WHERE Key_name = 'idx_context_entities_type'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_context_entities_type ON hpbrain_context_entities (tenant_id, entity_type)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_context_entities_type ON hpbrain_context_entities (tenant_id, entity_type)');
         }
     }
 

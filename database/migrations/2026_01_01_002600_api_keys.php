@@ -40,9 +40,9 @@ return new class extends Migration
   expires_date  TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
             $idx = DB::select("SHOW INDEX FROM hpbrain_api_keys WHERE Key_name = 'idx_api_keys_hash'");
-            if (empty($idx)) DB::unprepaired('CREATE UNIQUE INDEX idx_api_keys_hash ON hpbrain_api_keys (key_hash)');
+            if (empty($idx)) DB::unprepared('CREATE UNIQUE INDEX idx_api_keys_hash ON hpbrain_api_keys (key_hash)');
             $idx = DB::select("SHOW INDEX FROM hpbrain_api_keys WHERE Key_name = 'idx_api_keys_tenant'");
-            if (empty($idx)) DB::unprepaired('CREATE INDEX idx_api_keys_tenant ON hpbrain_api_keys (tenant_id, user_id)');
+            if (empty($idx)) DB::unprepared('CREATE INDEX idx_api_keys_tenant ON hpbrain_api_keys (tenant_id, user_id)');
         }
     }
 

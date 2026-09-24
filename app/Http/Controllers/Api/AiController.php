@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Ai\AiGateway;
+use App\Domain\Ai\AiRequest;
 use App\Domain\Undetermined\VerbResult;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * AI surface.
@@ -26,6 +29,10 @@ use Illuminate\Support\Facades\DB;
 final class AiController extends Controller
 {
     private const SUPPORTED = ['anthropic', 'openai', 'gemini', 'ollama'];
+
+    public function __construct(private readonly AiGateway $ai)
+    {
+    }
 
     /**
      * `providers` is a list of {name, available} because that is what the AI
@@ -94,18 +101,56 @@ final class AiController extends Controller
             return response()->json(VerbResult::undetermined(['no_evidence_for_signal']), 200);
         }
 
-        if ((string) env('AI_PROVIDER', '') === '') {
-            return response()->json(
-                VerbResult::undetermined(['no_ai_provider_configured'], $evidence->pluck('id')->all()),
-                200
-            );
+        $refs = $evidence->pluck('id')->all();
+
+        // Unchanged behaviour when no provider is configured, and the golden
+        // intelligence-flow test asserts this exact gap string. AiGateway
+        // treats the null driver as unconfigured outside local/testing, so a
+        // stray AI_PROVIDER on a production box cannot turn canned text into
+        // an apparent summary.
+        if (! $this->ai->isConfigured()) {
+            return response()->json(VerbResult::undetermined(['no_ai_provider_configured'], $refs), 200);
         }
 
-        // A provider is configured but the client is not implemented. Say so
-        // rather than silently degrading to a template.
-        return response()->json(
-            VerbResult::undetermined(['ai_provider_client_not_implemented'], $evidence->pluck('id')->all()),
-            200
-        );
+        try {
+            $response = $this->ai->complete(
+                new AiRequest(
+                    systemPrompt: 'Summarise the evidence supplied. Reply with STRICT JSON only: '
+                        .'{"summary":"...","evidenceRefs":["..."]}. Cite only ids you were given.',
+                    userPrompt: $evidence
+                        ->map(fn ($e) => sprintf('- id=%s content=%s', $e->id, (string) $e->content))
+                        ->implode("\n"),
+                    responseSchema: ['summary' => 'string', 'evidenceRefs' => ['string']],
+                    temperature: 0.1,
+                ),
+                tenantId: $this->tenantId($request),
+                actorId: $this->actorId($request),
+                service: 'ai.summarize_evidence',
+                entityType: 'Signal',
+                entityId: $data['signalId'],
+            );
+        } catch (Throwable) {
+            // The gateway has already written the failed execution row.
+            return response()->json(VerbResult::undetermined(['ai_call_failed'], $refs), 200);
+        }
+
+        $parsed = $response->json();
+
+        if ($parsed === null || ! isset($parsed['summary']) || ! is_string($parsed['summary'])) {
+            // Never the raw text as if it were a summary: a caller cannot tell
+            // a model's apology from its answer once it is rendered on screen.
+            return response()->json(VerbResult::undetermined(['ai_response_unparseable'], $refs), 200);
+        }
+
+        // Citations are intersected with what was actually supplied, so a
+        // fabricated reference cannot reach the caller.
+        $cited = array_values(array_intersect(
+            array_filter($parsed['evidenceRefs'] ?? [], 'is_string'), $refs
+        ));
+
+        return response()->json(VerbResult::decided(
+            ['summary' => $parsed['summary']],
+            $cited === [] ? $refs : $cited,
+        ), 200);
     }
 }

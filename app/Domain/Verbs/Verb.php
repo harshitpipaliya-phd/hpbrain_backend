@@ -31,9 +31,23 @@ enum Verb: string
         return $this === self::EXECUTE;
     }
 
-    /** Read-oriented verbs are lowest risk and were implemented first. */
+    /**
+     * Read-oriented verbs are lowest risk and were implemented first.
+     *
+     * COACH JOINS THEM BECAUSE IT WRITES NOTHING. It was absent from this list
+     * while it was unimplemented, not because it changes state: CoachVerb reads
+     * resolved context, evidence and memory, and returns a VerbResult. It
+     * inserts no domain row — unlike RECOMMEND, which is correctly excluded
+     * because it writes hpbrain_recommendations, and EXECUTE, which is the only
+     * verb that changes anything outside the Brain at all.
+     *
+     * This is a classification, not a permission. Each verb still states its
+     * own requirement in its governance callable, and COACH requires READ
+     * there — so adding it here grants nothing that governance does not also
+     * check.
+     */
     public function isReadOnly(): bool
     {
-        return in_array($this, [self::EXPLAIN, self::ASSESS, self::EVALUATE], true);
+        return in_array($this, [self::EXPLAIN, self::ASSESS, self::EVALUATE, self::COACH], true);
     }
 }

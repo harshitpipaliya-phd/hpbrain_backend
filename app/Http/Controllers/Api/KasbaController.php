@@ -4,16 +4,26 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Capability\CapabilityState;
+use App\Domain\Capability\DemandService;
+use App\Domain\Kasba\AssessmentModelResolver;
 use App\Domain\Kasba\KasbaService;
+use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 
 final class KasbaController extends Controller
 {
-    public function __construct(private readonly KasbaService $kasba)
-    {
+    public function __construct(
+        private readonly KasbaService $kasba,
+        private readonly EntityResolver $resolver,
+        private readonly AssessmentModelResolver $models,
+        private readonly DemandService $demand,
+    ) {
     }
 
     public function assessment(Request $request, string $tenantId, string $assignmentId, string $capabilityId): JsonResponse
@@ -33,15 +43,17 @@ final class KasbaController extends Controller
 
         $latestArr = $latest ? (array) $latest : null;
 
+        $model = $this->models->forTenant($tenant);
+
         $targets = [];
-        foreach (config('brain.kasba.dimensions') as $d) {
+        foreach ($model->dimensions as $d) {
             $raw = $capability->{$d} ?? null;
             $targets[$d] = is_string($raw) ? json_decode($raw, true) : $raw;
         }
 
         return response()->json([
-            'scores'       => $this->kasba->computeScores($latestArr),
-            'gaps'         => $this->kasba->computeGaps($latestArr, $targets),
+            'scores'       => $this->kasba->forModel($model)->computeScores($latestArr),
+            'gaps'         => $this->kasba->forModel($model)->computeGaps($latestArr, $targets),
             'assessedDate' => $latestArr['assessed_date'] ?? null,
         ]);
     }
@@ -65,7 +77,8 @@ final class KasbaController extends Controller
             ->select('p.*')
             ->get();
 
-        $dims = config('brain.kasba.dimensions');
+        $model = $this->models->forTenant($tenant);
+        $dims = $model->dimensions;
         $summary = [];
 
         foreach ($dims as $d) {
@@ -81,6 +94,16 @@ final class KasbaController extends Controller
             'cells'       => $this->heatmapCells($tenant, $rows, $dims),
             'dimensions'  => $summary,
             'assignments' => $rows->count(),
+            // The model itself, so the SPA renders N axes and N columns
+            // from the response rather than from a constant of its own.
+            // A four-dimension tenant needs no frontend change.
+            'model'       => $this->models->forTenant($tenant)->toArray(),
+            // Demand and deficit per capability (Phase 5a). The heatmap could
+            // say what people HAVE and never what the organization NEEDS, so
+            // every cell was half an answer — a level with nothing to be short
+            // of. deficit is NULL wherever either side is unknown, and stays
+            // null all the way to the renderer.
+            'deficit'     => $this->demand->perCapability($tenant),
         ]);
     }
 
@@ -116,9 +139,13 @@ final class KasbaController extends Controller
         // null departmentId rather than dropped.
         $personIds = $assignments->where('target_type', 'Person')->pluck('target_id')->unique()->all();
 
-        $departmentOfPerson = $personIds === [] ? collect() : DB::table('tbluser')
-            ->whereIn('id', $personIds)->whereNull('deleted_at')
-            ->pluck('department_id', 'id');
+        $person = $this->resolver->resolve($tenant, 'Person');
+
+        $departmentOfPerson = $personIds === [] ? collect() : DB::table($person->table)
+            ->whereIn($person->primaryKey, $personIds)
+            ->where($person->tenantKey, $tenant)
+            ->whereNull('deleted_at')
+            ->pluck($person->field('unit'), $person->primaryKey);
 
         $buckets = [];
 
@@ -148,8 +175,13 @@ final class KasbaController extends Controller
             };
 
             $key = $assignment->capability_id.'|'.($departmentId ?? '');
-            $buckets[$key] ??= ['capabilityId' => (string) $assignment->capability_id, 'departmentId' => $departmentId, 'levels' => []];
+            $buckets[$key] ??= [
+                'capabilityId' => (string) $assignment->capability_id,
+                'departmentId' => $departmentId,
+                'levels' => [], 'states' => [],
+            ];
             $buckets[$key]['levels'][] = array_sum($levels) / count($levels);
+            $buckets[$key]['states'][] = (string) ($p->capability_state ?? CapabilityState::UNKNOWN);
         }
 
         $cells = array_values(array_map(fn (array $b) => [
@@ -157,11 +189,46 @@ final class KasbaController extends Controller
             'departmentId'  => $b['departmentId'],
             'averageLevel'  => round(array_sum($b['levels']) / count($b['levels']), 2),
             'assessedCount' => count($b['levels']),
+            // The WEAKEST state in the cell, not the average or the best.
+            // Averaging states would invent a confidence nobody holds, and
+            // reporting the best would let one assessed row make four
+            // unknown ones look measured. A cell is only as known as its
+            // least-known member (Invariant 6, Pilot §A: show UNKNOWN honestly).
+            'capabilityState' => $this->weakestState($b['states']),
+            'unknownCount'    => count(array_filter(
+                $b['states'], fn (string $s) => $s === CapabilityState::UNKNOWN
+            )),
         ], $buckets));
 
         usort($cells, fn ($a, $b) => $b['averageLevel'] <=> $a['averageLevel']);
 
         return $cells;
+    }
+
+    /**
+     * The lowest-ranked state present. An unrecognised value is treated as
+     * Unknown rather than skipped: a state this code does not understand is
+     * not evidence of anything, and skipping it would quietly raise the cell.
+     *
+     * @param  array<int, string>  $states
+     */
+    private function weakestState(array $states): string
+    {
+        $weakest = null;
+
+        foreach ($states as $state) {
+            try {
+                $rank = CapabilityState::rank($state);
+            } catch (InvalidArgumentException) {
+                return CapabilityState::UNKNOWN;
+            }
+
+            if ($weakest === null || $rank < CapabilityState::rank($weakest)) {
+                $weakest = $state;
+            }
+        }
+
+        return $weakest ?? CapabilityState::UNKNOWN;
     }
 
     public function tasksForCapability(Request $request, string $tenantId, string $capabilityId): JsonResponse
@@ -224,7 +291,7 @@ final class KasbaController extends Controller
         }
 
         $avg = function ($row) {
-            $vals = collect(config('brain.kasba.dimensions'))
+            $vals = collect($this->models->forTenant($tenant)->dimensions)
                 ->map(fn ($d) => $row->{$d.'_level'})
                 ->filter(fn ($v) => $v !== null)->map(fn ($v) => (float) $v);
 
@@ -249,35 +316,113 @@ final class KasbaController extends Controller
         ]);
     }
 
+    /**
+     * Record a proficiency assessment — level AND state (Invariant 6).
+     *
+     * WHAT WAS WRONG. The state columns have existed since the January
+     * migration and this method wrote none of them, so every row it created
+     * carried real numeric levels beside a capability_state of 'Unknown'. That
+     * is the exact failure the state model exists to prevent: a number on the
+     * screen with nothing saying whether anyone measured it, which reads to a
+     * user as a fact and is actually a claim.
+     */
     public function recordProficiency(Request $request): JsonResponse
     {
+        $dimensions = $this->models->forTenant($this->tenantId($request))->dimensions;
+
         $rules = ['assignmentId' => ['required', 'string']];
 
-        foreach (config('brain.kasba.dimensions') as $d) {
-            $rules[$d.'Level'] = ['nullable', 'numeric', 'between:0,'.config('brain.kasba.max_level')];
+        foreach ($dimensions as $d) {
+            $rules[$d.'Level'] = ['nullable', 'numeric', 'between:0,'
+                .$this->models->forTenant($this->tenantId($request))->maxLevel];
         }
 
         $rules['evidenceConfidence'] = ['nullable', 'numeric', 'between:0,1'];
+        // Defaults to Asserted rather than Unknown: someone is recording a
+        // number, so at minimum a claim has been made. Unknown means nobody
+        // has said anything, which is no longer true once this endpoint runs.
+        $rules['capabilityState'] = ['nullable', Rule::in(CapabilityState::all())];
+        $rules['evidenceRef']     = ['nullable', 'string', 'size:36'];
+        // Which dimension the state describes. Required to tell Observed from
+        // Demonstrated, which are not interchangeable.
+        $rules['dimension']       = ['nullable', Rule::in($dimensions)];
+        $rules['stateSource']     = ['nullable', 'string', 'max:100'];
+        $rules['downgradeReason'] = ['nullable', 'string', 'max:500'];
+
         $data = $request->validate($rules);
+
+        $tenant      = $this->tenantId($request);
+        $actor       = $this->actorId($request);
+        $toState     = $data['capabilityState'] ?? CapabilityState::ASSERTED;
+        $evidenceRef = $data['evidenceRef'] ?? null;
+
+        // The evidence must be OURS. The column is a bare VARCHAR with no
+        // foreign key, so nothing but this check stops a caller citing another
+        // tenant's evidence — which would make the state provably traceable to
+        // a row they are not allowed to read.
+        if ($evidenceRef !== null) {
+            $ownsEvidence = DB::table('hpbrain_evidence')
+                ->where('tenant_id', $tenant)->where('id', $evidenceRef)->exists();
+
+            if (! $ownsEvidence) {
+                return response()->json(['error' => 'evidence_not_found'], 422);
+            }
+        }
+
+        // State advances from wherever this assignment already stands, not from
+        // Unknown: a fresh row is a new reading of the same capability, and
+        // ignoring the previous state is how silent regression happens.
+        $current = DB::table('hpbrain_capability_proficiency')
+            ->where('tenant_id', $tenant)
+            ->where('assignment_id', $data['assignmentId'])
+            ->orderByDesc('created_date')
+            ->value('capability_state') ?? CapabilityState::UNKNOWN;
+
+        try {
+            $state = CapabilityState::advance(
+                from: (string) $current,
+                to: $toState,
+                evidenceRef: $evidenceRef,
+                allowDowngrade: isset($data['downgradeReason']),
+                downgradeReason: $data['downgradeReason'] ?? null,
+                dimension: $data['dimension'] ?? null,
+            );
+        } catch (InvalidArgumentException $e) {
+            // The guard's own message names the rule that was broken, which is
+            // more useful to a caller than a generic validation error.
+            return response()->json([
+                'error'  => 'capability_state_transition_rejected',
+                'reason' => $e->getMessage(),
+                'from'   => $current,
+                'to'     => $toState,
+            ], 422);
+        }
 
         $now = now()->format('Y-m-d H:i:s');
 
         $row = [
             'id'            => \Ramsey\Uuid\Uuid::uuid4()->toString(),
-            'tenant_id'     => $this->tenantId($request),
+            'tenant_id'     => $tenant,
             'assignment_id' => $data['assignmentId'],
-            'assessed_by'   => $this->actorId($request),
+            'assessed_by'   => $actor,
             'assessed_date' => $now,
             'created_date'  => $now,
         ];
 
         // An unassessed dimension stays NULL. It is never defaulted to zero —
         // "not measured" is a different claim from "measured as zero".
-        foreach (config('brain.kasba.dimensions') as $d) {
+        foreach ($dimensions as $d) {
             $row[$d.'_level'] = $data[$d.'Level'] ?? null;
         }
 
         $row['evidence_confidence'] = $data['evidenceConfidence'] ?? null;
+        $row['capability_state']    = $state;
+        $row['evidence_ref']        = $evidenceRef;
+        // Who or what asserted it. Defaults to the authenticated actor rather
+        // than to a system label, so an unattributed state is impossible.
+        $row['state_source']        = $data['stateSource'] ?? 'api:'.$actor;
+        $row['state_changed_date']  = $state === $current ? null : $now;
+        $row['state_change_reason'] = $data['downgradeReason'] ?? null;
 
         DB::table('hpbrain_capability_proficiency')->insert($row);
 

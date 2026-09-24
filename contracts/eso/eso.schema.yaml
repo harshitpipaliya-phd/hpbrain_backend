@@ -1,0 +1,330 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://contracts.hp-enterprise-brain/eso/v1.0/eso.schema.yaml"
+title: ESO — Executable Skill Object (contract-at-rest)
+version: 1.0.0-draft
+status: DRAFT — awaiting architecture sign-off
+
+# ---------------------------------------------------------------------------
+# PROVENANCE — read this before changing anything
+#
+# Authoritative source : Product Discovery Document r2, §5.2 "The ESO Anatomy
+#                        (Canonical Schema)" — TWELVE blocks.
+#                        §5.5 "ESO 2.0" — the at-rest / in-motion duality.
+#
+# CORRECTION OF RECORD:
+#   The Engineering Blueprint (Ch.7 §7.2, Ch.9 §9.4, repo map line 212) states
+#   "An ESO at rest is a nine-field governed contract". THIS IS INCORRECT.
+#   §5.2 defines twelve blocks. §5.5 confirms the whole §5.2 specification IS
+#   the contract-at-rest. The "nine" appears to originate from conflating
+#   Block 3 (which is itself named "Contract") with the ESO contract as a whole.
+#   No source anywhere enumerates nine fields.
+#   ACTION: correct the Blueprint in Ch.7, Ch.9 and the repo map.
+#
+# Every field below is transcribed from §5.2. Nothing is invented.
+# Items requiring a decision are marked  # ⚠ CONFLICT  or  # ⚠ DECIDE
+# ---------------------------------------------------------------------------
+
+type: object
+description: >
+  The versioned, governed, auditable specification of an ESO at rest (§5.5).
+  In motion the ESO becomes a cognitive runtime (see eso-runtime.schema.yaml);
+  the runtime may adapt only WITHIN the envelope this contract authorizes —
+  it may never silently rewrite the procedure, exceed its trust level, or skip
+  evidence hooks.
+required: [identity, trigger, contract, procedure, executorPolicy, gotchas, assessment, evidenceHooks, lineage]
+additionalProperties: false
+
+properties:
+
+  # ── BLOCK 1 ──────────────────────────────────────────────────────────
+  identity:
+    type: object
+    description: "Governance and traceability. Every ESO points at exactly one graph node it operationalizes."
+    required: [esoId, name, version, status, owner, provenance, kasbaBinding]
+    additionalProperties: false
+    properties:
+      esoId: { type: string, description: "Stable unique identifier." }
+      name: { type: string }
+      version: { type: string, description: "Semver. A runtime wanting different behaviour must propose a NEW version (§5.5)." }
+      status: { type: string, enum: [draft, published, deprecated] }
+      owner: { type: string, description: "Accountable owner." }
+      provenance: { type: string, enum: [authored, mined, imported] }
+      kasbaBinding:
+        type: object
+        description: "Exactly one graph node this ESO operationalizes."
+        required: [nodeId, nodeType]
+        properties:
+          nodeId: { type: string }
+          nodeType: { type: string, enum: [Knowledge, Ability, Skill, Attitude, Behaviour, Task, Role, Capability] }
+          # ⚠ DECIDE: confirm enum against the Neo4j node labels in Blueprint §6.
+          # Note KASBA expands as Knowledge, Ability, Skill, Attitude, Behaviour (K-A-S-A-B) per §6.1.
+
+  # ── BLOCK 2 ──────────────────────────────────────────────────────────
+  trigger:
+    type: object
+    description: >
+      Programmatic invocation. The description is a TRIGGER CONDITION, not
+      documentation — written for the router, not for humans (§5.2).
+    required: [descriptionForMachine, applicableContexts, gapTypes]
+    additionalProperties: false
+    properties:
+      descriptionForMachine: { type: string, description: "Matching conditions for the router." }
+      applicableContexts: { type: array, items: { type: string } }
+      gapTypes:
+        type: array
+        description: "Gap types this ESO addresses."
+        items: { type: string }
+        # ⚠ DECIDE: bind to the eight root-cause families from the Product Bible:
+        # Capability · Capacity · Process · Information · Motivation · Coordination · External · Policy
+
+  # ── BLOCK 3 ──────────────────────────────────────────────────────────
+  contract:
+    type: object
+    description: >
+      The 'what'. Makes the ESO composable: outputs of one can satisfy
+      inputs/preconditions of another.
+      NOTE: this block is NAMED "Contract" but is only 1 of 12 blocks — it is
+      NOT the ESO contract. This naming is the likely origin of the
+      "nine-field contract" error. Consider renaming to `specification`.
+    required: [objective, inputs, outputs]
+    additionalProperties: false
+    properties:
+      objective:
+        type: string
+        enum: [DEVELOP, PERFORM, ASSESS, DECIDE]
+        description: >
+          DEVELOP a capability | PERFORM a task | ASSESS a capability | DECIDE among options.
+        # ⚠ CONFLICT — UNRESOLVED. The Product Bible states the four ESO types are:
+        #   Assessment (measure) | Learning (improve) | Workflow (execute) | Communication (coordinate)
+        # §5.2 states the four objectives are: DEVELOP | PERFORM | ASSESS | DECIDE
+        # These are two different four-way taxonomies. They partially map
+        # (ASSESS≈Assessment, DEVELOP≈Learning, PERFORM≈Workflow) but DECIDE has
+        # no Bible equivalent and Communication has no §5.2 equivalent.
+        # MUST BE RESOLVED BEFORE THIS SCHEMA IS PUBLISHED.
+      inputs: { type: array, items: { $ref: "#/$defs/typedParam" } }
+      outputs: { type: array, items: { $ref: "#/$defs/typedParam" } }
+      preconditions: { type: array, items: { type: string } }
+      prerequisites:
+        type: array
+        description: "Graph refs that must hold before this ESO can run."
+        items: { type: string }
+      constraintsPolicies: { type: array, items: { type: string } }
+
+  # ── BLOCK 4 ──────────────────────────────────────────────────────────
+  procedure:
+    type: object
+    description: >
+      The 'how'. Ordered steps. EXECUTOR IS PER-STEP, NOT PER-ESO — most real
+      work is hybrid at step granularity (§5.2).
+      In motion the procedure becomes "the skeleton the cognition animates" (§5.5).
+    required: [steps]
+    additionalProperties: false
+    properties:
+      steps:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          required: [stepId, order, executorClass, method, expectedArtifact]
+          additionalProperties: false
+          properties:
+            stepId: { type: string }
+            order: { type: integer, minimum: 1 }
+            executorClass:
+              type: string
+              enum: [human, agent, software, hybrid]
+              # ⚠ CONFLICT: Engineering Blueprint §6.3 states
+              #   (ESO)──BOUND_TO──▶(Executor {type: human|ai|hybrid})
+              # §5.2 states four classes: human | agent | software | hybrid
+              # and binds them PER STEP, not per ESO.
+              # The canonical data model's (ESO)-[:RESOLVED_TO]->(Executor) is
+              # therefore WRONG — resolution happens per step.
+              # RESOLVE: adopt §5.2 (4 classes, per-step) and correct Blueprint §6.3
+              # + the canonical model.
+            method: { type: string }
+            expectedArtifact: { type: string }
+
+  # ── BLOCK 5 ──────────────────────────────────────────────────────────
+  executorPolicy:
+    type: object
+    description: >
+      The 'who'. The executor-orchestration layer expressed as data (§5.2).
+      THIS IS THE AUTONOMY MODEL — use these trust levels; do not invent others.
+    required: [allowedExecutorClasses, trustLevels, routingCriteria, escalationPath]
+    additionalProperties: false
+    properties:
+      allowedExecutorClasses:
+        type: array
+        items: { type: string, enum: [human, agent, software, hybrid] }
+      trustLevels:
+        type: array
+        description: "Current trust level PER EXECUTOR."
+        items:
+          type: object
+          required: [executorRef, trustLevel]
+          properties:
+            executorRef: { type: string }
+            trustLevel:
+              type: string
+              enum: [observe, suggest, approve, autonomous]
+              description: >
+                The authorised autonomy ladder (§5.2). Effective autonomy at
+                runtime is bounded by this ceiling.
+              # ⚠ DECIDE: the DML/canonical model describe autonomy as
+              # {floor, ceiling, gate_conditions} computed at runtime from
+              # policy + case confidence + capability maturity.
+              # §5.2 expresses it as a per-executor trust level.
+              # RECOMMEND: trustLevel IS the ceiling; runtime computes effective
+              # autonomy ≤ ceiling using confidence + maturity. Confirm and
+              # document — do not leave two autonomy models.
+      routingCriteria: { type: array, items: { type: string } }
+      escalationPath: { type: array, items: { type: string } }
+
+  # ── BLOCK 6 ──────────────────────────────────────────────────────────
+  scaffolding:
+    type: object
+    description: >
+      Supports for developing executors. Only meaningful when objective=DEVELOP.
+      For PERFORM objectives this block holds job aids (§5.2).
+    additionalProperties: false
+    properties:
+      templates: { type: array, items: { type: string } }
+      workedExamples: { type: array, items: { type: string } }
+      tools:
+        type: array
+        description: "Venn/T-chart and similar thinking tools."
+        items: { type: string }
+      sentenceStems: { type: array, items: { type: string } }
+      checklists: { type: array, items: { type: string } }
+      jobAids: { type: array, items: { type: string }, description: "Used when objective=PERFORM." }
+
+  # ── BLOCK 7 ──────────────────────────────────────────────────────────
+  gotchas:
+    type: array
+    description: >
+      THE HIGHEST-SIGNAL BLOCK (§5.2). Known failure modes, misconceptions,
+      edge cases, anti-patterns. "Anticipating failure is the difference between
+      a tutor and a manual, and between a safe agent and a liability."
+      At runtime the Reasoner interprets signals against these (§5.5).
+    minItems: 1
+    items:
+      type: object
+      required: [gotchaId, kind, description]
+      properties:
+        gotchaId: { type: string, description: "Stable id — the runtime reports which gotcha fired." }
+        kind: { type: string, enum: [failure-mode, misconception, edge-case, anti-pattern] }
+        description: { type: string }
+        detectionSignal: { type: string }
+        response: { type: string }
+
+  # ── BLOCK 8 ──────────────────────────────────────────────────────────
+  assessment:
+    type: object
+    description: "Success must be observable and machine-checkable wherever possible (§5.2)."
+    required: [evaluator]
+    additionalProperties: false
+    properties:
+      rubric: { type: string }
+      masteryThreshold: { type: number, description: "Mastery/acceptance threshold." }
+      bloomLevel: { type: string, description: "For objective=DEVELOP." }
+      dokLevel: { type: string, description: "Depth of Knowledge — for objective=DEVELOP." }
+      acceptanceTests:
+        type: array
+        description: "Eval cases — for objective=PERFORM."
+        items: { type: string }
+      evaluator: { type: string, enum: [human, agent, software] }
+
+  # ── BLOCK 9 ──────────────────────────────────────────────────────────
+  evidenceHooks:
+    type: object
+    description: >
+      THE WRITE-BACK CONTRACT. "This is what makes intelligence compound
+      (Principle P6)" (§5.2). The runtime may NEVER skip evidence hooks (§5.5).
+    required: [mustLog, graphPropertiesUpdated]
+    additionalProperties: false
+    properties:
+      mustLog:
+        type: array
+        description: "What each execution must log."
+        items: { type: string, enum: [executor, context, artifacts, score, duration, exceptions] }
+        default: [executor, context, artifacts, score, duration, exceptions]
+      graphPropertiesUpdated:
+        type: array
+        description: "Which graph properties this ESO's execution updates."
+        items: { type: string }
+
+  # ── BLOCK 10 ─────────────────────────────────────────────────────────
+  resources:
+    type: object
+    description: "ESOs are folders, not files — they carry or reference everything needed to run (§5.2)."
+    additionalProperties: false
+    properties:
+      knowledgeNodes: { type: array, items: { type: string } }
+      documents: { type: array, items: { type: string } }
+      scripts: { type: array, items: { type: string } }
+      datasets: { type: array, items: { type: string } }
+      externalTools: { type: array, items: { type: string } }
+
+  # ── BLOCK 11 ─────────────────────────────────────────────────────────
+  memory:
+    type: object
+    description: >
+      Per-person / per-context state. "Longitudinal personalization; the system
+      gets smarter about each executor over time" (§5.2).
+      Feeds the runtime's episodic Memory faculty (§5.5).
+    additionalProperties: false
+    properties:
+      scope: { type: string, enum: [per-person, per-context], default: per-person }
+      attemptHistory: { type: array, items: { type: string } }
+      adaptationsThatWorked: { type: array, items: { type: string } }
+      lastOutcome: { type: string }
+    # ⚠ DECIDE: §5.2 places per-person memory INSIDE the ESO. The canonical data
+    # model places Outcome/Learning in the graph as append-only ledgers.
+    # RECOMMEND: this block declares WHAT memory the ESO reads/writes; the data
+    # itself lives in the graph. An ESO contract-at-rest is versioned and
+    # governed — it must not carry mutable per-person state.
+
+  # ── BLOCK 12 ─────────────────────────────────────────────────────────
+  lineage:
+    type: object
+    description: >
+      "ESOs compose like functions: Leadership = Diagnose ∘ Prioritize ∘ Decide
+      ∘ Communicate" (§5.2).
+    additionalProperties: false
+    properties:
+      composedOf: { type: array, items: { type: string }, description: "Sub-ESO refs." }
+      composesInto: { type: array, items: { type: string } }
+      supersedes: { type: string }
+      supersededBy: { type: string }
+      sourceEvidence:
+        type: array
+        description: "Evidence for the design of the ESO itself."
+        items: { type: string }
+
+$defs:
+  typedParam:
+    type: object
+    required: [name, type]
+    properties:
+      name: { type: string }
+      type: { type: string }
+      required: { type: boolean, default: true }
+
+# ---------------------------------------------------------------------------
+# OPEN DECISIONS — resolve before v1.0.0 is published
+#
+# 1. ⚠ objective enum: §5.2 (DEVELOP|PERFORM|ASSESS|DECIDE) vs Product Bible
+#    (Assessment|Learning|Workflow|Communication). Two taxonomies. Pick one.
+# 2. ⚠ executorClass: §5.2 (human|agent|software|hybrid, PER STEP) vs Blueprint
+#    §6.3 (human|ai|hybrid, per ESO). Adopt §5.2; correct Blueprint + canonical
+#    model (ESO)-[:RESOLVED_TO]->(Executor) becomes per-step.
+# 3. ⚠ autonomy: trustLevel (observe|suggest|approve|autonomous) vs DML's
+#    {floor, ceiling, gate}. Recommend trustLevel = ceiling.
+# 4. ⚠ memory block: declaration vs storage. Recommend declaration only.
+# 5. ⚠ "nine-field contract" claim must be corrected in Engineering Blueprint
+#    Ch.7 §7.2, Ch.9 §9.4, and the repo map (line 212).
+# 6. ⚠ Block 3 is named "contract" inside the contract. Consider `specification`.
+# 7. Storage: Blueprint §9.4 — contract-at-rest authoritative in POSTGRES
+#    (governed, versioned, auditable); bindings + runtime traces in NEO4J.
+#    This schema defines the Postgres-authoritative artifact. Confirmed, no conflict.
+# ---------------------------------------------------------------------------

@@ -1,0 +1,15 @@
+{
+  "name": "@hpbrain/contracts",
+  "version": "1.0.0",
+  "description": "The single source of truth. Types are generated from schemas.",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "drift": "node scripts/drift-report.mjs",
+    "check": "npm run generate && git diff --exit-code dist/ openapi/"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "^15.0.0",
+    "js-yaml": "^4.1.0"
+  }
+}

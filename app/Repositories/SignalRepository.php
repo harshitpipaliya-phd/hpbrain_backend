@@ -26,7 +26,21 @@ final class SignalRepository extends BaseRepository
         return ['metadata'];
     }
 
-    public function list(string $tenantId, ?string $status = null): array
+    /**
+     * Signals for a screen, newest first.
+     *
+     * `$since` and `$limit` are both optional and both default to the previous
+     * unbounded behaviour, so every existing caller is unaffected. They exist
+     * because the Signals screen offers a date window and then applied it in the
+     * browser: on the school tenant that meant transferring all 15,002 rows to
+     * render a 90-day view, on every visit to the screen and again from the two
+     * other screens that also list signals. The window the user chose is a
+     * predicate, and predicates belong in SQL.
+     *
+     * `$limit` is applied AFTER `$since` and after the ordering, so a capped
+     * response is the newest N within the window rather than an arbitrary N.
+     */
+    public function list(string $tenantId, ?string $status = null, ?string $since = null, ?int $limit = null): array
     {
         $q = $this->scoped($tenantId);
 
@@ -34,7 +48,55 @@ final class SignalRepository extends BaseRepository
             $q->where('status', $status);
         }
 
-        return $q->orderByDesc('created_date')->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
+        if ($since !== null) {
+            $q->where('created_date', '>=', $since);
+        }
+
+        $q->orderByDesc('created_date');
+
+        if ($limit !== null) {
+            $q->limit(max(1, $limit));
+        }
+
+        return $q->get()->map(fn ($r) => $this->hydrate((array) $r))->all();
+    }
+
+    /**
+     * Signals awaiting reasoning, RULE-DERIVED ONES FIRST.
+     *
+     * WHY THIS IS NOT list() WITH A FILTER. list() orders newest-first, which is
+     * right for a screen — the most recent thing is what somebody scrolling
+     * wants. It is wrong for spending a reasoning budget. Ingestion turns each
+     * imported spreadsheet row into its own signal, and those arrive in bulk and
+     * recent: one tenant here holds 1,499 of them against 8 rule-derived
+     * findings. Newest-first means a --limit of any sane size is consumed
+     * entirely by imported rows, and the findings the Brain actually DERIVED —
+     * the ones with a rule behind them, evidence attached and a case open — are
+     * never reached at all. Every provider call would be spent on the least
+     * informative signals in the database.
+     *
+     * So `rule_key IS NOT NULL` sorts first, newest-first within each group.
+     * Imported signals are not excluded — they are simply behind the findings.
+     *
+     * `(rule_key IS NULL)` yields 0/1 on both MySQL and SQLite, so one ORDER BY
+     * serves the ERP database and the test suite alike.
+     *
+     * Ordering, status and limit are all applied in SQL. list() pulls every
+     * signal a tenant has into PHP before anything narrows it, which on that
+     * same tenant is 1,499 rows hydrated to discard 1,494.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function pendingForReasoning(string $tenantId, int $limit): array
+    {
+        return $this->scoped($tenantId)
+            ->whereIn('status', ['new', 'triaged'])
+            ->orderByRaw('(rule_key IS NULL) asc')
+            ->orderByDesc('created_date')
+            ->limit(max(1, $limit))
+            ->get()
+            ->map(fn ($r) => $this->hydrate((array) $r))
+            ->all();
     }
 
     public function findById(string $tenantId, string $id): ?array

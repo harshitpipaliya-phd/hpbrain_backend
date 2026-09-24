@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Events\EventPublisher;
+use App\Domain\Events\LoopEvent;
 use App\Domain\Reasoning\ReasoningService;
 use App\Http\Controllers\Controller;
 use App\Repositories\EvidenceRepository;
 use App\Repositories\ReasoningStepRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Ramsey\Uuid\Uuid;
 
 /**
  * Confidence is computed here from corroborating evidence. The caller supplies
@@ -22,6 +25,7 @@ final class ReasoningController extends Controller
         private readonly ReasoningStepRepository $repository,
         private readonly EvidenceRepository $evidence,
         private readonly ReasoningService $reasoning,
+        private readonly EventPublisher $events,
     ) {
     }
 
@@ -54,7 +58,8 @@ final class ReasoningController extends Controller
 
         $existing = array_filter($this->repository->list($tenant), fn ($r) => ($r['signal_id'] ?? null) === $data['signalId']);
 
-        return response()->json($this->repository->insert([
+        $row = [
+            'id'               => Uuid::uuid4()->toString(),
             'tenant_id'        => $tenant,
             'signal_id'        => $data['signalId'],
             'case_id'          => $data['caseId'] ?? null,
@@ -62,6 +67,33 @@ final class ReasoningController extends Controller
             'description'      => $data['description'],
             'confidence_score' => $confidence,
             'created_by'       => $this->actorId($request),
-        ]), 201);
+        ];
+
+        // Golden path stages (6–7). The payload carries the evidence this step
+        // was grounded on, because the confidence above is a function of those
+        // rows: without them the number is unexplainable after the fact, and
+        // "why did it believe that?" is the question the event log exists to
+        // answer.
+        //
+        // correlation_id is the SIGNAL — no decision exists yet, so the signal
+        // is still the thread.
+        $this->events->publishInTransaction(
+            LoopEvent::DELIBERATED,
+            $tenant,
+            'ReasoningStep',
+            $this->actorId($request),
+            [
+                'reasoningStepId' => $row['id'],
+                'signalId'        => $row['signal_id'],
+                'caseId'          => $row['case_id'],
+                'stepOrder'       => $row['step_order'],
+                'confidenceScore' => $confidence,
+                'evidenceIds'     => array_values(array_map(fn ($e) => (string) $e['id'], $evidence)),
+            ],
+            fn () => ['entityId' => $row['id'], 'result' => $this->repository->insert($row)],
+            correlationId: $row['signal_id'],
+        );
+
+        return response()->json($this->repository->findById($tenant, $row['id']), 201);
     }
 }

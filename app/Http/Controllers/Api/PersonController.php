@@ -4,40 +4,204 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\People\PersonIntelligenceService;
+use App\Domain\People\PersonProfileService;
+use App\Domain\Universal\EntityResolver;
+use App\Domain\Universal\ResolvedSource;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
-/** People are read from the ERP tables tbluser / tbluserprofilemaster. */
+/** People — Person in the Brain's vocabulary — come from the tenant's own source. */
 final class PersonController extends Controller
 {
-    public function index(): JsonResponse
+    /**
+     * The universal fields map() reads. Resolved to source columns per tenant.
+     *
+     * These reads used to be SELECT * against the ERP's widest table. That
+     * pulled every column of every employee into PHP so that map() could throw
+     * all but eleven of them away, and among the discarded ones were `password`
+     * and `plain_password`: credential material crossing the wire and sitting in
+     * process memory for a screen that only ever renders a name and a
+     * department. Naming the fields keeps that closed.
+     *
+     * @var array<int, string>
+     */
+    private const LIST_FIELDS = [
+        'id', 'externalRef', 'firstName', 'lastName', 'email', 'phone',
+        'gender', 'unit', 'profile',
+    ];
+
+    public function __construct(private readonly EntityResolver $resolver)
     {
-        return response()->json($this->query()->get()->map(fn ($r) => $this->map((array) $r))->all());
+    }
+
+    /**
+     * Source columns for the listing, plus the tenant key and audit columns
+     * map() also reads.
+     *
+     * columns() skips universal fields the tenant has not mapped, so a source
+     * without a gender column simply selects one column fewer rather than
+     * failing — the field is absent, and map() renders it null.
+     *
+     * @return array<int, string>
+     */
+    private function listColumns(ResolvedSource $person): array
+    {
+        $columns = array_values(array_unique(array_merge(
+            array_values($person->columns(self::LIST_FIELDS)),
+            [$person->tenantKey],
+        )));
+
+        foreach (['created_at', 'updated_at'] as $column) {
+            if ($this->sourceHasColumn($person, $column)) {
+                $columns[] = $column;
+            }
+        }
+
+        return array_values(array_unique($columns));
+    }
+
+    /**
+     * The roster, optionally narrowed and paged ON THE SERVER.
+     *
+     * WHAT THIS FIXES. Every caller used to receive the tenant's entire
+     * workforce and narrow it in the browser — `person.ts` still contains the
+     * client-side `scope()` that did it. The Department page then rendered ten
+     * of them: on Fiber Valley that is 768 rows serialised, sent and discarded
+     * to show a first page of ten, on every department switch.
+     *
+     * BACKWARD COMPATIBLE BY CONSTRUCTION. With no query string this returns
+     * exactly what it always returned — a bare JSON array of every active
+     * person. The paged envelope appears only when a caller asks for a page, so
+     * the screens that still consume the array keep working unchanged. That is
+     * why the return shape is conditional rather than always an envelope.
+     *
+     * `unitId` is applied in SQL against the mapped unit column, so a department
+     * of ten costs ten rows regardless of how large the organization is.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $t = $this->authTenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
+
+        $unitId = trim((string) $request->query('unitId', ''));
+        $search = trim((string) $request->query('q', ''));
+        $paged = $request->query('page') !== null || $request->query('perPage') !== null;
+
+        $query = DB::table($person->table)
+            ->where($person->tenantKey, $t)
+            ->where($person->field('status'), 1)
+            ->tap(fn ($q) => $this->activeSourceRows($q, $person));
+
+        if ($unitId !== '' && $person->has('unit')) {
+            $query->where($person->field('unit'), $unitId);
+        }
+
+        if ($search !== '') {
+            // The same fields search() offers, so a name that is findable there
+            // is findable here rather than in a second, subtly different set.
+            $searchable = $person->columns(['firstName', 'lastName', 'email', 'externalRef']);
+            $query->where(function ($w) use ($search, $searchable) {
+                foreach ($searchable as $column) {
+                    $w->orWhere($column, 'like', "%{$search}%");
+                }
+            });
+        }
+
+        if (! $paged) {
+            $rows = $query->select($this->listColumns($person))->get();
+            $roles = $this->profileNames($rows, $person);
+
+            return response()->json($rows->map(fn ($r) => $this->map((array) $r, $person, $roles))->all());
+        }
+
+        // COUNT BEFORE THE PAGE, on the same builder, so "page 3 of 77" and the
+        // rows on page 3 can never describe different filters.
+        $total = (int) (clone $query)->count();
+
+        $perPage = max(1, min(100, (int) $request->query('perPage', 20)));
+        $page = max(1, (int) $request->query('page', 1));
+        $pages = max(1, (int) ceil($total / $perPage));
+        $page = min($page, $pages);
+
+        $rows = $query
+            ->select($this->listColumns($person))
+            ->orderBy($person->primaryKey)
+            ->forPage($page, $perPage)
+            ->get();
+
+        $roles = $this->profileNames($rows, $person);
+
+        return response()->json([
+            'people' => $rows->map(fn ($r) => $this->map((array) $r, $person, $roles))->all(),
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
+            'pages' => $pages,
+        ]);
     }
 
     public function search(Request $request): JsonResponse
     {
         $q = trim((string) $request->query('q', ''));
+        $t = $this->authTenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
 
-        $rows = $this->query()->where(function ($w) use ($q) {
-            $w->where('first_name', 'like', "%{$q}%")
-              ->orWhere('last_name', 'like', "%{$q}%")
-              ->orWhere('email', 'like', "%{$q}%")
-              ->orWhere('employee_no', 'like', "%{$q}%");
-        })->limit(50)->get();
+        $searchable = $person->columns(['firstName', 'lastName', 'email', 'externalRef']);
 
-        return response()->json($rows->map(fn ($r) => $this->map((array) $r))->all());
+        $rows = DB::table($person->table)
+            ->select($this->listColumns($person))
+            ->where($person->tenantKey, $t)
+            ->where($person->field('status'), 1)
+            ->where(function ($w) use ($q, $searchable) {
+                foreach ($searchable as $column) {
+                    $w->orWhere($column, 'like', "%{$q}%");
+                }
+            })
+            ->tap(fn ($query) => $this->activeSourceRows($query, $person))
+            ->limit(50)
+            ->get();
+
+        $roles = $this->profileNames($rows, $person);
+
+        return response()->json($rows->map(fn ($r) => $this->map((array) $r, $person, $roles))->all());
     }
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $row = $this->query()->where('id', $id)->first();
+        $t = $this->authTenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
+
+        $row = DB::table($person->table)
+            ->select($this->listColumns($person))
+            ->where($person->primaryKey, $id)
+            ->where($person->tenantKey, $t)
+            ->where($person->field('status'), 1)
+            ->tap(fn ($query) => $this->activeSourceRows($query, $person))
+            ->first();
 
         return $row
-            ? response()->json($this->map((array) $row))
+            ? response()->json($this->map((array) $row, $person))
             : response()->json(['error' => 'person_not_found'], 404);
+    }
+
+    private function sourceHasColumn(ResolvedSource $source, string $column): bool
+    {
+        try {
+            return Schema::hasColumn($source->table, $column);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function activeSourceRows(\Illuminate\Database\Query\Builder $query, ResolvedSource $source): void
+    {
+        if ($source->has('deletedAt')) {
+            $query->whereNull($source->field('deletedAt'));
+        }
     }
 
     public function store(Request $request): JsonResponse
@@ -47,65 +211,184 @@ final class PersonController extends Controller
             'firstName'  => ['required', 'string'],
             'lastName'   => ['required', 'string'],
             'email'      => ['required', 'email'],
-            'orgId'      => ['required', 'integer'],
             'phone'      => ['nullable', 'string'],
             'gender'     => ['nullable', 'string'],
+            'departmentId' => ['nullable', 'integer'],
+            'joiningDate'  => ['nullable', 'date'],
         ]);
 
-        // The ERP requires an 'Employee' profile for the institute. It is
-        // provisioned by OrganizationRepository::create(); if it is missing the
-        // institute predates the Brain and needs one added.
-        $profileId = DB::table('tbluserprofilemaster')
-            ->where('sub_institute_id', $data['orgId'])
-            ->where('name', 'Employee')->where('status', 1)->value('id');
+        $t = $this->authTenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
+        $profile = $this->resolver->resolve($t, 'PersonProfile');
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
+
+        if (!empty($data['departmentId']) && !DB::table($unit->table)
+            ->where($unit->primaryKey, $data['departmentId'])
+            ->where($unit->tenantKey, $t)
+            ->whereNull('deleted_at')
+            ->exists()) {
+            return response()->json(['error' => 'department_not_found'], 422);
+        }
+
+        $profileId = DB::table($profile->table)
+            ->where($profile->tenantKey, $t)
+            ->where($profile->field('name'), 'Employee')
+            ->where($profile->field('status'), 1)
+            ->value($profile->primaryKey);
 
         if (! $profileId) {
-            return response()->json(['error' => "no_employee_profile_for_org_{$data['orgId']}"], 422);
+            return response()->json(['error' => "no_employee_profile_for_org_{$t}"], 422);
         }
 
         $now = now()->format('Y-m-d H:i:s');
         $temp = substr(bin2hex(random_bytes(8)), 0, 12);
 
-        $id = DB::table('tbluser')->insertGetId([
-            'employee_no'      => $data['employeeId'],
-            'password'         => $temp,
-            'plain_password'   => $temp,
-            'first_name'       => $data['firstName'],
-            'last_name'        => $data['lastName'],
-            'email'            => $data['email'],
-            'mobile'           => $data['phone'] ?? null,
-            'gender'           => $data['gender'] ?? null,
-            'sub_institute_id' => $data['orgId'],
-            'user_profile_id'  => $profileId,
-            'status'           => 1,
-            'created_by'       => $this->actorId($request),
-            'created_at'       => $now,
-            'updated_at'       => $now,
+        $id = DB::table($person->table)->insertGetId([
+            $person->field('externalRef') => $data['employeeId'],
+            'password'                    => $temp,
+            'plain_password'              => $temp,
+            $person->field('firstName')   => $data['firstName'],
+            $person->field('lastName')    => $data['lastName'],
+            $person->field('email')       => $data['email'],
+            $person->field('phone')       => $data['phone'] ?? null,
+            $person->field('gender')      => $data['gender'] ?? null,
+            $person->field('unit')        => $data['departmentId'] ?? null,
+            $person->field('joinedDate')  => $data['joiningDate'] ?? null,
+            $person->tenantKey            => $t,
+            $person->field('profile')     => $profileId,
+            $person->field('status')      => 1,
+            'created_by'                  => $this->actorErpId($request),
+            'created_at'                  => $now,
+            'updated_at'                  => $now,
         ]);
 
+        $created = DB::table($person->table)
+            ->select($this->listColumns($person))
+            ->where($person->primaryKey, $id)
+            ->first();
+
         return response()->json(
-            $this->map((array) DB::table('tbluser')->find($id)) + ['tempPassword' => $temp],
+            $this->map((array) $created, $person) + ['tempPassword' => $temp],
             201
         );
     }
 
-    private function query()
+    /**
+     * Role names for a set of people, in ONE query.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $rows
+     * @return array<string, string> profile id => role name
+     */
+    private function profileNames($rows, ResolvedSource $person): array
     {
-        return DB::table('tbluser')->whereNull('deleted_at')->where('status', 1);
+        if (! $person->has('profile')) {
+            return [];
+        }
+
+        $column = $person->field('profile');
+
+        $ids = $rows
+            ->map(fn ($r) => ((array) $r)[$column] ?? null)
+            ->filter(fn ($v) => $v !== null && $v !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        try {
+            $profile = $this->resolver->resolve($person->tenantId, 'PersonProfile');
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return DB::table($profile->table)
+            ->where($profile->tenantKey, $person->tenantId)
+            ->whereIn($profile->primaryKey, $ids)
+            ->pluck($profile->field('name'), $profile->primaryKey)
+            ->map(fn ($n) => (string) $n)
+            ->all();
     }
 
-    private function map(array $r): array
+    /**
+     * @param  array<string, string>|null  $roles  preloaded names, or null to look one up
+     */
+    private function roleFor(mixed $profileId, ?array $roles, ResolvedSource $person): ?string
     {
+        if ($profileId === null || $profileId === '') {
+            return null;
+        }
+
+        if ($roles !== null) {
+            $name = $roles[(string) $profileId] ?? null;
+        } else {
+            try {
+                $profile = $this->resolver->resolve($person->tenantId, 'PersonProfile');
+                $name = DB::table($profile->table)
+                    ->where($profile->tenantKey, $person->tenantId)
+                    ->where($profile->primaryKey, $profileId)
+                    ->value($profile->field('name'));
+            } catch (\Throwable) {
+                $name = null;
+            }
+        }
+
+        return $name !== null && trim((string) $name) !== '' ? (string) $name : null;
+    }
+
+    /**
+     * @param  array<string, string>|null  $roles  preloaded role names, keyed by
+     *         profile id. Null makes this row resolve its own, which is correct
+     *         for the single-row paths and wrong for a list — see profileNames.
+     */
+    private function map(array $r, ResolvedSource $person, ?array $roles = null): array
+    {
+        // An unmapped field reads as null rather than throwing: this is a
+        // rendering path, and a source without a gender column has no gender to
+        // report. That is different from a source that has one and left it empty
+        // only in that the ERP could never fill it — a distinction the UI layers
+        // in Phase 6 are built to show.
+        $value = function (string $field) use ($r, $person) {
+            if (! $person->has($field)) {
+                return null;
+            }
+
+            return $r[$person->field($field)] ?? null;
+        };
+
+        $unit = $value('unit');
+        $displayName = trim((string) (($value('firstName') ?? '').' '.($value('lastName') ?? '')));
+        $profileId = $value('profile');
+
+        // ROLE NAMES ARE RESOLVED IN ONE QUERY FOR THE WHOLE PAGE, NOT ONE PER
+        // PERSON. This block used to run Schema::hasTable() AND a SELECT against
+        // tbluserprofilemaster for every row it mapped — two round trips per
+        // person. Against this deployment's remote database that made a list of
+        // 81 people cost ~1.9 seconds while the same endpoint on a tenant with
+        // one person answered in 50ms; the work scaled with the row count, not
+        // the data. Measured before: 1392 / 1831 / 1932 ms.
+        //
+        // $roles is prepared once by the caller (see profileNames) and passed
+        // down. It is optional so the single-row callers — show(), store() —
+        // stay unchanged and simply resolve the one name they need.
+        $role = $this->roleFor($profileId, $roles, $person);
+
         return [
-            'id'           => (string) $r['id'],
-            'employeeId'   => $r['employee_no'] ?? null,
-            'firstName'    => $r['first_name'] ?? null,
-            'lastName'     => $r['last_name'] ?? null,
-            'email'        => $r['email'] ?? null,
-            'phone'        => $r['mobile'] ?? null,
-            'gender'       => $r['gender'] ?? null,
-            'departmentId' => isset($r['department_id']) ? (string) $r['department_id'] : null,
-            'orgId'        => (string) ($r['sub_institute_id'] ?? ''),
+            'id'           => (string) $r[$person->primaryKey],
+            'employeeId'   => $value('externalRef'),
+            'firstName'    => $value('firstName'),
+            'lastName'     => $value('lastName'),
+            'displayName'  => $displayName !== '' ? $displayName : null,
+            'email'        => $value('email'),
+            'phone'        => $value('phone'),
+            'gender'       => $value('gender'),
+            'departmentId' => $unit !== null ? (string) $unit : null,
+            'designation'  => $role,
+            'employmentType' => $role !== null ? strtolower((string) $role) : null,
+            'employmentStatus' => 'active',
+            'orgId'        => (string) ($r[$person->tenantKey] ?? ''),
             'status'       => 'active',
             'createdDate'  => $r['created_at'] ?? null,
             'updatedDate'  => $r['updated_at'] ?? null,
@@ -116,9 +399,9 @@ final class PersonController extends Controller
     {
         return response()->json(
             DB::table('hpbrain_audit_logs')
-                ->where('tenant_id', $this->tenantId($request))
+                ->where('tenant_id', $this->authTenantId($request))
                 ->where('entity_type', 'Person')->where('entity_id', $id)
-                ->orderByDesc('created_date')->get()
+                ->orderByDesc('created_at')->get()
         );
     }
 
@@ -131,7 +414,15 @@ final class PersonController extends Controller
             'phone'     => ['sometimes', 'nullable', 'string'],
         ]);
 
-        $map = ['firstName' => 'first_name', 'lastName' => 'last_name', 'email' => 'email', 'phone' => 'mobile'];
+        $t = $this->authTenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
+
+        $map = [
+            'firstName' => $person->field('firstName'),
+            'lastName'  => $person->field('lastName'),
+            'email'     => $person->field('email'),
+            'phone'     => $person->field('phone'),
+        ];
         $fields = [];
         foreach ($data as $k => $v) { $fields[$map[$k]] = $v; }
 
@@ -140,219 +431,113 @@ final class PersonController extends Controller
         }
 
         $fields['updated_at'] = now()->format('Y-m-d H:i:s');
-        $n = DB::table('tbluser')->where('id', $id)->whereNull('deleted_at')->update($fields);
+        $n = DB::table($person->table)
+            ->where($person->primaryKey, $id)
+            ->where($person->tenantKey, $t)
+            ->whereNull('deleted_at')
+            ->update($fields);
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'person_not_found'], 404);
     }
 
     public function archive(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $n = DB::table('tbluser')->where('id', $id)->whereNull('deleted_at')
-            ->update(['deleted_at' => now()->format('Y-m-d H:i:s'), 'status' => 0]);
+        $t = $this->authTenantId($request);
+        $person = $this->resolver->resolve($t, 'Person');
+
+        $n = DB::table($person->table)
+            ->where($person->primaryKey, $id)
+            ->where($person->tenantKey, $t)
+            ->whereNull('deleted_at')
+            ->update([
+                'deleted_at'             => now()->format('Y-m-d H:i:s'),
+                $person->field('status') => 0,
+            ]);
 
         return $n ? response()->json(['ok' => true]) : response()->json(['error' => 'person_not_found'], 404);
     }
 
-    /** The five KASBA dimensions, in the order the UI renders them. */
-    private const KASBA = ['knowledge', 'ability', 'skill', 'behaviour', 'attitude'];
-
     /**
-     * The Brain's view of a person: capabilities held, how firmly known, and
-     * what the person has actually decided and executed.
+     * Everything the installation knows about one person.
      *
-     * Two things this method must get right, both of which it previously did
-     * not:
+     * WHAT CHANGED AND WHY. This used to compose the response inline from four
+     * loop tables — capability assignments, decisions, ESO executions, learnings
+     * — and nothing else. Those four are empty for every tenant onboarded so far,
+     * so the screen rendered five dashes and three "nothing recorded" panels
+     * while the rows that actually describe a person went unread: their ERP
+     * master row's mapped fields, their class-section unit, their profile, and
+     * the operational records their reference appears in (twelve fee invoices per
+     * student for the school tenant). The aggregation now lives in
+     * PersonProfileService, which reads all of it and returns null — never zero —
+     * for what genuinely is not there.
      *
-     * 1. hpbrain_capability_assignments is polymorphic — (target_type,
-     *    target_id) — exactly as CapabilityController::assign() writes it.
-     *    Filtering on a `person_id` column raised
-     *      SQLSTATE[42S22]: Unknown column 'person_id' in 'where clause'
-     *    on every visit to a person's profile.
+     * THREE BUGS WENT WITH IT. The old response overrode the mapped firstName,
+     * lastName and email with `$person['first_name']`, `['last_name']` and
+     * `['email']` read literally, so a tenant whose source names those columns
+     * anything else got empty strings from an endpoint that had already resolved
+     * the right columns a few lines above. jobTitle was read from a hardcoded
+     * `hrms_job_titles`, which is the school ERP's table and not necessarily
+     * anyone else's. And the capability/decision/execution/learning queries named
+     * their tables unguarded, so the endpoint 500'd rather than degrading on an
+     * installation where a loop table has not been migrated.
      *
-     * 2. The response shape is a contract. web/src/components/person/
-     *    PersonTwin.tsx and workspace/PersonIntelligence.tsx both read
-     *    capabilityScores[], decisionParticipation, executionHistory[],
-     *    guardians[] and individualScore. Returning raw assignment rows left
-     *    every one of those undefined, and `twin.capabilityScores.length`
-     *    threw before React could paint — a blank screen, not an error.
+     * THE LEGACY KEYS ARE STILL HERE. capabilityScores, decisionParticipation,
+     * executionHistory, recentActivity, individualScore, guardians and
+     * capabilityCount are unchanged in name and shape, because they are what the
+     * shipped SPA reads. Removing them would have been a breaking change
+     * disguised as a refactor; they are now projections of the same service the
+     * new keys come from, so the two can never disagree.
      */
-    public function twin(Request $request, string $tenantId, string $id): JsonResponse
+    public function twin(Request $request, string $tenantId, string $id, PersonProfileService $profiles): JsonResponse
     {
-        $row = $this->query()->where('id', $id)->first();
+        $profile = $profiles->build($this->authTenantId($request), $id);
 
-        if (! $row) {
+        if ($profile === null) {
             return response()->json(['error' => 'person_not_found'], 404);
         }
 
-        $person = (array) $row;
-        $t = $this->tenantId($request);
-        $pid = (string) $id;
+        $intelligence = $profile['intelligence'];
 
-        $assignments = DB::table('hpbrain_capability_assignments')
-            ->where('tenant_id', $t)
-            ->where('target_type', 'Person')
-            ->where('target_id', $pid)
-            ->orderBy('assigned_date')
-            ->get();
-
-        // One proficiency record per assignment: the most recent assessment.
-        // Older rows are history, not a second opinion to average in.
-        $proficiency = $assignments->isEmpty() ? collect() : DB::table('hpbrain_capability_proficiency')
-            ->where('tenant_id', $t)
-            ->whereIn('assignment_id', $assignments->pluck('id')->all())
-            ->orderByDesc('assessed_date')
-            ->get()
-            ->groupBy('assignment_id')
-            ->map(fn ($rows) => $rows->first());
-
-        $capabilityNames = $assignments->isEmpty() ? collect() : DB::table('hpbrain_capabilities')
-            ->where('tenant_id', $t)
-            ->whereIn('id', $assignments->pluck('capability_id')->all())
-            ->pluck('name', 'id');
-
-        // Gaps are measured against the target level for the person's job role.
-        // With no jobtitle_id, or no requirements recorded for it, there is no
-        // target — and an unmeasurable gap is reported as no gap, not as zero.
-        $jobRoleId = isset($person['jobtitle_id']) && $person['jobtitle_id'] !== null
-            ? (string) $person['jobtitle_id']
-            : null;
-
-        $requirements = $jobRoleId === null ? collect() : DB::table('hpbrain_job_role_capability_requirements')
-            ->where('tenant_id', $t)->where('job_role_id', $jobRoleId)
-            ->get()->keyBy('capability_id');
-
-        $capabilityScores = $assignments->map(function ($a) use ($proficiency, $capabilityNames, $requirements) {
-            $p = $proficiency->get($a->id);
-
-            $scores = [];
-            $assessed = [];
-
-            foreach (self::KASBA as $dim) {
-                $raw = $p->{$dim.'_level'} ?? null;
-                $val = $raw === null ? null : (float) $raw;
-                $scores[$dim] = $val;
-                if ($val !== null) { $assessed[] = $val; }
-            }
-
-            $scores['overall'] = $assessed === []
-                ? null
-                : round(array_sum($assessed) / count($assessed), 2);
-
-            $req = $requirements->get($a->capability_id);
-            $target = $req ? (float) $req->required_level : null;
-            $gaps = [];
-
-            if ($target !== null) {
-                foreach (self::KASBA as $dim) {
-                    $current = $scores[$dim];
-                    if ($current === null || $current < $target) {
-                        $gaps[] = [
-                            'dimension'    => $dim,
-                            'currentLevel' => $current,
-                            'targetLevel'  => $target,
-                            'gap'          => round($target - ($current ?? 0.0), 2),
-                        ];
-                    }
-                }
-            }
-
-            return [
-                'capabilityId'    => (string) $a->capability_id,
-                'capabilityName'  => (string) ($capabilityNames[$a->capability_id] ?? $a->capability_id),
-                'assignmentId'    => (string) $a->id,
-                // Surfaced explicitly: how much of what we "know" is merely claimed.
-                'capabilityState' => (string) ($p->capability_state ?? 'Unassessed'),
-                'scores'          => $scores,
-                'gaps'            => $gaps,
-                'assessedDate'    => $p->assessed_date ?? null,
-            ];
-        })->values();
-
-        $decisions = DB::table('hpbrain_decisions')
-            ->where('tenant_id', $t)->where('decided_by', $pid)->get();
-
-        $approved = $decisions->filter(
-            fn ($d) => in_array(strtolower((string) $d->status), ['approved', 'accepted'], true)
-        )->count();
-
-        $executions = DB::table('hpbrain_eso_executions')
-            ->where('tenant_id', $t)->where('executed_by', $pid)
-            ->orderByDesc('created_date')->limit(50)->get();
-
-        $completed = $executions->filter(
-            fn ($e) => in_array(strtolower((string) $e->status), ['completed', 'succeeded', 'success'], true)
-        )->count();
-
-        // Activity attributed to this person, either as the actor or as the
-        // subject of the record.
-        $recentActivity = DB::table('hpbrain_audit_logs')
-            ->where('tenant_id', $t)
-            ->where(function ($w) use ($pid) {
-                $w->where('actor_id', $pid)
-                  ->orWhere(fn ($q) => $q->where('entity_type', 'Person')->where('entity_id', $pid));
-            })
-            ->orderByDesc('created_at')->limit(25)->get()
-            ->map(fn ($a) => [
-                'type'       => (string) $a->action,
-                'entityType' => (string) $a->entity_type,
-                'createdAt'  => $a->created_at,
-            ])->values();
-
-        $guardians = DB::table('hpbrain_guardians')
-            ->where('tenant_id', $t)->where('student_person_id', $pid)->get()
-            ->map(fn ($g) => [
-                'firstName'        => (string) ($g->first_name ?? ''),
-                'lastName'         => (string) ($g->last_name ?? ''),
-                'relationship'     => (string) ($g->relationship ?? ''),
-                'email'            => $g->email ?? null,
-                'phone'            => $g->phone ?? null,
-                'isPrimaryContact' => (bool) $g->is_primary_contact,
-            ])->values();
-
-        $learningContributions = DB::table('hpbrain_learnings')
-            ->where('tenant_id', $t)->where('created_by', $pid)->count();
-
-        // Each component is a 0-100 reading of one evidence stream. A stream
-        // with no records contributes nothing rather than a zero, so a person
-        // with one assessed capability and no decisions is not scored as
-        // having failed every decision they never made.
-        $overalls = $capabilityScores->pluck('scores.overall')->filter(fn ($v) => $v !== null);
-
-        $breakdown = [
-            'capabilityScore'  => $overalls->isEmpty() ? null : round(($overalls->avg() / 5) * 100, 1),
-            'decisionQuality'  => $decisions->isEmpty() ? null : round($approved / $decisions->count() * 100, 1),
-            'executionSuccess' => $executions->isEmpty() ? null : round($completed / $executions->count() * 100, 1),
-        ];
-
-        $present = array_values(array_filter($breakdown, fn ($v) => $v !== null));
-
-        return response()->json([
-            'person' => array_merge($this->map($person), [
-                // PersonIntelligence reads person.firstName[0] for the avatar
-                // initials; a null there is a TypeError, so these are strings.
-                'firstName' => (string) ($person['first_name'] ?? ''),
-                'lastName'  => (string) ($person['last_name'] ?? ''),
-                'email'     => (string) ($person['email'] ?? ''),
-                'jobTitle'  => $jobRoleId === null ? null : DB::table('hrms_job_titles')
-                    ->where('id', $jobRoleId)->whereNull('deleted_at')->value('title'),
-            ]),
-            'capabilityCount'       => $assignments->count(),
-            'capabilityScores'      => $capabilityScores,
-            'decisionParticipation' => ['total' => $decisions->count(), 'approved' => $approved],
-            'learningContributions' => $learningContributions,
-            'recentActivity'        => $recentActivity,
-            'guardians'             => $guardians,
-            'executionHistory'      => $executions->map(fn ($e) => [
-                'id'            => (string) $e->id,
-                'esoId'         => (string) ($e->eso_id ?? ''),
-                'status'        => (string) ($e->status ?? 'unknown'),
-                'completedDate' => $e->completed_date ?? null,
-                'createdDate'   => $e->created_date ?? null,
-            ])->values(),
-            'individualScore' => [
-                'score'     => $present === [] ? null : round(array_sum($present) / count($present), 1),
-                'breakdown' => $breakdown,
+        return response()->json($profile + [
+            // ---- Compatibility projection (see the note above) ---------------
+            'capabilityCount'       => count($intelligence['capabilities']),
+            'capabilityScores'      => $intelligence['capabilities'],
+            'decisionParticipation' => [
+                'total'    => $intelligence['decisions']['total'],
+                'approved' => $intelligence['decisions']['approved'],
             ],
+            'learningContributions' => $intelligence['learnings'],
+            'recentActivity'        => array_map(static fn ($a) => [
+                'type'       => $a['action'],
+                'entityType' => $a->entityType ?? null,
+                'createdAt'  => $a->createdAt ?? null,
+            ], $profile['audit']),
+            'guardians'             => $profile['contacts']['guardians'],
+            'executionHistory'      => $intelligence['executions'],
+            'individualScore'       => $intelligence['score'],
         ]);
+    }
+
+    /**
+     * GET /api/v1/people/{tenantId}/{id}/intelligence
+     *
+     * The redesigned Person Profile screen reads this single endpoint. It
+     * returns the verdict (band + score + reason), the data confidence ring,
+     * since-refresh changes, contribution, presence, consistency (including
+     * the cross-source mismatch detection D3), capability, loop involvement,
+     * the paginated records list, blind spots, and a full score explanation.
+     */
+    public function intelligence(Request $request, string $tenantId, string $id, PersonIntelligenceService $service): JsonResponse
+    {
+        $tenant = $this->authTenantId($request);
+        $page = max(1, (int) $request->query('page', 1));
+        $pageSize = max(1, min(100, (int) $request->query('page_size', 25)));
+
+        $payload = $service->buildWithPage($tenant, $id, $page, $pageSize);
+        if ($payload === null) {
+            return response()->json(['error' => 'person_not_found'], 404);
+        }
+
+        return response()->json($payload);
     }
 }

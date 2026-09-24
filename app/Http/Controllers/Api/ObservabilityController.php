@@ -55,7 +55,7 @@ final class ObservabilityController extends Controller
             $q->where('metric_name', $name);
         }
 
-        return response()->json($q->orderByDesc('recorded_date')->limit(500)->get());
+        return response()->json($q->orderByDesc('recorded_at')->limit(500)->get());
     }
 
     private function databaseCheck(): array

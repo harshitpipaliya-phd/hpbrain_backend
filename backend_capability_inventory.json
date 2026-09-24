@@ -1,0 +1,1851 @@
+{
+  "generated": "2026-08-03T11:19:20Z",
+  "repository": "hpBrain Backend Laravel Application",
+  "summary": {
+    "total_modules": 15,
+    "total_submodules": 42,
+    "total_capabilities": 186,
+    "individual_level_capabilities": 18,
+    "department_level_capabilities": 12,
+    "organization_level_capabilities": 156,
+    "api_endpoints_reviewed": 156,
+    "roles": 5,
+    "permissions": 11,
+    "policies": 0,
+    "gates": 3,
+    "security_findings": 8,
+    "unverified_features": 5
+  },
+  "authorization": {
+    "middleware_stack": [
+      {
+        "name": "AuthenticateJwt",
+        "file": "app/Http/Middleware/AuthenticateJwt.php",
+        "lines": "23-55",
+        "purpose": "Validates Bearer token JWT authentication, extracts userId, tenantId, and role from claims",
+        "failure_response": 401
+      },
+      {
+        "name": "EnsureTenantScope",
+        "file": "app/Http/Middleware/EnsureTenantScope.php",
+        "lines": "44-101",
+        "purpose": "Enforces tenant isolation, allows admins cross-tenant access if organization exists",
+        "failure_response": 403
+      },
+      {
+        "name": "RequirePermission",
+        "file": "app/Http/Middleware/RequirePermission.php",
+        "lines": "28-124",
+        "purpose": "Validates role-based permissions, audits all denials",
+        "failure_response": 403
+      }
+    ],
+    "roles": [
+      {
+        "name": "Viewer",
+        "key": "viewer",
+        "description": "Read-only access to all tenant data",
+        "permissions": ["read"],
+        "file": "app/Domain/Authorization/Role.php",
+        "lines": "36-38"
+      },
+      {
+        "name": "Analyst",
+        "key": "analyst",
+        "description": "Read, create, update, evidence curation",
+        "permissions": ["read", "create", "update", "evidence.curate"],
+        "file": "app/Domain/Authorization/Role.php",
+        "lines": "39-44"
+      },
+      {
+        "name": "Manager",
+        "key": "manager",
+        "description": "Analyst + decision approval + ESO execution",
+        "permissions": ["read", "create", "update", "evidence.curate", "decision.approve", "eso.execute"],
+        "file": "app/Domain/Authorization/Role.php",
+        "lines": "47-54"
+      },
+      {
+        "name": "Admin",
+        "key": "admin",
+        "description": "All permissions, cross-tenant access",
+        "permissions": "*",
+        "file": "app/Domain/Authorization/Role.php",
+        "lines": "55"
+      },
+      {
+        "name": "Tenant Admin",
+        "key": "tenant_admin",
+        "description": "Same as admin within tenant",
+        "permissions": "*",
+        "file": "app/Domain/Authorization/Role.php",
+        "lines": "55"
+      }
+    ],
+    "permissions": [
+      {"name": "Read", "key": "read", "granted_to": ["viewer", "analyst", "manager", "admin", "tenant_admin"]},
+      {"name": "Create", "key": "create", "granted_to": ["analyst", "manager", "admin", "tenant_admin"]},
+      {"name": "Update", "key": "update", "granted_to": ["analyst", "manager", "admin", "tenant_admin"]},
+      {"name": "Delete", "key": "delete", "granted_to": ["manager", "admin", "tenant_admin"]},
+      {"name": "Evidence Curate", "key": "evidence.curate", "granted_to": ["analyst", "manager", "admin", "tenant_admin"]},
+      {"name": "Decision Approve", "key": "decision.approve", "granted_to": ["manager", "admin", "tenant_admin"]},
+      {"name": "ESO Execute", "key": "eso.execute", "granted_to": ["manager", "admin", "tenant_admin"]},
+      {"name": "Settings Manage", "key": "settings.manage", "granted_to": ["admin", "tenant_admin"]},
+      {"name": "API Key Manage", "key": "apikey.manage", "granted_to": ["admin", "tenant_admin"]},
+      {"name": "Events Manage", "key": "events.manage", "granted_to": ["admin", "tenant_admin"]},
+      {"name": "Tenant Manage", "key": "tenant.manage", "granted_to": ["admin"]}
+    ]
+  },
+  "modules": [
+    {
+      "id": 1,
+      "name": "Authentication",
+      "description": "User login, logout, token management",
+      "submodules": ["login", "logout", "refresh", "change_password"],
+      "capabilities_count": 4,
+      "routes_count": 4,
+      "capabilities": [
+        {
+          "id": "auth-001",
+          "name": "Login",
+          "description": "Authenticate with email/password",
+          "scope": "public",
+          "roles": [],
+          "permissions": [],
+          "route": "POST /auth/login",
+          "controller": "AuthController:50",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "auth-002",
+          "name": "Logout",
+          "description": "Revoke refresh token",
+          "scope": "public",
+          "roles": [],
+          "permissions": [],
+          "route": "POST /auth/logout",
+          "controller": "AuthController:116",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "auth-003",
+          "name": "Refresh Token",
+          "description": "Exchange refresh token for new access",
+          "scope": "public",
+          "roles": [],
+          "permissions": [],
+          "route": "POST /auth/refresh",
+          "controller": "AuthController:142",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "auth-004",
+          "name": "Change Password",
+          "description": "Change own password",
+          "scope": "individual",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["self"],
+          "route": "POST /auth/change-password",
+          "controller": "AuthController:199",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Organization Management",
+      "description": "Organization and department management",
+      "submodules": ["organizations", "departments", "organization_types", "organization_units"],
+      "capabilities_count": 18,
+      "routes_count": 18,
+      "capabilities": [
+        {
+          "id": "org-001",
+          "name": "View Organizations",
+          "description": "List organizations",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /organizations/{tenantId}",
+          "controller": "OrganizationController:28",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-002",
+          "name": "Create Organization",
+          "description": "Create new organization",
+          "scope": "organization",
+          "roles": ["admin"],
+          "permissions": ["tenant.manage"],
+          "route": "POST /organizations",
+          "controller": "OrganizationController:46",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-003",
+          "name": "View Organization",
+          "description": "Get organization details",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /organizations/{tenantId}/{id}",
+          "controller": "OrganizationController:35",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-004",
+          "name": "Update Organization",
+          "description": "Update organization info",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "PATCH /organizations/{tenantId}/{id}",
+          "controller": "OrganizationController:71",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-005",
+          "name": "Archive Organization",
+          "description": "Soft delete organization",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "POST /organizations/{tenantId}/{id}/archive",
+          "controller": "OrganizationController:103",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-006",
+          "name": "View Organization Audit",
+          "description": "View organization audit log",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /organizations/{tenantId}/{id}/audit",
+          "controller": "OrganizationController:61",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-007",
+          "name": "View Organization Structure",
+          "description": "View org hierarchy",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /organizations/{tenantId}/{id}/structure",
+          "controller": "OrganizationController:116",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-008",
+          "name": "View Data Quality",
+          "description": "View data quality metrics",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /organizations/{tenantId}/{id}/data-quality",
+          "controller": "OrganizationController:163",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-009",
+          "name": "View Departments",
+          "description": "List departments",
+          "scope": "department",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /departments/{tenantId}",
+          "controller": "DepartmentController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-010",
+          "name": "Create Department",
+          "description": "Create new department",
+          "scope": "department",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /departments",
+          "controller": "DepartmentController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-011",
+          "name": "View Department",
+          "description": "Get department details",
+          "scope": "department",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /departments/{tenantId}/{id}",
+          "controller": "DepartmentController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "org-012",
+          "name": "Update Department",
+          "description": "Update department",
+          "scope": "department",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "PATCH /departments/{tenantId}/{id}",
+          "controller": "DepartmentController",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Foundation - People",
+      "description": "People management",
+      "submodules": ["people", "search"],
+      "capabilities_count": 4,
+      "routes_count": 4,
+      "capabilities": [
+        {
+          "id": "people-001",
+          "name": "Search People",
+          "description": "Search people in organization",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /people/{tenantId}/search",
+          "controller": "PersonController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "people-002",
+          "name": "View People",
+          "description": "List people",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /people/{tenantId}",
+          "controller": "PersonController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "people-003",
+          "name": "Create Person",
+          "description": "Create person record",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /people",
+          "controller": "PersonController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "people-004",
+          "name": "View Person",
+          "description": "Get person details",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /people/{tenantId}/{id}",
+          "controller": "PersonController",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Foundation - Capabilities",
+      "description": "Capability management and assignments",
+      "submodules": ["capabilities", "assignments", "versions", "audit"],
+      "capabilities_count": 10,
+      "routes_count": 10,
+      "capabilities": [
+        {
+          "id": "cap-001",
+          "name": "View Capabilities",
+          "description": "List capabilities",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /capabilities/{tenantId}",
+          "controller": "CapabilityController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "cap-002",
+          "name": "Search Capabilities",
+          "description": "Search capabilities",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /capabilities/{tenantId}/search",
+          "controller": "CapabilityController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "cap-003",
+          "name": "Create Capability",
+          "description": "Create new capability",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /capabilities",
+          "controller": "CapabilityController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "cap-004",
+          "name": "View Capability",
+          "description": "Get capability details",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /capabilities/{tenantId}/{id}",
+          "controller": "CapabilityController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "cap-005",
+          "name": "Update Capability",
+          "description": "Update capability",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "PATCH /capabilities/{tenantId}/{id}",
+          "controller": "CapabilityController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "cap-006",
+          "name": "Archive Capability",
+          "description": "Archive capability",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "POST /capabilities/{tenantId}/{id}/archive",
+          "controller": "CapabilityController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "cap-007",
+          "name": "Assign Capability",
+          "description": "Assign to person",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "POST /capabilities/{tenantId}/{id}/assign",
+          "controller": "CapabilityController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "cap-008",
+          "name": "View Assignments",
+          "description": "View capability assignments",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /capabilities/{tenantId}/{id}/assignments",
+          "controller": "CapabilityController",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Intelligence Loop - Signals",
+      "description": "Signal recording and management",
+      "submodules": ["signals", "generation"],
+      "capabilities_count": 5,
+      "routes_count": 5,
+      "capabilities": [
+        {
+          "id": "signal-001",
+          "name": "View Signals",
+          "description": "List signals",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /signals/{tenantId}",
+          "controller": "SignalController:24",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "signal-002",
+          "name": "Create Signal",
+          "description": "Record new signal",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /signals",
+          "controller": "SignalController:36",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "signal-003",
+          "name": "View Signal",
+          "description": "Get signal details",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /signals/{tenantId}/{id}",
+          "controller": "SignalController:29",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "signal-004",
+          "name": "Change Signal Status",
+          "description": "Update signal status",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "PATCH /signals/{tenantId}/{id}/status",
+          "controller": "SignalController:86",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "signal-005",
+          "name": "Generate Signals",
+          "description": "AI signal generation",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "POST /signals/generate",
+          "controller": "SignalController:97",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Intelligence Loop - Evidence",
+      "description": "Evidence recording and management",
+      "submodules": ["evidence", "signals"],
+      "capabilities_count": 4,
+      "routes_count": 4,
+      "capabilities": [
+        {
+          "id": "evidence-001",
+          "name": "View Evidence",
+          "description": "List evidence",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /evidence/{tenantId}",
+          "controller": "EvidenceController:37",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "evidence-002",
+          "name": "Create Evidence",
+          "description": "Record new evidence",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /evidence",
+          "controller": "EvidenceController:53",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "evidence-003",
+          "name": "View Evidence",
+          "description": "Get evidence details",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /evidence/{tenantId}/{id}",
+          "controller": "EvidenceController:44",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "evidence-004",
+          "name": "View Evidence for Signal",
+          "description": "List evidence for signal",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /evidence/{tenantId}/signal/{signalId}",
+          "controller": "EvidenceController:148",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Intelligence Loop - Cases",
+      "description": "Case management",
+      "submodules": ["cases", "evidence"],
+      "capabilities_count": 6,
+      "routes_count": 6,
+      "capabilities": [
+        {
+          "id": "case-001",
+          "name": "View Cases",
+          "description": "List cases",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /cases/{tenantId}",
+          "controller": "CaseController:26",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "case-002",
+          "name": "Create Case",
+          "description": "Create investigation case",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /cases",
+          "controller": "CaseController:31",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "case-003",
+          "name": "View Case",
+          "description": "Get case details",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /cases/{tenantId}/{id}",
+          "controller": "CaseController:73",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "case-004",
+          "name": "Transition Case",
+          "description": "Change case status",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "PATCH /cases/{tenantId}/{id}/transition",
+          "controller": "CaseController:93",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "case-005",
+          "name": "Attach Evidence",
+          "description": "Link evidence to case",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "POST /cases/{tenantId}/{id}/evidence",
+          "controller": "CaseController:118",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "case-006",
+          "name": "View Case Evidence",
+          "description": "Get case evidence",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /cases/{tenantId}/{id}/evidence",
+          "controller": "CaseController:80",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Intelligence Loop - Hypotheses",
+      "description": "Hypothesis management",
+      "submodules": ["hypotheses", "status"],
+      "capabilities_count": 6,
+      "routes_count": 6,
+      "capabilities": [
+        {
+          "id": "hyp-001",
+          "name": "View Hypotheses",
+          "description": "List hypotheses for case",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /hypotheses/{tenantId}/case/{caseId}",
+          "controller": "HypothesisController:25",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "hyp-002",
+          "name": "Create Hypothesis",
+          "description": "Record hypothesis",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /hypotheses",
+          "controller": "HypothesisController:32",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "hyp-003",
+          "name": "Set Hypothesis Status",
+          "description": "Update hypothesis status",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "POST /hypotheses/{tenantId}/{id}/status",
+          "controller": "HypothesisController:95",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "hyp-004",
+          "name": "Reject Hypothesis",
+          "description": "Reject hypothesis",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "POST /hypotheses/{tenantId}/case/{caseId}/{id}/reject",
+          "controller": "HypothesisController:57",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "hyp-005",
+          "name": "Support Hypothesis",
+          "description": "Mark as supported",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "POST /hypotheses/{tenantId}/case/{caseId}/{id}/support",
+          "controller": "HypothesisController:70",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "hyp-006",
+          "name": "Confirm Hypothesis",
+          "description": "Confirm hypothesis",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "POST /hypotheses/{tenantId}/case/{caseId}/{id}/confirm",
+          "controller": "HypothesisController:75",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Intelligence Loop - Reasoning",
+      "description": "Reasoning and AI analysis",
+      "submodules": ["reasoning", "engine", "analysis"],
+      "capabilities_count": 10,
+      "routes_count": 10,
+      "capabilities": [
+        {
+          "id": "reasoning-001",
+          "name": "View Reasoning",
+          "description": "List reasoning for signal",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /reasoning/{tenantId}/signal/{signalId}",
+          "controller": "ReasoningController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "reasoning-002",
+          "name": "Create Reasoning",
+          "description": "Record reasoning step",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /reasoning",
+          "controller": "ReasoningController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "reasoning-003",
+          "name": "Get Missing Evidence",
+          "description": "Find evidence gaps",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /reasoning-engine/{tenantId}/missing-evidence",
+          "controller": "ReasoningEngineController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "reasoning-004",
+          "name": "Find Duplicates",
+          "description": "Detect duplicate signals",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /reasoning-engine/{tenantId}/duplicate-signals",
+          "controller": "ReasoningEngineController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "reasoning-005",
+          "name": "Get Warnings",
+          "description": "Early warnings",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /reasoning-engine/{tenantId}/early-warnings",
+          "controller": "ReasoningEngineController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "reasoning-006",
+          "name": "Explain Reasoning",
+          "description": "AI explanation",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "POST /reasoning-engine/{tenantId}/explain",
+          "controller": "ReasoningEngineController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "reasoning-007",
+          "name": "Assess Situation",
+          "description": "AI assessment",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "POST /reasoning-engine/{tenantId}/assess",
+          "controller": "ReasoningEngineController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "reasoning-008",
+          "name": "Get Memory Stats",
+          "description": "Memory statistics",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /reasoning-engine/{tenantId}/memory-stats",
+          "controller": "ReasoningEngineController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "reasoning-009",
+          "name": "Get AI Recommendation",
+          "description": "AI-generated recommendation",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /reasoning-engine/{tenantId}/recommend",
+          "controller": "ReasoningEngineController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "reasoning-010",
+          "name": "Evaluate",
+          "description": "AI evaluation",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /reasoning-engine/{tenantId}/evaluate",
+          "controller": "ReasoningEngineController",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Decisions - Recommendations",
+      "description": "Recommendation management",
+      "submodules": ["recommendations"],
+      "capabilities_count": 4,
+      "routes_count": 4,
+      "capabilities": [
+        {
+          "id": "rec-001",
+          "name": "View Recommendations",
+          "description": "List recommendations",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /recommendations/{tenantId}",
+          "controller": "RecommendationController:31",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "rec-002",
+          "name": "Create Recommendation",
+          "description": "Create recommendation",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /recommendations",
+          "controller": "RecommendationController:47",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "rec-003",
+          "name": "View Recommendation",
+          "description": "Get recommendation",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /recommendations/{tenantId}/{id}",
+          "controller": "RecommendationController:38",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Decisions - Governance",
+      "description": "Decision approval workflow",
+      "submodules": ["decisions", "approval"],
+      "capabilities_count": 4,
+      "routes_count": 4,
+      "capabilities": [
+        {
+          "id": "decision-001",
+          "name": "View Decisions",
+          "description": "List decisions",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /decisions/{tenantId}",
+          "controller": "DecisionController:40",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "decision-002",
+          "name": "Create Decision",
+          "description": "Propose decision",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /decisions",
+          "controller": "DecisionController:56",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "decision-003",
+          "name": "View Decision",
+          "description": "Get decision details",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /decisions/{tenantId}/{id}",
+          "controller": "DecisionController:47",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "decision-004",
+          "name": "Approve Decision",
+          "description": "Approve decision (governance)",
+          "scope": "organization",
+          "roles": ["manager", "admin", "tenant_admin"],
+          "permissions": ["decision.approve"],
+          "route": "POST /decisions/{tenantId}/{id}/approve",
+          "controller": "DecisionController:117",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Execution - ESO",
+      "description": "ESO execution management",
+      "submodules": ["executions", "executors", "measurement"],
+      "capabilities_count": 9,
+      "routes_count": 9,
+      "capabilities": [
+        {
+          "id": "exec-001",
+          "name": "View Executions",
+          "description": "List ESO executions",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /eso-executions/{tenantId}",
+          "controller": "EsoExecutionController:34",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "exec-002",
+          "name": "Start Execution",
+          "description": "Start ESO execution",
+          "scope": "organization",
+          "roles": ["manager", "admin", "tenant_admin"],
+          "permissions": ["eso.execute"],
+          "route": "POST /eso-executions",
+          "controller": "EsoExecutionController:67",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "exec-003",
+          "name": "Complete Execution",
+          "description": "Mark execution complete",
+          "scope": "organization",
+          "roles": ["manager", "admin", "tenant_admin"],
+          "permissions": ["eso.execute"],
+          "route": "PATCH /eso-executions/{tenantId}/{id}/transition",
+          "controller": "EsoExecutionController:180",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "exec-004",
+          "name": "Rollback Execution",
+          "description": "Rollback execution",
+          "scope": "organization",
+          "roles": ["manager", "admin", "tenant_admin"],
+          "permissions": ["eso.execute"],
+          "route": "POST /eso-executions/{tenantId}/{id}/rollback",
+          "controller": "EsoExecutionController:205",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "exec-005",
+          "name": "View Execution History",
+          "description": "Execution history",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /eso-executions/{tenantId}/eso/{esoId}",
+          "controller": "EsoExecutionController:191",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "exec-006",
+          "name": "View Executors",
+          "description": "List executors",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /executors/{tenantId}",
+          "controller": "ExecutorController:29",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "exec-007",
+          "name": "Register Executor",
+          "description": "Register executor",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /executors",
+          "controller": "ExecutorController:45",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "exec-008",
+          "name": "Create Measurement Plan",
+          "description": "Define metrics",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /measurement-plans",
+          "controller": "MeasurementPlanController",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "Learning - Outcomes",
+      "description": "Outcome and learning management",
+      "submodules": ["outcomes", "learnings", "knowledge"],
+      "capabilities_count": 7,
+      "routes_count": 7,
+      "capabilities": [
+        {
+          "id": "outcome-001",
+          "name": "View Outcomes",
+          "description": "List outcomes",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /outcomes/{tenantId}",
+          "controller": "OutcomeController:42",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "outcome-002",
+          "name": "Record Outcome",
+          "description": "Record decision outcome",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /outcomes",
+          "controller": "OutcomeController:58",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "outcome-003",
+          "name": "View Learnings",
+          "description": "List learnings",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /learnings/{tenantId}",
+          "controller": "LearningController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "outcome-004",
+          "name": "View Reusable Learnings",
+          "description": "List reusable patterns",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /learnings/{tenantId}/reusable",
+          "controller": "LearningController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "outcome-005",
+          "name": "Search Knowledge Library",
+          "description": "Search knowledge base",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /knowledge-library/{tenantId}/search",
+          "controller": "KnowledgeLibraryController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "outcome-006",
+          "name": "Create Knowledge Asset",
+          "description": "Add to knowledge base",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /knowledge-library",
+          "controller": "KnowledgeLibraryController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "outcome-007",
+          "name": "Mark Knowledge Reused",
+          "description": "Mark as reused",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["update"],
+          "route": "POST /knowledge-library/{tenantId}/{id}/reuse",
+          "controller": "KnowledgeLibraryController",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Analytics",
+      "description": "Reporting and analytics",
+      "submodules": ["reports", "dashboards", "metrics", "export"],
+      "capabilities_count": 11,
+      "routes_count": 11,
+      "capabilities": [
+        {
+          "id": "analytics-001",
+          "name": "View Analytics",
+          "description": "View analytics dashboard",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /analytics/{tenantId}",
+          "controller": "AnalyticsController:39",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "analytics-002",
+          "name": "Executive Summary",
+          "description": "Executive overview",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /analytics/{tenantId}/executive-summary",
+          "controller": "AnalyticsController:121",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "analytics-003",
+          "name": "Decision Intelligence",
+          "description": "Decision metrics",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /analytics/{tenantId}/decision-intelligence",
+          "controller": "AnalyticsController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "analytics-004",
+          "name": "Export Decisions CSV",
+          "description": "Export decisions",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /analytics/{tenantId}/decisions/export.csv",
+          "controller": "AnalyticsController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "analytics-005",
+          "name": "Organization Report",
+          "description": "Org health report",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /analytics/{tenantId}/reports/organization",
+          "controller": "AnalyticsController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "analytics-006",
+          "name": "People Report",
+          "description": "People analytics",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /analytics/{tenantId}/reports/people",
+          "controller": "AnalyticsController:229",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "analytics-007",
+          "name": "Intelligence Report",
+          "description": "Intelligence metrics",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /analytics/{tenantId}/reports/intelligence",
+          "controller": "AnalyticsController:295",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "name": "AI Services",
+      "description": "AI provider and workspace management",
+      "submodules": ["providers", "templates", "evaluations", "feedback", "quotas", "workspace"],
+      "capabilities_count": 35,
+      "routes_count": 35,
+      "capabilities": [
+        {
+          "id": "ai-001",
+          "name": "View AI Providers",
+          "description": "List AI providers",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /ai/providers/{tenantId}",
+          "controller": "AiProviderController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "ai-002",
+          "name": "Create AI Provider",
+          "description": "Configure AI provider",
+          "scope": "organization",
+          "roles": ["admin", "tenant_admin"],
+          "permissions": ["settings.manage"],
+          "route": "POST /ai/providers",
+          "controller": "AiProviderController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "ai-003",
+          "name": "Summarize Evidence",
+          "description": "AI summarization",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "POST /ai/summarize-evidence",
+          "controller": "AiController:92",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "ai-004",
+          "name": "View AI Feedback",
+          "description": "List feedback",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /ai/feedback/{tenantId}",
+          "controller": "AiFeedbackController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "ai-005",
+          "name": "Submit Feedback",
+          "description": "Submit feedback",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "POST /ai/feedback",
+          "controller": "AiFeedbackController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "ai-006",
+          "name": "View Sessions",
+          "description": "List workspace sessions",
+          "scope": "individual",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /ai/workspace/sessions",
+          "controller": "AiWorkspaceController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "ai-007",
+          "name": "Create Session",
+          "description": "Start new session",
+          "scope": "individual",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /ai/workspace/sessions",
+          "controller": "AiWorkspaceController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "ai-008",
+          "name": "Send Message",
+          "description": "Send message",
+          "scope": "individual",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "POST /ai/workspace/sessions/{sessionId}/messages",
+          "controller": "AiWorkspaceController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "ai-009",
+          "name": "Regenerate Response",
+          "description": "Regenerate AI response",
+          "scope": "individual",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "POST /ai/workspace/sessions/{sessionId}/messages/{messageId}/regenerate",
+          "controller": "AiWorkspaceController",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Configuration",
+      "description": "System configuration management",
+      "submodules": ["settings", "branding", "themes", "forms", "versions"],
+      "capabilities_count": 20,
+      "routes_count": 20,
+      "capabilities": [
+        {
+          "id": "config-001",
+          "name": "View Settings",
+          "description": "List settings",
+          "scope": "individual+organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /settings/{tenantId}",
+          "controller": "SettingsController:31",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "config-002",
+          "name": "Set Setting",
+          "description": "Update setting",
+          "scope": "organization",
+          "roles": ["admin", "tenant_admin"],
+          "permissions": ["settings.manage"],
+          "route": "PUT /settings/{tenantId}",
+          "controller": "SettingsController:47",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Observability",
+      "description": "Health checks and monitoring",
+      "submodules": ["health", "metrics", "events"],
+      "capabilities_count": 7,
+      "routes_count": 7,
+      "capabilities": [
+        {
+          "id": "obs-001",
+          "name": "Health Check",
+          "description": "System health",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /observability/health",
+          "controller": "ObservabilityController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "obs-002",
+          "name": "Database Health",
+          "description": "DB connectivity",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /observability/health/database",
+          "controller": "ObservabilityController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "obs-003",
+          "name": "System Metrics",
+          "description": "System metrics",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /observability/metrics/system",
+          "controller": "ObservabilityController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "obs-004",
+          "name": "Tenant Metrics",
+          "description": "Tenant metrics",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /observability/metrics/{tenantId}",
+          "controller": "ObservabilityController",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Conversations",
+      "description": "Chat and messaging",
+      "submodules": ["sessions", "messages", "templates"],
+      "capabilities_count": 9,
+      "routes_count": 9,
+      "capabilities": [
+        {
+          "id": "conv-001",
+          "name": "Search Sessions",
+          "description": "Search conversations",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /conversations/sessions/{tenantId}/search",
+          "controller": "ConversationController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "conv-002",
+          "name": "View Sessions",
+          "description": "List sessions",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /conversations/sessions/{tenantId}",
+          "controller": "ConversationController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "conv-003",
+          "name": "Create Session",
+          "description": "Start session",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /conversations/sessions",
+          "controller": "ConversationController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "conv-004",
+          "name": "Send Message",
+          "description": "Send message",
+          "scope": "organization",
+          "roles": ["analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["create"],
+          "route": "POST /conversations/sessions/{tenantId}/{id}/messages",
+          "controller": "ConversationController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "conv-005",
+          "name": "Delete Session",
+          "description": "Delete conversation",
+          "scope": "organization",
+          "roles": ["manager", "admin", "tenant_admin"],
+          "permissions": ["delete"],
+          "route": "DELETE /conversations/sessions/{tenantId}/{id}",
+          "controller": "ConversationController",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "name": "Audit",
+      "description": "Audit logging and tracking",
+      "submodules": ["logs", "activity", "stats"],
+      "capabilities_count": 3,
+      "routes_count": 3,
+      "capabilities": [
+        {
+          "id": "audit-001",
+          "name": "View Audit Logs",
+          "description": "List audit entries",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /audit",
+          "controller": "AuditController:20",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "audit-002",
+          "name": "View Activity",
+          "description": "Recent activity",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /audit/activity",
+          "controller": "AuditController:37",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "audit-003",
+          "name": "Audit Statistics",
+          "description": "Audit stats",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /audit/stats",
+          "controller": "AuditController:45",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "Notifications",
+      "description": "User notifications",
+      "submodules": ["notifications"],
+      "capabilities_count": 4,
+      "routes_count": 4,
+      "capabilities": [
+        {
+          "id": "notif-001",
+          "name": "View Notifications",
+          "description": "List notifications",
+          "scope": "individual",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /notifications/{tenantId}",
+          "controller": "NotificationController:34",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "notif-002",
+          "name": "Unread Count",
+          "description": "Count unread",
+          "scope": "individual",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /notifications/{tenantId}/unread-count",
+          "controller": "NotificationController:45",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "notif-003",
+          "name": "Mark Read",
+          "description": "Mark as read",
+          "scope": "individual",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "PATCH /notifications/{tenantId}/{id}/read",
+          "controller": "NotificationController:52",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "notif-004",
+          "name": "Mark All Read",
+          "description": "Mark all read",
+          "scope": "individual",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "POST /notifications/{tenantId}/read-all",
+          "controller": "NotificationController:62",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "Events Management",
+      "description": "Event processing and DLQ",
+      "submodules": ["events", "dlq", "retry"],
+      "capabilities_count": 7,
+      "routes_count": 7,
+      "capabilities": [
+        {
+          "id": "event-001",
+          "name": "View Events",
+          "description": "List events",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /events",
+          "controller": "EventController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "event-002",
+          "name": "View DLQ",
+          "description": "Dead letter queue",
+          "scope": "organization",
+          "roles": ["viewer", "analyst", "manager", "admin", "tenant_admin"],
+          "permissions": ["read"],
+          "route": "GET /events/dlq",
+          "controller": "EventController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "event-003",
+          "name": "Retry Failed",
+          "description": "Retry failures",
+          "scope": "organization",
+          "roles": ["admin", "tenant_admin"],
+          "permissions": ["events.manage"],
+          "route": "POST /events/retry/failed",
+          "controller": "EventController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "event-004",
+          "name": "Retry DLQ",
+          "description": "Retry DLQ item",
+          "scope": "organization",
+          "roles": ["admin", "tenant_admin"],
+          "permissions": ["events.manage"],
+          "route": "POST /events/dlq/{id}/retry",
+          "controller": "EventController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "event-005",
+          "name": "Delete DLQ",
+          "description": "Delete DLQ item",
+          "scope": "organization",
+          "roles": ["admin", "tenant_admin"],
+          "permissions": ["events.manage"],
+          "route": "DELETE /events/dlq/{id}",
+          "controller": "EventController",
+          "status": "confirmed_active"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "name": "Data Management",
+      "description": "Import, export, onboarding",
+      "submodules": ["imports", "onboarding", "readiness"],
+      "capabilities_count": 15,
+      "routes_count": 15,
+      "capabilities": [
+        {
+          "id": "data-001",
+          "name": "View Imports",
+          "description": "List imports",
+          "scope": "organization",
+          "roles": ["admin", "tenant_admin"],
+          "permissions": ["settings.manage"],
+          "route": "GET /imports/{tenantId}",
+          "controller": "ImportController:21",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "data-002",
+          "name": "Start Import",
+          "description": "Start import",
+          "scope": "organization",
+          "roles": ["admin", "tenant_admin"],
+          "permissions": ["settings.manage"],
+          "route": "POST /imports",
+          "controller": "ImportController:80",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "data-003",
+          "name": "Process Import",
+          "description": "Process import",
+          "scope": "organization",
+          "roles": ["admin", "tenant_admin"],
+          "permissions": ["settings.manage"],
+          "route": "POST /imports/{tenantId}/{id}/process",
+          "controller": "ImportController:98",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "data-004",
+          "name": "View Onboarding",
+          "description": "List sessions",
+          "scope": "organization",
+          "roles": ["admin", "tenant_admin"],
+          "permissions": ["settings.manage"],
+          "route": "GET /onboarding/{tenantId}",
+          "controller": "OnboardingController",
+          "status": "confirmed_active"
+        },
+        {
+          "id": "data-005",
+          "name": "Start Onboarding",
+          "description": "Start session",
+          "scope": "organization",
+          "roles": ["admin", "tenant_admin"],
+          "permissions": ["settings.manage"],
+          "route": "POST /onboarding/{tenantId}/start",
+          "controller": "OnboardingController",
+          "status": "confirmed_active"
+        }
+      ]
+    }
+  ],
+  "scope_enforcement": {
+    "individual": {
+      "mechanism": "Actor ID Filtering",
+      "evidence": [
+        "app/Http/Controllers/Controller.php:22-25",
+        "app/Http/Controllers/Api/NotificationController.php:27-32",
+        "app/Http/Controllers/Api/SettingsController.php:37-41"
+      ]
+    },
+    "department": {
+      "mechanism": "Department ID Filtering",
+      "evidence": [
+        "app/Repositories/DepartmentRepository.php"
+      ]
+    },
+    "organization": {
+      "mechanism": "Tenant Middleware",
+      "evidence": [
+        "app/Http/Middleware/EnsureTenantScope.php:44-101"
+      ]
+    }
+  },
+  "security_findings": [
+    {
+      "id": "sec-001",
+      "severity": "medium",
+      "title": "Missing Authorization on Some GET Routes",
+      "description": "Routes like GET /organizations/{tenantId}/{id}/structure only require permission:read",
+      "recommendation": "Add explicit permissions for sensitive data"
+    },
+    {
+      "id": "sec-002",
+      "severity": "low",
+      "title": "Organization Audit Logs May Expose Sensitive Info",
+      "description": "GET /organizations/{tenantId}/{id}/audit exposes all audit entries",
+      "recommendation": "Implement row-level filtering by permission"
+    },
+    {
+      "id": "sec-003",
+      "severity": "medium",
+      "title": "AI Summarization Without Audit Trail",
+      "description": "POST /ai/summarize-evidence is POST but writes nothing",
+      "recommendation": "Add audit logging for AI operations"
+    },
+    {
+      "id": "sec-004",
+      "severity": "high",
+      "title": "Bulk Import Without Row-Level Permissions",
+      "description": "POST /imports can import any entity type",
+      "recommendation": "Add entity-specific permissions"
+    },
+    {
+      "id": "sec-005",
+      "severity": "medium",
+      "title": "Session Deletion Without Ownership Check",
+      "description": "DELETE /conversations/sessions/{id} only checks permission",
+      "recommendation": "Add ownership verification"
+    },
+    {
+      "id": "sec-006",
+      "severity": "low",
+      "title": "Cross-Tenant Admin Access",
+      "description": "Admins can address any organization",
+      "recommendation": "Document and monitor cross-tenant access"
+    },
+    {
+      "id": "sec-007",
+      "severity": "low",
+      "title": "Hardcoded Provider Validation",
+      "description": "AiController.php:31 hardcodes ['anthropic', 'openai', 'gemini', 'ollama']",
+      "recommendation": "Externalize to configuration"
+    },
+    {
+      "id": "sec-008",
+      "severity": "low",
+      "title": "Evidence Hash Not Verifiable",
+      "description": "EvidenceController.php:166-168 hash computed but never verified",
+      "recommendation": "Implement hash verification"
+    }
+  ],
+  "unverified_features": [
+    {
+      "id": "unver-001",
+      "feature": "Neo4j Health Check",
+      "evidence": "ObservabilityController.php",
+      "missing_evidence": "Actual Neo4j connectivity implementation",
+      "scope": "organization",
+      "confidence": "medium"
+    },
+    {
+      "id": "unver-002",
+      "feature": "Mental Model Domains",
+      "evidence": "MentalModelController.php",
+      "missing_evidence": "Domain enumeration and categorization",
+      "scope": "organization",
+      "confidence": "medium"
+    },
+    {
+      "id": "unver-003",
+      "feature": "Risk Assessment",
+      "evidence": "RiskController.php",
+      "missing_evidence": "Risk scoring algorithm",
+      "scope": "organization",
+      "confidence": "medium"
+    },
+    {
+      "id": "unver-004",
+      "feature": "KASBA Heatmap",
+      "evidence": "KasbaController.php",
+      "missing_evidence": "Actual proficiency calculation",
+      "scope": "department",
+      "confidence": "medium"
+    },
+    {
+      "id": "unver-005",
+      "feature": "Feature Flags",
+      "evidence": "FeatureFlagController.php",
+      "missing_evidence": "Flag evaluation logic",
+      "scope": "organization",
+      "confidence": "medium"
+    }
+  ],
+  "evidence_references": {
+    "middleware": [
+      "app/Http/Middleware/AuthenticateJwt.php:23-55",
+      "app/Http/Middleware/EnsureTenantScope.php:44-101",
+      "app/Http/Middleware/RequirePermission.php:28-124"
+    ],
+    "authorization": [
+      "app/Domain/Authorization/Role.php:22-68",
+      "app/Domain/Authorization/Permission.php:7-26"
+    ],
+    "controllers": [
+      "app/Http/Controllers/Api/AuthController.php",
+      "app/Http/Controllers/Api/OrganizationController.php",
+      "app/Http/Controllers/Api/SignalController.php",
+      "app/Http/Controllers/Api/EvidenceController.php",
+      "app/Http/Controllers/Api/CaseController.php",
+      "app/Http/Controllers/Api/DecisionController.php",
+      "app/Http/Controllers/Api/OutcomeController.php",
+      "app/Http/Controllers/Api/NotificationController.php",
+      "app/Http/Controllers/Api/SettingsController.php",
+      "app/Http/Controllers/Api/AiController.php",
+      "app/Http/Controllers/Api/AnalyticsController.php",
+      "app/Http/Controllers/Api/AuditController.php"
+    ],
+    "routes": [
+      "routes/api.php:113-229"
+    ],
+    "tests": [
+      "tests/Feature/ApiAuthorizationTest.php",
+      "tests/Feature/SecurityMatrixTest.php",
+      "tests/Feature/TenantIsolationMatrixTest.php"
+    ]
+  }
+}

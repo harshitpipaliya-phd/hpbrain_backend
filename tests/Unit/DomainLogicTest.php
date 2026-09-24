@@ -56,11 +56,20 @@ final class DomainLogicTest extends TestCase
         $r = new ReasoningService(new EvidenceService(90));
         $ev = fn (float $c, int $d) => ['confidence' => $c, 'observedDate' => $this->at($d)];
 
-        // Values produced by running the Node implementation.
-        self::assertSame(0.3,  $r->computeConfidence([]));
-        self::assertSame(0.43, $r->computeConfidence([$ev(0.9, 0)]));
-        self::assertSame(0.37, $r->computeConfidence([$ev(0.9, 90)]));
-        self::assertSame(0.75, $r->computeConfidence([$ev(1.0, 0), $ev(1.0, 0), $ev(1.0, 0)]));
+        // Pinned to the same instant at() measures from. Without this the
+        // ages below are relative to the real clock, so every expected value
+        // decays by a point every few days and the suite rots on its own.
+        $now = new DateTimeImmutable('2026-07-27T00:00:00Z');
+
+        // Values produced by running the Node implementation. 0.9 × 1.0 × 0.15
+        // + 0.30 is 0.435, which both Math.round and PHP's round() take up to
+        // 0.44 — verified against the Node expression directly. The 0.43 that
+        // stood here was never reproducible; it only passed because the score
+        // was being decayed against the real clock (see computeConfidence).
+        self::assertSame(0.3,  $r->computeConfidence([], $now));
+        self::assertSame(0.44, $r->computeConfidence([$ev(0.9, 0)], $now));
+        self::assertSame(0.37, $r->computeConfidence([$ev(0.9, 90)], $now));
+        self::assertSame(0.75, $r->computeConfidence([$ev(1.0, 0), $ev(1.0, 0), $ev(1.0, 0)], $now));
     }
 
     public function test_confidence_never_reaches_certainty(): void
