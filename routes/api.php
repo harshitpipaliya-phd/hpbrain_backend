@@ -181,6 +181,7 @@ Route::prefix('v1')->group(function () {
         Route::get('departments/{tenantId}/{id}', [DepartmentController::class, 'show']);
 
         Route::get('people/{tenantId}/search', [PersonController::class, 'search']);
+        Route::get('people/{tenantId}/options', [PersonController::class, 'options']);
         Route::get('people/{tenantId}', [PersonController::class, 'index']);
         Route::post('people', [PersonController::class, 'store'])->middleware('permission:create');
         Route::get('people/{tenantId}/{id}', [PersonController::class, 'show']);
