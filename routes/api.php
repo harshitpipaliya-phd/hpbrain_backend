@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\AiController;
+use App\Http\Controllers\Api\AiIntelligence\AiIntelligenceAskController;
+use App\Http\Controllers\Api\AiIntelligence\AiIntelligenceCapabilityController;
+use App\Http\Controllers\Api\AiIntelligence\AiIntelligenceConfigurationController;
+use App\Http\Controllers\Api\AiIntelligence\AiIntelligenceEvaluationController;
+use App\Http\Controllers\Api\AiIntelligence\AiIntelligencePolicyController;
+use App\Http\Controllers\Api\AiIntelligence\AiIntelligenceRecommendationController;
+use App\Http\Controllers\Api\AiIntelligence\AiIntelligenceTemplateController;
+use App\Http\Controllers\Api\AiIntelligence\AiIntelligenceUsageController;
 use App\Http\Controllers\Api\AiEvaluationController;
 use App\Http\Controllers\Api\AiFeedbackController;
 use App\Http\Controllers\Api\AiPromptTemplateController;
@@ -871,6 +879,83 @@ Route::prefix('v1')->group(function () {
             Route::post('workspace/sessions/{sessionId}/messages/{messageId}/explain', [AiWorkspaceController::class, 'explain']);
             Route::get('workspace/sessions/{sessionId}/messages/{messageId}/follow-up', [AiWorkspaceController::class, 'followUp']);
             Route::get('workspace/sessions/{sessionId}/history', [AiWorkspaceController::class, 'history']);
+        });
+
+        // ---- AI & Intelligence console (ported from G2G /api/ai/*) ----------
+        //
+        // A separate prefix from `ai/*` above: those routes and their tables
+        // (hpbrain_ai_providers, _prompt_templates, _evaluations, _quotas, …)
+        // serve existing screens and are untouched. This console has its own
+        // hpbrain_ai_* tables and G2G's {success, message, data, errors}
+        // envelope.
+        //
+        // NO {tenantId} SEGMENT: the tenant comes from the token (EnsureTenantScope
+        // sets it), never from the URL or the body.
+        //
+        // settings.manage on the whole group — admin + tenant_admin only, the
+        // equivalent of G2G's profile:admin — so a route added here later is
+        // born gated rather than open. Literal segments (`options`, `preview`,
+        // `pending`, `models`) are registered before `{id}` routes, and ids are
+        // constrained to a UUID shape.
+        Route::prefix('ai-intelligence')->middleware('permission:settings.manage')->group(function () {
+            $uuid = '[0-9a-fA-F\-]{36}';
+
+            Route::get('capabilities', [AiIntelligenceCapabilityController::class, 'index']);
+            Route::get('capabilities/{capability}', [AiIntelligenceCapabilityController::class, 'show'])
+                ->where('capability', '[a-z0-9\-]+');
+
+            Route::get('configuration/options', [AiIntelligenceConfigurationController::class, 'options']);
+            Route::get('configuration', [AiIntelligenceConfigurationController::class, 'index']);
+            Route::post('configuration', [AiIntelligenceConfigurationController::class, 'store']);
+            Route::put('configuration/{id}', [AiIntelligenceConfigurationController::class, 'update'])->where('id', $uuid);
+            Route::delete('configuration/{id}', [AiIntelligenceConfigurationController::class, 'destroy'])->where('id', $uuid);
+
+            Route::get('configuration-models', [AiIntelligenceConfigurationController::class, 'models']);
+            Route::post('configuration-models', [AiIntelligenceConfigurationController::class, 'storeModel']);
+            Route::put('configuration-models/{id}', [AiIntelligenceConfigurationController::class, 'updateModel'])->where('id', $uuid);
+
+            Route::get('templates/options', [AiIntelligenceTemplateController::class, 'options']);
+            Route::post('templates/preview', [AiIntelligenceTemplateController::class, 'preview']);
+            Route::get('templates', [AiIntelligenceTemplateController::class, 'index']);
+            Route::post('templates', [AiIntelligenceTemplateController::class, 'store']);
+            Route::get('templates/{id}', [AiIntelligenceTemplateController::class, 'show'])->where('id', $uuid);
+            Route::put('templates/{id}', [AiIntelligenceTemplateController::class, 'update'])->where('id', $uuid);
+            Route::delete('templates/{id}', [AiIntelligenceTemplateController::class, 'destroy'])->where('id', $uuid);
+
+            Route::post('ask', [AiIntelligenceAskController::class, 'ask']);
+            Route::get('grounding-context', [AiIntelligenceAskController::class, 'groundingContext']);
+            Route::get('conversations', [AiIntelligenceAskController::class, 'conversations']);
+            Route::get('conversations/{conversation}', [AiIntelligenceAskController::class, 'conversation'])
+                ->where('conversation', $uuid);
+
+            Route::get('recommendations/pending', [AiIntelligenceRecommendationController::class, 'pending']);
+            Route::get('recommendations', [AiIntelligenceRecommendationController::class, 'index']);
+            Route::get('recommendations/{recommendation}', [AiIntelligenceRecommendationController::class, 'show'])
+                ->where('recommendation', $uuid);
+            Route::post('recommendations/{recommendation}/approve', [AiIntelligenceRecommendationController::class, 'approve'])
+                ->where('recommendation', $uuid);
+            Route::post('recommendations/{recommendation}/reject', [AiIntelligenceRecommendationController::class, 'reject'])
+                ->where('recommendation', $uuid);
+            Route::post('recommendations/{recommendation}/defer', [AiIntelligenceRecommendationController::class, 'defer'])
+                ->where('recommendation', $uuid);
+
+            Route::get('evaluations/options', [AiIntelligenceEvaluationController::class, 'options']);
+            Route::get('evaluations', [AiIntelligenceEvaluationController::class, 'index']);
+            Route::post('evaluations', [AiIntelligenceEvaluationController::class, 'store']);
+            Route::get('evaluations/{evaluation}', [AiIntelligenceEvaluationController::class, 'show'])->where('evaluation', $uuid);
+            Route::post('evaluations/{evaluation}/run', [AiIntelligenceEvaluationController::class, 'run'])->where('evaluation', $uuid);
+            Route::delete('evaluations/{evaluation}', [AiIntelligenceEvaluationController::class, 'destroy'])->where('evaluation', $uuid);
+
+            Route::get('usage/options', [AiIntelligenceUsageController::class, 'options']);
+            Route::get('usage', [AiIntelligenceUsageController::class, 'summary']);
+            Route::get('usage/events', [AiIntelligenceUsageController::class, 'events']);
+            Route::post('usage/quota', [AiIntelligenceUsageController::class, 'saveQuota']);
+
+            Route::get('policies/options', [AiIntelligencePolicyController::class, 'options']);
+            Route::get('policies', [AiIntelligencePolicyController::class, 'index']);
+            Route::post('policies', [AiIntelligencePolicyController::class, 'store']);
+            Route::put('policies/{id}', [AiIntelligencePolicyController::class, 'update'])->where('id', $uuid);
+            Route::delete('policies/{id}', [AiIntelligencePolicyController::class, 'destroy'])->where('id', $uuid);
         });
     });
 });
