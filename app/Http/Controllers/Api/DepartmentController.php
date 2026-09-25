@@ -178,24 +178,52 @@ final class DepartmentController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name'        => ['required', 'string', 'min:1'],
+            'name'        => ['required', 'string', 'min:1', 'max:255'],
             'description' => ['nullable', 'string'],
             'parentId'    => ['nullable', 'integer'],
+            'code'        => ['nullable', 'string', 'max:50'],
         ]);
 
         $t = $this->authTenantId($request);
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
+        // Tenant-scoped duplicate department name check
+        if (DB::table($unit->table)
+            ->where($unit->tenantKey, $t)
+            ->where($unit->field('name'), trim($data['name']))
+            ->tap(fn ($q) => $this->activeSourceRows($q, $unit))
+            ->exists()) {
+            return response()->json([
+                'error' => 'department_already_exists',
+                'message' => 'A department with this name already exists in this organization.',
+            ], 422);
+        }
+
+        if (!empty($data['parentId']) && !DB::table($unit->table)
+            ->where($unit->primaryKey, $data['parentId'])
+            ->where($unit->tenantKey, $t)
+            ->tap(fn ($q) => $this->activeSourceRows($q, $unit))
+            ->exists()) {
+            return response()->json(['error' => 'parent_department_not_found'], 422);
+        }
+
         $now = now()->format('Y-m-d H:i:s');
 
         $fields = [
-            $unit->field('name')        => $data['name'],
-            $unit->field('description') => $data['description'] ?? null,
+            $unit->field('name')        => trim($data['name']),
+            $unit->field('description') => !empty($data['description']) ? trim($data['description']) : null,
             $unit->field('parent')      => $data['parentId'] ?? 0,
             $unit->field('status')      => 1,
             'is_calculated'             => 0,
             $unit->tenantKey            => $t,
         ];
+
+        if ($this->sourceHasColumn($unit, 'code')) {
+            $code = !empty($data['code'])
+                ? strtoupper(trim($data['code']))
+                : strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $data['name']) ?: 'DEPT', 0, 10));
+            $fields['code'] = $code;
+        }
 
         foreach ([
             'created_by' => $this->actorErpId($request),
@@ -207,7 +235,7 @@ final class DepartmentController extends Controller
             }
         }
 
-        $id = DB::table($unit->table)->insertGetId($fields);
+        $id = DB::transaction(fn () => DB::table($unit->table)->insertGetId($fields));
 
         return response()->json(
             $this->map((array) DB::table($unit->table)->where($unit->primaryKey, $id)->first(), $unit),

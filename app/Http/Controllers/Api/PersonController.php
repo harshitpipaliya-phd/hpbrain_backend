@@ -204,17 +204,62 @@ final class PersonController extends Controller
         }
     }
 
+    public function options(Request $request): JsonResponse
+    {
+        $t = $this->authTenantId($request);
+        $unit = $this->resolver->resolve($t, 'OrganizationUnit');
+        $profile = $this->resolver->resolve($t, 'PersonProfile');
+
+        $deptQuery = DB::table($unit->table)
+            ->where($unit->tenantKey, $t)
+            ->where($unit->field('status'), 1)
+            ->tap(fn ($q) => $this->activeSourceRows($q, $unit));
+
+        $departments = $deptQuery->get()->map(function ($d) use ($unit) {
+            $arr = (array) $d;
+            return [
+                'id' => (string) $arr[$unit->primaryKey],
+                'name' => (string) ($arr[$unit->field('name')] ?? ''),
+                'code' => isset($arr['code']) ? (string) $arr['code'] : null,
+            ];
+        })->values();
+
+        $roleQuery = DB::table($profile->table)
+            ->where($profile->tenantKey, $t)
+            ->where($profile->field('status'), 1)
+            ->tap(fn ($q) => $this->activeSourceRows($q, $profile));
+
+        $roles = $roleQuery->get()->map(function ($r) use ($profile) {
+            $arr = (array) $r;
+            return [
+                'id' => (string) $arr[$profile->primaryKey],
+                'name' => (string) ($arr[$profile->field('name')] ?? ''),
+            ];
+        })->values();
+
+        return response()->json([
+            'departments' => $departments,
+            'roles' => $roles,
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'employeeId' => ['required', 'string'],
-            'firstName'  => ['required', 'string'],
-            'lastName'   => ['required', 'string'],
-            'email'      => ['required', 'email'],
-            'phone'      => ['nullable', 'string'],
-            'gender'     => ['nullable', 'string'],
+            'employeeId'   => ['required', 'string'],
+            'firstName'    => ['required', 'string'],
+            'middleName'   => ['nullable', 'string'],
+            'lastName'     => ['required', 'string'],
+            'email'        => ['required', 'email'],
+            'phone'        => ['nullable', 'string'],
+            'gender'       => ['nullable', 'string'],
+            'birthDate'    => ['nullable', 'date'],
             'departmentId' => ['nullable', 'integer'],
+            'roleId'       => ['nullable', 'integer'],
+            'designation'  => ['nullable', 'string'],
+            'userName'     => ['nullable', 'string'],
             'joiningDate'  => ['nullable', 'date'],
+            'status'       => ['nullable', 'integer'],
         ]);
 
         $t = $this->authTenantId($request);
@@ -222,45 +267,153 @@ final class PersonController extends Controller
         $profile = $this->resolver->resolve($t, 'PersonProfile');
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
+        // Check duplicate email
+        if (DB::table($person->table)
+            ->where('email', trim($data['email']))
+            ->tap(fn ($q) => $this->activeSourceRows($q, $person))
+            ->exists()) {
+            return response()->json([
+                'error' => 'email_already_exists',
+                'message' => 'A user with this email address already exists.',
+            ], 422);
+        }
+
+        // Check duplicate employee ID within tenant
+        if (DB::table($person->table)
+            ->where($person->tenantKey, $t)
+            ->where($person->field('externalRef'), trim($data['employeeId']))
+            ->tap(fn ($q) => $this->activeSourceRows($q, $person))
+            ->exists()) {
+            return response()->json([
+                'error' => 'employee_id_already_exists',
+                'message' => 'A person with this Employee ID already exists in this organization.',
+            ], 422);
+        }
+
+        // Check username uniqueness if provided and column exists
+        $userName = !empty($data['userName']) ? trim($data['userName']) : trim($data['employeeId']);
+        if ($this->sourceHasColumn($person, 'user_name')) {
+            if (DB::table($person->table)
+                ->where('user_name', $userName)
+                ->tap(fn ($q) => $this->activeSourceRows($q, $person))
+                ->exists()) {
+                return response()->json([
+                    'error' => 'username_already_exists',
+                    'message' => 'A user with this username already exists.',
+                ], 422);
+            }
+        }
+
         if (!empty($data['departmentId']) && !DB::table($unit->table)
             ->where($unit->primaryKey, $data['departmentId'])
             ->where($unit->tenantKey, $t)
-            ->whereNull('deleted_at')
+            ->tap(fn ($q) => $this->activeSourceRows($q, $unit))
             ->exists()) {
             return response()->json(['error' => 'department_not_found'], 422);
         }
 
-        $profileId = DB::table($profile->table)
-            ->where($profile->tenantKey, $t)
-            ->where($profile->field('name'), 'Employee')
-            ->where($profile->field('status'), 1)
-            ->value($profile->primaryKey);
+        $profileId = null;
+        if (!empty($data['roleId'])) {
+            $roleExists = DB::table($profile->table)
+                ->where($profile->primaryKey, $data['roleId'])
+                ->where($profile->tenantKey, $t)
+                ->where($profile->field('status'), 1)
+                ->tap(fn ($q) => $this->activeSourceRows($q, $profile))
+                ->exists();
+            if ($roleExists) {
+                $profileId = (int) $data['roleId'];
+            }
+        }
+
+        if (!$profileId) {
+            $profileId = DB::table($profile->table)
+                ->where($profile->tenantKey, $t)
+                ->where(function ($q) use ($profile) {
+                    $q->where($profile->field('name'), 'Employee')
+                      ->orWhere($profile->field('name'), 'like', '%employee%')
+                      ->orWhere($profile->field('name'), 'like', '%staff%');
+                })
+                ->where($profile->field('status'), 1)
+                ->value($profile->primaryKey);
+        }
+
+        if (! $profileId) {
+            $profileId = DB::table($profile->table)
+                ->where($profile->tenantKey, $t)
+                ->where($profile->field('status'), 1)
+                ->value($profile->primaryKey);
+        }
 
         if (! $profileId) {
             return response()->json(['error' => "no_employee_profile_for_org_{$t}"], 422);
         }
 
+        $clientId = null;
+        if ($this->sourceHasColumn($person, 'client_id')) {
+            $clientId = DB::table($person->table)
+                ->where($person->tenantKey, $t)
+                ->whereNotNull('client_id')
+                ->value('client_id')
+                ?? DB::table($profile->table)
+                ->where($profile->tenantKey, $t)
+                ->whereNotNull('client_id')
+                ->value('client_id');
+        }
+
         $now = now()->format('Y-m-d H:i:s');
         $temp = substr(bin2hex(random_bytes(8)), 0, 12);
 
-        $id = DB::table($person->table)->insertGetId([
-            $person->field('externalRef') => $data['employeeId'],
-            'password'                    => $temp,
+        $fields = [
+            $person->field('externalRef') => trim($data['employeeId']),
+            'password'                    => bcrypt($temp),
             'plain_password'              => $temp,
-            $person->field('firstName')   => $data['firstName'],
-            $person->field('lastName')    => $data['lastName'],
-            $person->field('email')       => $data['email'],
-            $person->field('phone')       => $data['phone'] ?? null,
-            $person->field('gender')      => $data['gender'] ?? null,
+            $person->field('firstName')   => trim($data['firstName']),
+            $person->field('lastName')    => trim($data['lastName']),
+            $person->field('email')       => trim($data['email']),
+            $person->field('phone')       => !empty($data['phone']) ? trim($data['phone']) : null,
+            
             $person->field('unit')        => $data['departmentId'] ?? null,
             $person->field('joinedDate')  => $data['joiningDate'] ?? null,
             $person->tenantKey            => $t,
             $person->field('profile')     => $profileId,
-            $person->field('status')      => 1,
+            $person->field('status')      => isset($data['status']) ? (int) $data['status'] : 1,
             'created_by'                  => $this->actorErpId($request),
             'created_at'                  => $now,
             'updated_at'                  => $now,
-        ]);
+        ];
+
+        if ($this->sourceHasColumn($person, 'middle_name')) {
+            $fields['middle_name'] = !empty($data['middleName']) ? trim($data['middleName']) : null;
+        }
+
+        if ($this->sourceHasColumn($person, 'birthdate')) {
+            $fields['birthdate'] = !empty($data['birthDate']) ? $data['birthDate'] : null;
+        }
+
+        if ($person->has('gender') && $this->sourceHasColumn($person, $person->field('gender'))) {
+            $rawGender = strtolower(trim((string) ($data['gender'] ?? '')));
+            $genderVal = match ($rawGender) {
+                'female', 'f' => 'F',
+                'male', 'm'   => 'M',
+                'other', 'o', 'non_binary' => 'O',
+                default => !empty($rawGender) ? strtoupper(substr($rawGender, 0, 1)) : null,
+            };
+            $fields[$person->field('gender')] = $genderVal;
+        }
+        if ($this->sourceHasColumn($person, 'employee_no')) {
+            $fields['employee_no'] = trim($data['employeeId']);
+        }
+        if ($this->sourceHasColumn($person, 'employee_id') && is_numeric($data['employeeId'])) {
+            $fields['employee_id'] = (int) $data['employeeId'];
+        }
+        if ($this->sourceHasColumn($person, 'user_name')) {
+            $fields['user_name'] = $userName;
+        }
+        if ($clientId !== null && $this->sourceHasColumn($person, 'client_id')) {
+            $fields['client_id'] = $clientId;
+        }
+
+        $id = DB::transaction(fn () => DB::table($person->table)->insertGetId($fields));
 
         $created = DB::table($person->table)
             ->select($this->listColumns($person))
@@ -272,6 +425,7 @@ final class PersonController extends Controller
             201
         );
     }
+
 
     /**
      * Role names for a set of people, in ONE query.
