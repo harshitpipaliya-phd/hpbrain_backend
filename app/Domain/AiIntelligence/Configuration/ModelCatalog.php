@@ -91,9 +91,25 @@ final class ModelCatalog
         return Platform::visible($query, $tenantId)->exists();
     }
 
+    /**
+     * The model a provider falls back to for this tenant: the tenant's own active
+     * catalogue row first, then the platform's — so a tenant that catalogued its own
+     * model is not handed the platform's first row. The listings (forProvider /
+     * grouped) keep their platform-first order.
+     */
     public function defaultFor(string $provider, string $tenantId): ?string
     {
-        return $this->forProvider($provider, $tenantId)[0]['model_id'] ?? null;
+        if (! Schema::hasTable(self::TABLE)) {
+            return null;
+        }
+
+        $model = Platform::visible(DB::table(self::TABLE)->where('provider', $provider)->where('status', 1), $tenantId)
+            ->orderByRaw('CASE WHEN tenant_id = ? THEN 0 ELSE 1 END', [$tenantId])
+            ->orderBy('sort_order')
+            ->orderBy('label')
+            ->value('model_id');
+
+        return $model === null ? null : (string) $model;
     }
 
     /**

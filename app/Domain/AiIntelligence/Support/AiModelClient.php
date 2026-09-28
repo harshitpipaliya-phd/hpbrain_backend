@@ -48,10 +48,13 @@ final class AiModelClient
     /**
      * @param  array<int, array{role: string, content: string}>  $messages
      * @param  array{max_tokens?: int, temperature?: float, json?: bool, related_type?: string, related_id?: string, user_id?: string}  $options
+     * @param  string|null  $productModule  The hpbrain_ai_modules key the call is made from, when
+     *                                      there is one. Only lets that area's own AI Stack model
+     *                                      choice apply; omitted, resolution is unchanged.
      */
-    public function complete(string $moduleKey, array $messages, array $options, string $tenantId): AiCompletion
+    public function complete(string $moduleKey, array $messages, array $options, string $tenantId, ?string $productModule = null): AiCompletion
     {
-        $config = $this->configuration->resolve($moduleKey, $tenantId);
+        $config = $this->configuration->resolve($moduleKey, $tenantId, $productModule);
 
         if (! $this->providers->isDriveable($config->provider)) {
             throw AiNotConfiguredException::providerNotDriveable($this->providers->label($config->provider));
@@ -71,7 +74,7 @@ final class AiModelClient
             $this->meter->record($moduleKey, $config, $tenantId, 0, 0, null, [
                 'outcome' => AiUsageMeter::OUTCOME_REFUSED,
                 'error' => $refusal,
-            ] + $this->meta($options));
+            ] + $this->meta($options, $productModule));
 
             throw new AiQuotaExceededException($refusal);
         }
@@ -93,7 +96,7 @@ final class AiModelClient
             $this->meter->record($moduleKey, $config, $tenantId, 0, 0, $this->elapsed($started), [
                 'outcome' => AiUsageMeter::OUTCOME_FAILED,
                 'error' => $exception->getMessage(),
-            ] + $this->meta($options));
+            ] + $this->meta($options, $productModule));
 
             throw $exception;
         }
@@ -107,7 +110,7 @@ final class AiModelClient
             $completion['input_tokens'],
             $completion['output_tokens'],
             $latencyMs,
-            ['finish_reason' => $completion['finish_reason']] + $this->meta($options)
+            ['finish_reason' => $completion['finish_reason']] + $this->meta($options, $productModule)
         );
 
         return new AiCompletion(
@@ -121,13 +124,19 @@ final class AiModelClient
         );
     }
 
-    /** @param array<string, mixed> $options */
-    private function meta(array $options): array
+    /**
+     * What the meter records beside the counts. `product_module` attributes the event
+     * to the AI Stack module the call was made from; omitted, it is attributed to none.
+     *
+     * @param array<string, mixed> $options
+     */
+    private function meta(array $options, ?string $productModule = null): array
     {
         return array_filter([
             'related_type' => $options['related_type'] ?? null,
             'related_id' => $options['related_id'] ?? null,
             'user_id' => $options['user_id'] ?? null,
+            'product_module' => $productModule !== null && trim($productModule) !== '' ? trim($productModule) : null,
         ], fn ($value) => $value !== null);
     }
 

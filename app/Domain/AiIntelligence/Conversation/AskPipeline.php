@@ -78,7 +78,12 @@ final class AskPipeline
                     'related_id' => $conversationId,
                     'user_id' => $scope->userId,
                 ],
-                $tenantId
+                $tenantId,
+                // The area the question was asked from, when one was named: lets that
+                // area's own AI Stack model choice apply, and attributes the metered
+                // call to it (hpbrain_ai_usage_events.product_module). Without one the
+                // call resolves and is metered exactly as before.
+                $moduleKey !== null && trim($moduleKey) !== '' ? trim($moduleKey) : null
             );
         } catch (AiNotConfiguredException $exception) {
             return $this->recordFailure($scope, $conversation, $exception, configured: false);

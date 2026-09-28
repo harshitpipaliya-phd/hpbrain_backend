@@ -11,6 +11,7 @@ use App\Domain\AiIntelligence\Support\Platform;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -69,12 +70,26 @@ final class AiIntelligencePolicyController extends AiIntelligenceController
             $query = Platform::visible(DB::table('hpbrain_ai_policies as p'), $tenantId, 'p.tenant_id');
 
             if ($moduleKey !== '') {
+                // The module-scoped listing (a module's AI Stack). The assignment must be
+                // the POLICY OWNER's own row — another tenant's assignment rows can never
+                // pull a policy into this list.
                 $query->whereExists(function ($exists) use ($moduleIds) {
                     $exists->from('hpbrain_ai_policy_assignments as a')
                         ->whereColumn('a.policy_id', 'p.id')
+                        ->whereColumn('a.tenant_id', 'p.tenant_id')
                         ->where('a.scope_type', 'module')
                         ->whereIn('a.scope_id', $moduleIds);
                 });
+
+                // A platform policy this tenant replaced with its own copy is shown once —
+                // as the copy. Forks recorded before `forked_from` existed cannot be linked.
+                if (Schema::hasColumn('hpbrain_ai_policies', 'forked_from')) {
+                    $query->whereNotExists(function ($forked) use ($tenantId) {
+                        $forked->from('hpbrain_ai_policies as f')
+                            ->whereColumn('f.forked_from', 'p.id')
+                            ->where('f.tenant_id', $tenantId);
+                    });
+                }
             }
 
             $rows = $query->orderByDesc('p.updated_date')->orderByDesc('p.created_date')->get(['p.id'])->all();
@@ -134,7 +149,7 @@ final class AiIntelligencePolicyController extends AiIntelligenceController
             // A platform policy is shared: an edit writes THIS tenant its own copy and
             // leaves the platform row intact for everyone else.
             if (Platform::isPlatform($row)) {
-                $forkId = DB::transaction(fn () => $this->insertPolicy($data, $scope));
+                $forkId = DB::transaction(fn () => $this->insertPolicy($data, $scope, $id));
 
                 $this->audit->record('ai.policy.forked', $scope, [
                     'related_type' => 'hpbrain_ai_policies',
@@ -291,13 +306,20 @@ final class AiIntelligencePolicyController extends AiIntelligenceController
         return $validated;
     }
 
-    /** @param array<string, mixed> $data */
-    private function insertPolicy(array $data, AiIntelligenceScope $scope): string
+    /**
+     * @param array<string, mixed> $data
+     * @param string|null $forkedFrom The platform policy this row is this tenant's copy of.
+     */
+    private function insertPolicy(array $data, AiIntelligenceScope $scope, ?string $forkedFrom = null): string
     {
         $now = Platform::now();
         $id = Platform::id();
 
-        DB::table('hpbrain_ai_policies')->insert($this->policyColumns($data) + [
+        $link = $forkedFrom !== null && Schema::hasColumn('hpbrain_ai_policies', 'forked_from')
+            ? ['forked_from' => $forkedFrom]
+            : [];
+
+        DB::table('hpbrain_ai_policies')->insert($link + $this->policyColumns($data) + [
             'id' => $id,
             'tenant_id' => $scope->tenantId,
             'created_by' => $scope->userId,
