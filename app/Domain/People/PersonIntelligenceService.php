@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\People;
 
+use App\Domain\Scoring\Banding;
 use App\Domain\Universal\EntityResolver;
 use App\Domain\Universal\ResolvedSource;
 use Illuminate\Support\Facades\DB;
@@ -336,13 +337,26 @@ final class PersonIntelligenceService
     }
 
     /**
-     * @return array{signals:int, cases:int, decisions:int, executions:int}
+     * A zero here is ambiguous on its own: it can mean "nothing has ever
+     * flagged this person" (a quiet, clean record) or "this organization
+     * does not attribute this dimension to people at all" (an unmeasured
+     * gap, not a finding). `tracked` distinguishes the two so the frontend
+     * can say which one it is instead of presenting every zero identically.
+     *
+     * @return array{signals:int, cases:int, decisions:int, executions:int, tracked:array{signals:bool, cases:bool, decisions:bool, executions:bool}}
      */
     private function loop(string $tenantId, string $personId): array
     {
         $base = ['signals' => 0, 'cases' => 0, 'decisions' => 0, 'executions' => 0];
-        if (! Schema::hasTable('hpbrain_signals')) {
-            return $base;
+        $tracked = [
+            'signals' => Schema::hasTable('hpbrain_signals'),
+            'cases' => Schema::hasTable('hpbrain_cases') || Schema::hasTable('hpbrain_case_signals'),
+            'decisions' => Schema::hasTable('hpbrain_decisions'),
+            'executions' => Schema::hasTable('hpbrain_eso_executions'),
+        ];
+
+        if (! $tracked['signals']) {
+            return $base + ['tracked' => $tracked];
         }
 
         $base['signals'] = (int) DB::table('hpbrain_signals')
@@ -373,21 +387,21 @@ final class PersonIntelligenceService
             $base['cases'] = $caseIds->filter()->unique()->count();
         }
 
-        if (Schema::hasTable('hpbrain_decisions')) {
+        if ($tracked['decisions']) {
             $base['decisions'] = (int) DB::table('hpbrain_decisions')
                 ->where('tenant_id', $tenantId)
                 ->where('decided_by', $personId)
                 ->count();
         }
 
-        if (Schema::hasTable('hpbrain_eso_executions')) {
+        if ($tracked['executions']) {
             $base['executions'] = (int) DB::table('hpbrain_eso_executions')
                 ->where('tenant_id', $tenantId)
                 ->where('executed_by', $personId)
                 ->count();
         }
 
-        return $base;
+        return $base + ['tracked' => $tracked];
     }
 
     /**
@@ -513,16 +527,14 @@ final class PersonIntelligenceService
     private function band(float $score): string
     {
         $b = config('scoring.person.bands', []);
-        if ($score >= ($b['steady'] ?? 85)) {
-            return 'steady';
-        }
-        if ($score >= ($b['watch'] ?? 70)) {
-            return 'watch';
-        }
-        if ($score >= ($b['support'] ?? 55)) {
-            return 'support';
-        }
-        return 'support';
+
+        // The floor below 'support' is 'support' itself — there is no fourth,
+        // lower band today. Reproduced as-is rather than invented a new label.
+        return Banding::classify($score, [
+            [(float) ($b['steady'] ?? 85), 'steady'],
+            [(float) ($b['watch'] ?? 70), 'watch'],
+            [(float) ($b['support'] ?? 55), 'support'],
+        ], 'support');
     }
 
     private function standingReason(array $components, array $person, array $mismatches, string $band): string

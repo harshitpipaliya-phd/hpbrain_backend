@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Reasoning;
 
-use App\Domain\Ai\AiProvider;
+use App\Domain\Ai\AiGateway;
+use App\Domain\Ai\AiQuotaExceededException;
 use App\Domain\Ai\AiRequest;
 use App\Domain\Recommendation\RecommendationService;
 use App\Repositories\EvidenceRepository;
@@ -75,12 +76,16 @@ final class SignalReasoner
      */
     private const EVIDENCE_SAMPLE_LIMIT = 12;
 
+    /** Stamped as the actor of record when this runs from a scheduled command, not a user request. */
+    private const SYSTEM_ACTOR = 'system';
+
     public function __construct(
         private readonly SignalRepository $signals,
         private readonly EvidenceRepository $evidence,
         private readonly ReasoningStepRepository $steps,
         private readonly RecommendationRepository $recommendations,
         private readonly RecommendationService $classifier,
+        private readonly AiGateway $ai,
     ) {
     }
 
@@ -94,11 +99,20 @@ final class SignalReasoner
 
         $evidence = $this->evidence->list($tenantId, null, $signalId);
 
-        /** @var AiProvider $provider */
-        $provider = app(AiProvider::class);
-
         try {
-            $response = $provider->complete($this->buildRequest($signal, $evidence));
+            $response = $this->ai->complete(
+                $this->buildRequest($signal, $evidence),
+                $tenantId,
+                self::SYSTEM_ACTOR,
+                self::AUTHOR,
+                entityType: 'Signal',
+                entityId: $signalId,
+            );
+        } catch (AiQuotaExceededException) {
+            // Refused before any provider call was made — same outcome as any
+            // other reason this layer cannot produce a recommendation: null,
+            // not a fabricated one.
+            return null;
         } catch (\Throwable) {
             // A transport or protocol failure is not a low-confidence answer.
             // It is no answer, and it is reported as one.

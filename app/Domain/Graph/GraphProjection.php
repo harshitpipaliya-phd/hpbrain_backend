@@ -1987,6 +1987,14 @@ final class GraphProjection
                         'status'       => $row->status,
                         'source'       => $row->source,
                         'observedAt'   => $content['observedAt'] ?? $row->observed_date,
+                        // The client's only route to a real evidence destination:
+                        // there is no standalone evidence screen, so "open full
+                        // record" opens the signal chain this evidence supports
+                        // instead — where the evidence is shown in context,
+                        // rather than the unfiltered Evidence list. Null when the
+                        // row itself has no signal (schema allows it, even though
+                        // the pipeline always writes one today).
+                        'signalId'     => $row->signal_id,
                     ],
                     true,
                     null,

@@ -54,8 +54,14 @@ class TemplateCatalog
     ) {
     }
 
-    /** @return array<int, array<string, mixed>> */
-    public function forModule(?string $moduleKey, string $tenantId): array
+    /**
+     * @param  bool  $latestOnly  The AI Stack view: one row per template_key — this tenant's
+     *                           own row shadows the platform's, and only the latest version
+     *                           of the winning owner is kept. The centralized console passes
+     *                           false and still lists every version of every owner.
+     * @return array<int, array<string, mixed>>
+     */
+    public function forModule(?string $moduleKey, string $tenantId, bool $latestOnly = false): array
     {
         if (! Schema::hasTable(self::TABLE)) {
             return [];
@@ -71,9 +77,53 @@ class TemplateCatalog
 
         $rows = $query->orderBy('template_key')->orderByDesc('version')->get();
 
+        if ($latestOnly) {
+            $rows = $this->latestPerKey($rows, $tenantId);
+        }
+
         $bindings = $this->bindings($tenantId);
 
         return $rows->map(fn ($row) => $this->present($row, $tenantId, $bindings))->values()->all();
+    }
+
+    /**
+     * One row per template_key: this tenant's own rows win over the platform's for the
+     * same key, and of the winning owner only the highest version is kept.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $rows
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private function latestPerKey(\Illuminate\Support\Collection $rows, string $tenantId): \Illuminate\Support\Collection
+    {
+        $winners = [];
+
+        foreach ($rows as $row) {
+            $key = (string) $row->template_key;
+            $current = $winners[$key] ?? null;
+
+            if ($current === null) {
+                $winners[$key] = $row;
+
+                continue;
+            }
+
+            $rowIsTenant = (string) $row->tenant_id === $tenantId;
+            $currentIsTenant = (string) $current->tenant_id === $tenantId;
+
+            if ($rowIsTenant !== $currentIsTenant) {
+                if ($rowIsTenant) {
+                    $winners[$key] = $row;
+                }
+
+                continue;
+            }
+
+            if ((int) $row->version > (int) $current->version) {
+                $winners[$key] = $row;
+            }
+        }
+
+        return collect(array_values($winners));
     }
 
     /** @return array<string, mixed>|null */
@@ -411,6 +461,19 @@ class TemplateCatalog
             ];
         }
 
+        // Also per template × module, so `offered_in_module` can require the binding to
+        // be for the template's OWN module (a key re-bound elsewhere is not offered here).
+        foreach ($rows as $row) {
+            $key = (string) $row->action_ref . '|' . (string) $row->module_key;
+
+            $bindings[$key] ??= [
+                'module_key' => (string) $row->module_key,
+                'label' => (string) $row->label,
+                'status' => (int) $row->status,
+                'requires_entity' => (bool) $row->requires_entity,
+            ];
+        }
+
         return $bindings;
     }
 
@@ -421,6 +484,7 @@ class TemplateCatalog
     public function present(object $row, string $tenantId, array $bindings = []): array
     {
         $binding = $bindings[(string) $row->template_key] ?? null;
+        $ownBinding = $row->module_key === null ? null : ($bindings[(string) $row->template_key . '|' . (string) $row->module_key] ?? null);
         $variables = Platform::decode($row->variables ?? null);
         $userPrompt = (string) ($row->user_prompt ?? '');
         $systemPrompt = (string) ($row->system_prompt ?? '');
@@ -465,7 +529,8 @@ class TemplateCatalog
             // — Edit means "make your own copy".
             'editable_in_place' => ! $isPlatform,
 
-            'offered_in_module' => $binding !== null && $binding['status'] === 1,
+            // Offered only when the live binding is for THIS template's own module.
+            'offered_in_module' => $ownBinding !== null && $ownBinding['status'] === 1,
             'offer_label' => $binding['label'] ?? null,
             'offer_module_key' => $binding['module_key'] ?? null,
             'offer_requires_entity' => (bool) ($binding['requires_entity'] ?? false),
