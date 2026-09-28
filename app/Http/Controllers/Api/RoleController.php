@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Authorization\Permission;
+use App\Domain\Authorization\Role;
 use App\Http\Controllers\Controller;
 use App\Repositories\RoleRepository;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +23,24 @@ final class RoleController extends Controller
         $category = $request->query('category');
 
         return response()->json($this->repository->list($tenantId, $category));
+    }
+
+    /**
+     * The access roles RequirePermission actually enforces, and what each grants.
+     *
+     * Read from the Role and Permission enums rather than hpbrain_roles, whose
+     * `permissions` column is descriptive only — so this is the matrix a request
+     * is really checked against, not a copy that could drift from it.
+     */
+    public function matrix(): JsonResponse
+    {
+        return response()->json([
+            'permissions' => Permission::allValues(),
+            'roles'       => array_map(
+                fn (Role $role) => ['key' => $role->value, 'permissions' => $role->permissions()],
+                Role::cases(),
+            ),
+        ]);
     }
 
     public function show(Request $request, string $tenantId, string $id): JsonResponse

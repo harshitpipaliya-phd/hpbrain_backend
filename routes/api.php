@@ -473,6 +473,9 @@ Route::prefix('v1')->group(function () {
         Route::post('reasoning-engine/{tenantId}/evaluate', [ReasoningEngineController::class, 'evaluate'])->middleware('permission:create');
 
         Route::get('tasks/registry', [TaskController::class, 'registry']);
+        // The cron schedule is read-only, but it describes the whole install
+        // rather than one tenant, so it sits behind settings.manage.
+        Route::get('tasks/schedule', [TaskController::class, 'schedule'])->middleware('permission:settings.manage');
         // tasks/run is NOT read-adjacent. `expire-stale-evidence` issues a bulk
         // UPDATE rewriting evidence status across the whole tenant, and the
         // registry marks two of three tasks `mutates: true`. It needs write
@@ -713,6 +716,8 @@ Route::prefix('v1')->group(function () {
 
         Route::get('roles/{tenantId}', [RoleController::class, 'index'])->middleware('permission:settings.manage');
         Route::post('roles', [RoleController::class, 'store'])->middleware('permission:settings.manage');
+        // Literal segment, so it is registered before roles/{tenantId}/{id}.
+        Route::get('roles/{tenantId}/matrix', [RoleController::class, 'matrix'])->middleware('permission:settings.manage');
         Route::get('roles/{tenantId}/{id}', [RoleController::class, 'show'])->middleware('permission:settings.manage');
         Route::patch('roles/{tenantId}/{id}', [RoleController::class, 'update'])->middleware('permission:settings.manage');
         Route::delete('roles/{tenantId}/{id}', [RoleController::class, 'destroy'])->middleware('permission:settings.manage');
