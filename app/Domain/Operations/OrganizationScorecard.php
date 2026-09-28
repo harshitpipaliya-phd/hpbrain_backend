@@ -622,8 +622,9 @@ final class OrganizationScorecard
 
         $assessed = DB::table('hpbrain_capability_assignments')
             ->where('tenant_id', $tenantId)
+            ->where('target_type', 'Person')
             ->distinct()
-            ->count('person_id');
+            ->count('target_id');
 
         $score = (int) round(min(1.0, $assessed / $people) * 100);
 

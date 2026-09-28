@@ -361,7 +361,7 @@ final class StudentProjectionBuilder
                   student's name has no promoted column, so it is the only
                   field still read out of JSON.
                 */
-                MAX(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.student_name')))            AS student_name,
+                COALESCE(MAX(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.student_name'))), MAX(subject_ref)) AS student_name,
                 COUNT(*)                                                              AS records,
                 COUNT(DISTINCT category)                                              AS subjects,
                 ROUND(SUM(metric_value), 2)                                           AS obtained,
@@ -457,7 +457,18 @@ final class StudentProjectionBuilder
             SELECT
                 tenant_id,
                 subject_ref AS student_ref,
-                MAX(JSON_UNQUOTE(JSON_EXTRACT(payload, '$."Student Name"')))  AS student_name,
+                /*
+                  FALLS BACK TO THE ENROLMENT NUMBER, NEVER NULL. This literal
+                  JSON key is Lions' own field name for a student's name on a
+                  fee receipt; a tenant whose fee export carries no name field
+                  at all (Sunrise's does not) produced NULL here, which this
+                  table's NOT NULL student_name column then rejected outright —
+                  failing the INSERT for every student in the tenant, not just
+                  the unnamed rows. The roster pass already has this fallback
+                  (see fullName() above) for the same reason: an identifier the
+                  source actually gave us beats refusing to project the student.
+                */
+                COALESCE(MAX(JSON_UNQUOTE(JSON_EXTRACT(payload, '$."Student Name"'))), MAX(subject_ref)) AS student_name,
                 COUNT(*)                                                      AS records,
                 ROUND(SUM(metric_value), 2)                                   AS paid,
                 MIN(DATE(occurred_at))                                        AS first_receipt,
