@@ -34,8 +34,10 @@ use App\Http\Controllers\Api\ContextController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DashboardWidgetController;
+use App\Http\Controllers\Api\DataCoverageController;
 use App\Http\Controllers\Api\DecisionController;
 use App\Http\Controllers\Api\DepartmentController;
+use App\Http\Controllers\Api\EntityIntelligenceController;
 use App\Http\Controllers\Api\EntityMappingController;
 use App\Http\Controllers\Api\EsoExecutionController;
 use App\Http\Controllers\Api\EventController;
@@ -190,6 +192,12 @@ Route::prefix('v1')->group(function () {
         Route::post('people', [PersonController::class, 'store'])->middleware('permission:create');
         Route::get('people/{tenantId}/{id}', [PersonController::class, 'show']);
         Route::get('people/{tenantId}/{id}/intelligence', [PersonController::class, 'intelligence']);
+
+        // One entry point for "open this entity's intelligence" regardless of
+        // type — dispatches to DepartmentVerdict/PersonIntelligenceService
+        // where one exists, and to ContextEngine's facts-and-signals read
+        // where it does not. See EntityIntelligenceController.
+        Route::get('entity-intelligence/{tenantId}/{entityType}/{entityId}', [EntityIntelligenceController::class, 'show']);
 
         /*
           EVERY LITERAL SEGMENT BEFORE /{id}. Laravel matches in registration
@@ -403,6 +411,7 @@ Route::prefix('v1')->group(function () {
         Route::get('operations/{tenantId}/departments', [OperationalIntelligenceController::class, 'departments']);
         Route::get('operations/{tenantId}/trends', [OperationalIntelligenceController::class, 'trends']);
         Route::get('operations/{tenantId}/loop', [OperationalIntelligenceController::class, 'loop']);
+        Route::get('operations/{tenantId}/coverage', [DataCoverageController::class, 'show']);
 
         /*
          * Knowledge Library — the RETRIEVE surface.

@@ -55,14 +55,14 @@ final class OnboardingController extends Controller
             'data' => ['nullable', 'array'],
         ]);
 
-        $session = app(\App\Services\OnboardingEngine::class)->completeStep($id, (string) $data['step'], $data['data'] ?? []);
+        $session = app(\App\Services\OnboardingEngine::class)->completeStep($tenantId, $id, (string) $data['step'], $data['data'] ?? []);
 
         return $session ? response()->json($session) : response()->json(['error' => 'onboarding_session_not_found'], 404);
     }
 
     public function getNextStep(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $step = app(\App\Services\OnboardingEngine::class)->getNextStep($id);
+        $step = app(\App\Services\OnboardingEngine::class)->getNextStep($tenantId, $id);
 
         return response()->json($step);
     }
@@ -73,35 +73,35 @@ final class OnboardingController extends Controller
             'step' => ['required', 'integer'],
         ]);
 
-        $result = app(\App\Services\OnboardingEngine::class)->validateStep($id, (string) $data['step']);
+        $result = app(\App\Services\OnboardingEngine::class)->validateStep($tenantId, $id, (string) $data['step']);
 
         return response()->json($result);
     }
 
     public function activate(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $session = app(\App\Services\OnboardingEngine::class)->activateOrganization($id);
+        $session = app(\App\Services\OnboardingEngine::class)->activateOrganization($tenantId, $id);
 
         return $session ? response()->json($session) : response()->json(['error' => 'onboarding_session_not_found'], 404);
     }
 
     public function readiness(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $status = app(\App\Services\OnboardingEngine::class)->getReadinessStatus($id);
+        $status = app(\App\Services\OnboardingEngine::class)->getReadinessStatus($tenantId, $id);
 
         return response()->json($status);
     }
 
     public function runReadinessChecks(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $results = app(\App\Services\OnboardingEngine::class)->runReadinessChecks($id);
+        $results = app(\App\Services\OnboardingEngine::class)->runReadinessChecks($tenantId, $id);
 
         return response()->json($results);
     }
 
     public function abandon(Request $request, string $tenantId, string $id): JsonResponse
     {
-        $session = app(\App\Services\OnboardingEngine::class)->abandonOnboarding($id);
+        $session = app(\App\Services\OnboardingEngine::class)->abandonOnboarding($tenantId, $id);
 
         return $session ? response()->json($session) : response()->json(['error' => 'onboarding_session_not_found'], 404);
     }

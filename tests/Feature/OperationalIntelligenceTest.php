@@ -411,6 +411,73 @@ final class OperationalIntelligenceTest extends TestCase
         );
     }
 
+    /**
+     * Phase B: the scorecard endpoint must carry the same shared, validated
+     * contract shape as department and person intelligence — additively,
+     * alongside every key the endpoint already published.
+     *
+     * @test
+     */
+    public function the_scorecard_endpoint_carries_a_valid_summary_alongside_its_existing_payload(): void
+    {
+        $this->seedWorkload(self::TENANT, 'job_order', completed: 90, open: 10, cancelled: 0, department: 'Field Operations');
+
+        $body = $this->withHeaders($this->auth())
+            ->getJson('/api/v1/operations/'.self::TENANT.'/scorecard')
+            ->assertOk()
+            ->json();
+
+        // Every key the endpoint already published is still there, unchanged.
+        self::assertArrayHasKey('overall', $body);
+        self::assertArrayHasKey('dimensions', $body);
+
+        self::assertArrayHasKey('summary', $body);
+        self::assertTrue($body['summary']['valid'], json_encode($body['summary']['errors']));
+
+        $contract = $body['summary']['contract'];
+        self::assertSame('Organization', $contract['context']['type']);
+        self::assertNotEmpty($contract['title']);
+        self::assertNotEmpty($contract['executiveSummary']);
+        self::assertArrayHasKey('dataCoverage', $contract);
+        self::assertNotEmpty($contract['limitations'], 'This fixture leaves several dimensions unmeasurable.');
+
+        foreach ($contract['findings'] as $finding) {
+            self::assertTrue(\App\Domain\Intelligence\IntelligenceOutputContract::isValidFindingType($finding['type']));
+        }
+    }
+
+    /**
+     * Regression: every dimension weight and band cutoff in OrganizationScorecard
+     * used to be a literal scattered through the class (R7's remaining thread —
+     * DepartmentProfile and PersonIntelligenceService were already moved to
+     * config/scoring.php, this class was not). This proves config actually
+     * drives the output rather than merely documenting values the class still
+     * hardcodes.
+     *
+     * @test
+     */
+    public function organization_scorecard_weights_and_bands_are_config_driven(): void
+    {
+        $this->seedWorkload(self::TENANT, 'job_order', completed: 100, open: 0, cancelled: 0, department: 'Field Operations');
+
+        config(['scoring.organization.weights.dataCoverage' => 99.0]);
+        config(['scoring.organization.bands.excellent' => 999]);
+
+        $scorecard = app(OrganizationScorecard::class)->forTenant(self::TENANT);
+
+        $dataCoverage = array_values(array_filter(
+            $scorecard['dimensions'],
+            fn (array $d): bool => $d['key'] === 'dataCoverage',
+        ))[0];
+
+        self::assertSame(99.0, $dataCoverage['weight'], 'The configured weight must reach the published dimension.');
+        self::assertNotSame(
+            'excellent',
+            $scorecard['band'],
+            'With the excellent cutoff pushed to 999, no real score can clear it.'
+        );
+    }
+
     /* ───────────────────────────── narrative ───────────────────────────── */
 
     public function test_every_narrative_finding_is_backed_by_a_measured_value(): void

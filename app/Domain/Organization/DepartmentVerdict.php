@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Organization;
 
+use App\Domain\Metrics\SnapshotReader;
 use App\Domain\Universal\EntityResolver;
 use App\Domain\Universal\ResolvedSource;
 use Illuminate\Support\Facades\DB;
@@ -76,6 +77,7 @@ final class DepartmentVerdict
         private readonly DepartmentProfile $profiles,
         private readonly DepartmentWorkAttribution $attribution,
         private readonly DepartmentRosterReader $rosters,
+        private readonly SnapshotReader $snapshots,
     ) {
     }
 
@@ -429,34 +431,27 @@ final class DepartmentVerdict
             'reason' => 'This unit has been measured once. Movement needs two measurements, so nothing can be compared yet — the next scheduled refresh produces the first delta.',
         ];
 
-        if (! Schema::hasTable('hpbrain_metric_snapshots') || $score === null) {
+        if ($score === null) {
             return $blank;
         }
 
-        $rows = DB::table('hpbrain_metric_snapshots')
-            ->where('tenant_id', $tenant)
-            ->where('metric_key', self::HEALTH_METRIC)
-            ->where('dimension_key', $departmentId)
-            ->whereNotNull('value')
-            ->orderByDesc('snapshot_date')
-            ->limit(2)
-            ->get(['snapshot_date', 'value']);
+        $previous = $this->snapshots->previousMeasurement($tenant, self::HEALTH_METRIC, $departmentId);
 
-        if ($rows->count() < 2) {
+        if ($previous === null) {
             return $blank;
         }
 
-        $previous = $rows[1];
-        $delta = $score - (int) round((float) $previous->value);
+        $previousScore = (int) round($previous['value']);
+        $delta = $score - $previousScore;
 
         return [
             'supported' => true,
             'delta' => $delta,
-            'previousScore' => (int) round((float) $previous->value),
-            'previousDate' => (string) $previous->snapshot_date,
+            'previousScore' => $previousScore,
+            'previousDate' => $previous['date'],
             'changes' => [[
                 'label' => sprintf('Health %s%d', $delta >= 0 ? '+' : '', $delta),
-                'detail' => sprintf('was %d on %s', (int) round((float) $previous->value), (string) $previous->snapshot_date),
+                'detail' => sprintf('was %d on %s', $previousScore, $previous['date']),
                 'direction' => $delta > 0 ? 'up' : ($delta < 0 ? 'down' : 'flat'),
             ]],
             'reason' => null,

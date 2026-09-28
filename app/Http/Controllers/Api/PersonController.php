@@ -267,9 +267,10 @@ final class PersonController extends Controller
         $profile = $this->resolver->resolve($t, 'PersonProfile');
         $unit = $this->resolver->resolve($t, 'OrganizationUnit');
 
-        // Check duplicate email
+        // Check duplicate email within tenant
         if (DB::table($person->table)
-            ->where('email', trim($data['email']))
+            ->where($person->tenantKey, $t)
+            ->where($person->field('email'), trim($data['email']))
             ->tap(fn ($q) => $this->activeSourceRows($q, $person))
             ->exists()) {
             return response()->json([
@@ -294,6 +295,7 @@ final class PersonController extends Controller
         $userName = !empty($data['userName']) ? trim($data['userName']) : trim($data['employeeId']);
         if ($this->sourceHasColumn($person, 'user_name')) {
             if (DB::table($person->table)
+                ->where($person->tenantKey, $t)
                 ->where('user_name', $userName)
                 ->tap(fn ($q) => $this->activeSourceRows($q, $person))
                 ->exists()) {

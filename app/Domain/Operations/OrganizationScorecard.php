@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 use App\Domain\Organization\FoundationCounts;
+use App\Domain\Scoring\Banding;
 use App\Domain\Universal\EntityResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -145,7 +146,7 @@ final class OrganizationScorecard
             return $this->unsupported(
                 'dataCoverage',
                 'Data Coverage',
-                1.0,
+                $this->weight('dataCoverage', 1.0),
                 'No operational records have been ingested, so there is nothing to assess coverage over.',
                 'Connect a source system and run an import.',
             );
@@ -177,7 +178,7 @@ final class OrganizationScorecard
         return [
             'key' => 'dataCoverage',
             'label' => 'Data Coverage',
-            'weight' => 1.0,
+            'weight' => $this->weight('dataCoverage', 1.0),
             'supported' => true,
             'score' => $score,
             'band' => $this->band($score),
@@ -206,7 +207,7 @@ final class OrganizationScorecard
             return $this->unsupported(
                 'executionHealth',
                 'Execution Health',
-                1.4,
+                $this->weight('executionHealth', 1.4),
                 (string) ($execution['reason'] ?? 'No dataset carries a resolvable workflow status.'),
                 'Map a status field on at least one operational dataset so completion can be derived.',
             );
@@ -217,7 +218,7 @@ final class OrganizationScorecard
         return [
             'key' => 'executionHealth',
             'label' => 'Execution Health',
-            'weight' => 1.4,
+            'weight' => $this->weight('executionHealth', 1.4),
             'supported' => true,
             'score' => $score,
             'band' => $this->band($score),
@@ -259,7 +260,7 @@ final class OrganizationScorecard
         return [
             'key' => 'workloadHealth',
             'label' => 'Workload Health',
-            'weight' => 1.2,
+            'weight' => $this->weight('workloadHealth', 1.2),
             'supported' => true,
             'score' => $score,
             'band' => $this->band($score),
@@ -295,7 +296,7 @@ final class OrganizationScorecard
             return $this->unsupported(
                 'responsiveness',
                 'Responsiveness',
-                1.0,
+                $this->weight('responsiveness', 1.0),
                 (string) ($responsiveness['reason'] ?? 'No record carries both an opening and a later closing timestamp.'),
                 'Map a closing or resolution timestamp on an operational dataset to unlock turnaround and SLA analysis.',
             );
@@ -306,7 +307,7 @@ final class OrganizationScorecard
         return [
             'key' => 'responsiveness',
             'label' => 'Responsiveness',
-            'weight' => 1.0,
+            'weight' => $this->weight('responsiveness', 1.0),
             'supported' => true,
             'score' => $score,
             'band' => $this->band($score),
@@ -337,7 +338,7 @@ final class OrganizationScorecard
             return $this->unsupported(
                 'serviceHealth',
                 'Service Health',
-                1.2,
+                $this->weight('serviceHealth', 1.2),
                 (string) ($service['reason'] ?? 'No dataset carries a subject reference.'),
                 'Map the customer, asset or subject identifier on an operational dataset to unlock repeat-issue analysis.',
             );
@@ -348,7 +349,7 @@ final class OrganizationScorecard
         return [
             'key' => 'serviceHealth',
             'label' => 'Service Health',
-            'weight' => 1.2,
+            'weight' => $this->weight('serviceHealth', 1.2),
             'supported' => true,
             'score' => $score,
             'band' => $this->band($score),
@@ -388,7 +389,7 @@ final class OrganizationScorecard
             return $this->unsupported(
                 'departmentHealth',
                 'Department Coverage',
-                0.9,
+                $this->weight('departmentHealth', 0.9),
                 'This organization has no active units on its register, so unit coverage cannot be assessed.',
                 'Register the organization\'s departments or units in the connected HR system.',
             );
@@ -398,7 +399,7 @@ final class OrganizationScorecard
             return $this->unsupported(
                 'departmentHealth',
                 'Department Coverage',
-                0.9,
+                $this->weight('departmentHealth', 0.9),
                 (string) ($ops['support']['reasons']['department'] ?? 'Imported records do not name an owning unit.'),
                 'Include the owning department on operational exports so work can be attributed to a unit.',
             );
@@ -412,7 +413,7 @@ final class OrganizationScorecard
         return [
             'key' => 'departmentHealth',
             'label' => 'Department Coverage',
-            'weight' => 0.9,
+            'weight' => $this->weight('departmentHealth', 0.9),
             'supported' => true,
             'score' => $score,
             'band' => $this->band($score),
@@ -440,7 +441,7 @@ final class OrganizationScorecard
             return $this->unsupported(
                 'signalHealth',
                 'Signal Health',
-                1.0,
+                $this->weight('signalHealth', 1.0),
                 (string) ($signals['reason'] ?? 'No detector has fired for this organization.'),
                 'Ingest operational data so the detector set has something to read.',
             );
@@ -465,7 +466,7 @@ final class OrganizationScorecard
         return [
             'key' => 'signalHealth',
             'label' => 'Signal Health',
-            'weight' => 1.0,
+            'weight' => $this->weight('signalHealth', 1.0),
             'supported' => true,
             'score' => $score,
             'band' => $this->band($score),
@@ -498,7 +499,7 @@ final class OrganizationScorecard
             return $this->unsupported(
                 'evidenceStrength',
                 'Evidence Strength',
-                1.0,
+                $this->weight('evidenceStrength', 1.0),
                 (string) ($evidence['reason'] ?? 'No evidence has been recorded.'),
                 'Evidence is written by the detectors alongside signals; it appears with the first grounded detection.',
             );
@@ -509,7 +510,7 @@ final class OrganizationScorecard
         return [
             'key' => 'evidenceStrength',
             'label' => 'Evidence Strength',
-            'weight' => 1.0,
+            'weight' => $this->weight('evidenceStrength', 1.0),
             'supported' => true,
             'score' => $score,
             'band' => $this->band($score),
@@ -540,7 +541,7 @@ final class OrganizationScorecard
             return $this->unsupported(
                 'deliberationHealth',
                 'Deliberation Health',
-                0.8,
+                $this->weight('deliberationHealth', 0.8),
                 (string) ($cases['reason'] ?? 'No investigation has been opened.'),
                 'Triage a detected signal into an investigation to start the deliberation loop.',
             );
@@ -554,7 +555,7 @@ final class OrganizationScorecard
         return [
             'key' => 'deliberationHealth',
             'label' => 'Deliberation Health',
-            'weight' => 0.8,
+            'weight' => $this->weight('deliberationHealth', 0.8),
             'supported' => true,
             'score' => $score,
             'band' => $this->band($score),
@@ -589,7 +590,7 @@ final class OrganizationScorecard
         $unsupported = fn (string $reason) => $this->unsupported(
             'capabilityCoverage',
             'Capability Coverage',
-            1.0,
+            $this->weight('capabilityCoverage', 1.0),
             $reason,
             'Assign capabilities to departments and people to unlock skill-gap and readiness intelligence.',
         );
@@ -629,7 +630,7 @@ final class OrganizationScorecard
         return [
             'key' => 'capabilityCoverage',
             'label' => 'Capability Coverage',
-            'weight' => 1.0,
+            'weight' => $this->weight('capabilityCoverage', 1.0),
             'supported' => true,
             'score' => $score,
             'band' => $this->band($score),
@@ -783,12 +784,19 @@ final class OrganizationScorecard
             return null;
         }
 
-        return match (true) {
-            $score >= 85 => 'excellent',
-            $score >= 70 => 'healthy',
-            $score >= 55 => 'watch',
-            default => 'needs attention',
-        };
+        $b = config('scoring.organization.bands', []);
+
+        return Banding::classify((float) $score, [
+            [(float) ($b['excellent'] ?? 85), 'excellent'],
+            [(float) ($b['healthy'] ?? 70), 'healthy'],
+            [(float) ($b['watch'] ?? 55), 'watch'],
+        ], 'needs attention');
+    }
+
+    /** A dimension's weight in the renormalised mean, config-driven (R7). */
+    private function weight(string $key, float $default): float
+    {
+        return (float) config("scoring.organization.weights.{$key}", $default);
     }
 
     private function pct(float $ratio): string

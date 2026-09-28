@@ -39,9 +39,9 @@ final class OnboardingEngine
         ]);
     }
 
-    public function completeStep(string $sessionId, string $step, array $data): ?array
+    public function completeStep(string $tenantId, string $sessionId, string $step, array $data): ?array
     {
-        $session = $this->sessionRepository->find($this->resolveTenantId($sessionId), $sessionId);
+        $session = $this->sessionRepository->find($tenantId, $sessionId);
 
         if (!$session) {
             return null;
@@ -62,16 +62,16 @@ final class OnboardingEngine
         }
         $sessionData = array_merge($sessionData, $data);
 
-        return $this->sessionRepository->update($session['tenant_id'], $sessionId, [
+        return $this->sessionRepository->update($tenantId, $sessionId, [
             'current_step'    => $nextStep,
             'completed_steps' => $completedSteps,
             'data'            => $sessionData,
         ]);
     }
 
-    public function getNextStep(string $sessionId): ?array
+    public function getNextStep(string $tenantId, string $sessionId): ?array
     {
-        $session = $this->sessionRepository->find($this->resolveTenantId($sessionId), $sessionId);
+        $session = $this->sessionRepository->find($tenantId, $sessionId);
 
         if (!$session) {
             return null;
@@ -113,9 +113,9 @@ final class OnboardingEngine
         return ['step' => null, 'name' => 'complete', 'total' => $totalSteps, 'completed' => array_keys($completedSteps)];
     }
 
-    public function validateStep(string $sessionId, string $step): array
+    public function validateStep(string $tenantId, string $sessionId, string $step): array
     {
-        $session = $this->sessionRepository->find($this->resolveTenantId($sessionId), $sessionId);
+        $session = $this->sessionRepository->find($tenantId, $sessionId);
 
         if (!$session) {
             return ['valid' => false, 'errors' => ['session_not_found']];
@@ -133,9 +133,9 @@ final class OnboardingEngine
         return ['valid' => true, 'errors' => []];
     }
 
-    public function activateOrganization(string $sessionId): ?array
+    public function activateOrganization(string $tenantId, string $sessionId): ?array
     {
-        $session = $this->sessionRepository->find($this->resolveTenantId($sessionId), $sessionId);
+        $session = $this->sessionRepository->find($tenantId, $sessionId);
 
         if (!$session) {
             return null;
@@ -143,7 +143,7 @@ final class OnboardingEngine
 
         $now = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');
 
-        return $this->sessionRepository->update($session['tenant_id'], $sessionId, [
+        return $this->sessionRepository->update($tenantId, $sessionId, [
             'status'        => 'activated',
             'completed_by'  => $session['started_by'],
             'activated_date'=> $now,
@@ -151,9 +151,9 @@ final class OnboardingEngine
         ]);
     }
 
-    public function getReadinessStatus(string $orgId): array
+    public function getReadinessStatus(string $tenantId, string $orgId): array
     {
-        $checks = app(ReadinessCheckRepository::class)->findByOrg('platform', $orgId);
+        $checks = app(ReadinessCheckRepository::class)->findByOrg($tenantId, $orgId);
 
         $total = count($checks);
         $passed = count(array_filter($checks, fn ($c) => $c['status'] === 'pass'));
@@ -171,9 +171,8 @@ final class OnboardingEngine
         ];
     }
 
-    public function runReadinessChecks(string $orgId): array
+    public function runReadinessChecks(string $tenantId, string $orgId): array
     {
-        $tenantId = 'platform';
         $checks = [
             ['check_type' => 'structure', 'check_name' => 'Organization structure defined', 'status' => 'pass', 'message' => 'Units configured'],
             ['check_type' => 'roles', 'check_name' => 'Roles assigned', 'status' => 'pass', 'message' => 'Roles configured'],
@@ -195,21 +194,14 @@ final class OnboardingEngine
         return $results;
     }
 
-    public function abandonOnboarding(string $sessionId): ?array
+    public function abandonOnboarding(string $tenantId, string $sessionId): ?array
     {
-        $session = $this->sessionRepository->find($this->resolveTenantId($sessionId), $sessionId);
+        $session = $this->sessionRepository->find($tenantId, $sessionId);
 
         if (!$session) {
             return null;
         }
 
-        return $this->sessionRepository->update($session['tenant_id'], $sessionId, ['status' => 'abandoned']);
-    }
-
-    private function resolveTenantId(string $sessionId): string
-    {
-        $session = $this->sessionRepository->find('platform', $sessionId);
-
-        return $session ? $session['tenant_id'] : 'platform';
+        return $this->sessionRepository->update($tenantId, $sessionId, ['status' => 'abandoned']);
     }
 }
