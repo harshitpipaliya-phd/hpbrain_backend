@@ -11,6 +11,10 @@ use App\Http\Controllers\Api\AiIntelligence\AiIntelligencePolicyController;
 use App\Http\Controllers\Api\AiIntelligence\AiIntelligenceRecommendationController;
 use App\Http\Controllers\Api\AiIntelligence\AiIntelligenceTemplateController;
 use App\Http\Controllers\Api\AiIntelligence\AiIntelligenceUsageController;
+use App\Http\Controllers\Api\AiIntelligence\AiStackModelController;
+use App\Http\Controllers\Api\AiIntelligence\AiStackModuleController;
+use App\Http\Controllers\Api\AiIntelligence\AiStackReportController;
+use App\Http\Controllers\Api\AiIntelligence\AiStackToolAgentController;
 use App\Http\Controllers\Api\AiEvaluationController;
 use App\Http\Controllers\Api\AiFeedbackController;
 use App\Http\Controllers\Api\AiPromptTemplateController;
@@ -957,6 +961,38 @@ Route::prefix('v1')->group(function () {
             Route::post('policies', [AiIntelligencePolicyController::class, 'store']);
             Route::put('policies/{id}', [AiIntelligencePolicyController::class, 'update'])->where('id', $uuid);
             Route::delete('policies/{id}', [AiIntelligencePolicyController::class, 'destroy'])->where('id', $uuid);
+
+            /*
+            | One area's own AI Stack — the decentralised per-module screens (Usage & Cost,
+            | Guardrails, Activity, Models, Templates → report, Knowledge Base check,
+            | Automations). Ported from G2G routes/ai.php; {module} is an active
+            | hpbrain_ai_modules key visible to the tenant (else 404).
+            */
+            $moduleKey = '[a-z0-9_\-]+';
+
+            Route::get('modules/{module}/profile', [AiStackModuleController::class, 'profile'])->where('module', $moduleKey);
+            Route::get('modules/{module}/usage', [AiStackModuleController::class, 'usage'])->where('module', $moduleKey);
+            Route::get('modules/{module}/guardrails', [AiStackModuleController::class, 'guardrails'])->where('module', $moduleKey);
+            Route::get('modules/{module}/activity', [AiStackModuleController::class, 'activity'])->where('module', $moduleKey);
+            Route::post('modules/{module}/activity', [AiStackModuleController::class, 'recordActivity'])->where('module', $moduleKey);
+            Route::get('modules/{module}/models', [AiStackModelController::class, 'index'])->where('module', $moduleKey);
+            Route::put('modules/{module}/models', [AiStackModelController::class, 'update'])->where('module', $moduleKey);
+            Route::delete('modules/{module}/models', [AiStackModelController::class, 'destroy'])->where('module', $moduleKey);
+            Route::post('modules/{module}/models/credentials', [AiStackModelController::class, 'storeCredential'])->where('module', $moduleKey);
+            Route::put('modules/{module}/models/credentials/{credential}', [AiStackModelController::class, 'updateCredential'])
+                ->where(['module' => $moduleKey, 'credential' => $uuid]);
+
+            Route::post('workspace/report', [AiStackReportController::class, 'build']);
+            Route::get('reports/{id}', [AiStackReportController::class, 'show'])->where('id', $uuid);
+            Route::put('reports/{id}', [AiStackReportController::class, 'update'])->where('id', $uuid);
+            Route::post('reports/{id}/regenerate', [AiStackReportController::class, 'regenerate'])->where('id', $uuid);
+            Route::post('data-sources/{name}/run', [AiStackReportController::class, 'runSource'])->where('name', '[a-z0-9_.\-]+');
+
+            Route::get('tool-agents', [AiStackToolAgentController::class, 'index']);
+            Route::post('tool-agents', [AiStackToolAgentController::class, 'store']);
+            Route::patch('tool-agents/{id}', [AiStackToolAgentController::class, 'setStatus'])->where('id', $uuid);
+            Route::post('tool-agents/{id}/run', [AiStackToolAgentController::class, 'run'])->where('id', $uuid);
+            Route::get('tool-agent-runs', [AiStackToolAgentController::class, 'runs']);
         });
     });
 });

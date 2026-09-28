@@ -29,11 +29,17 @@ final class AiUsageMeter
 
     public const OUTCOME_REFUSED = 'refused';
 
+    /** Whether hpbrain_ai_usage_events has `product_module` (2026_09_29_100001), read once. */
+    private ?bool $hasProductModule = null;
+
     public function __construct(private readonly ModelCatalog $models)
     {
     }
 
-    /** @param array<string, mixed> $options `related_type`, `related_id`, `user_id`, `outcome`, `error`, `finish_reason` */
+    /**
+     * @param array<string, mixed> $options `related_type`, `related_id`, `user_id`, `outcome`, `error`, `finish_reason`,
+     *                                      `product_module` (the hpbrain_ai_modules key the call was made from, if any)
+     */
     public function record(
         string $moduleKey,
         ResolvedAiConfiguration $config,
@@ -50,7 +56,16 @@ final class AiUsageMeter
 
             $now = Platform::now();
 
-            DB::table('hpbrain_ai_usage_events')->insert([
+            // Attribution to the product module is additive: before the column exists
+            // the event is still recorded, just not attributed to a module.
+            $attribution = [];
+            $productModule = trim((string) ($options['product_module'] ?? ''));
+
+            if ($productModule !== '' && $this->hasProductModule()) {
+                $attribution['product_module'] = mb_substr($productModule, 0, 64);
+            }
+
+            DB::table('hpbrain_ai_usage_events')->insert($attribution + [
                 'id' => Platform::id(),
                 'tenant_id' => $tenantId,
                 'ai_module' => $moduleKey,
@@ -77,6 +92,19 @@ final class AiUsageMeter
                 'error' => $exception->getMessage(),
             ]);
         }
+    }
+
+    private function hasProductModule(): bool
+    {
+        if ($this->hasProductModule === null) {
+            try {
+                $this->hasProductModule = Schema::hasColumn('hpbrain_ai_usage_events', 'product_module');
+            } catch (Throwable) {
+                $this->hasProductModule = false;
+            }
+        }
+
+        return $this->hasProductModule;
     }
 
     /** Null when the call may proceed, or the reason it may not. */

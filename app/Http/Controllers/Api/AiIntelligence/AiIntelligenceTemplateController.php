@@ -69,14 +69,19 @@ final class AiIntelligenceTemplateController extends AiIntelligenceController
         try {
             $tenantId = $this->scope($request)->tenantId;
 
-            $validated = $request->validate(['module_key' => 'nullable|string|max:80']);
+            $validated = $request->validate([
+                'module_key' => 'nullable|string|max:80',
+                // The AI Stack's view: one row per template key (tenant shadows platform,
+                // latest version only). Omitted, the console listing is unchanged.
+                'latest_only' => 'nullable|boolean',
+            ]);
             $moduleKey = $validated['module_key'] ?? null;
 
             if ($moduleKey !== null && $moduleKey !== '' && ! $this->modules->exists($moduleKey, $tenantId)) {
                 return $this->failure('That module is not one this organisation has.', 404);
             }
 
-            $templates = $this->templates->forModule($moduleKey, $tenantId);
+            $templates = $this->templates->forModule($moduleKey, $tenantId, $request->boolean('latest_only'));
 
             return $this->success('Templates resolved.', [
                 'tenant_id' => $tenantId,

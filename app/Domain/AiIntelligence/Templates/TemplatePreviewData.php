@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\AiIntelligence\Templates;
 
+use App\Domain\AiIntelligence\Reports\ModuleDataSourceCatalog;
+use App\Domain\AiIntelligence\Support\AiIntelligenceScope;
 use App\Domain\AiIntelligence\Support\OrganisationProfile;
 use App\Domain\AiIntelligence\Support\TenantFacts;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +33,7 @@ final class TemplatePreviewData
         private readonly TenantFacts $facts,
         private readonly OrganisationProfile $organisation,
         private readonly TemplateModuleCatalog $modules,
+        private readonly ModuleDataSourceCatalog $sources,
     ) {
     }
 
@@ -38,6 +41,15 @@ final class TemplatePreviewData
     public function forTenant(string $tenantId, ?string $moduleKey = null): array
     {
         $facts = $this->facts->all($tenantId);
+
+        // A named AI Stack module previews against ITS OWN records — the first rows of
+        // its own read-only data source — so a Signals prompt is never previewed
+        // against capability rows. The centralized console (no module, or the shared
+        // key) keeps the capability-model preview below.
+        if ($moduleKey !== null && $moduleKey !== '' && $moduleKey !== TemplateModuleCatalog::SHARED
+            && $this->sources->forModule($moduleKey) !== []) {
+            return $this->forModule($tenantId, $moduleKey, $facts);
+        }
 
         try {
             [$rows, $total] = $this->capabilities($tenantId);
@@ -88,6 +100,95 @@ final class TemplatePreviewData
             'capability_count' => $this->stringify($facts['capability_count']),
             'knowledge_asset_count' => $this->stringify($facts['knowledge_asset_count']),
         ];
+    }
+
+    /**
+     * Preview values from one module's own data source (ModuleDataSourceCatalog),
+     * read for this tenant exactly as the module's Knowledge Base "Check" reads it.
+     * An unavailable or empty source gives "none listed" / "none" — never other rows.
+     *
+     * @param  array<string, int|null>  $facts
+     * @return array<string, string>
+     */
+    private function forModule(string $tenantId, string $moduleKey, array $facts): array
+    {
+        $source = $this->sources->forModule($moduleKey)[0];
+        $rows = [];
+        $total = 0;
+        $available = false;
+
+        try {
+            $result = $this->sources->run($source['name'], new AiIntelligenceScope($tenantId, '', ''), ['limit' => self::ROWS]);
+            $available = (bool) $result['available'];
+            $rows = $available ? $result['rows'] : [];
+            $total = $available ? (int) $result['total'] : 0;
+        } catch (Throwable) {
+            // A preview never fails the editor: an unreadable source previews as empty.
+        }
+
+        $labels = array_column($source['columns'], 'label', 'key');
+        $lines = array_map(fn (array $row) => $this->describeRow($row, $labels), $rows);
+        $shown = count($lines);
+
+        $metrics = [$source['label'] . ': ' . ($available ? $total : 'not available')];
+
+        foreach ([
+            'Open signals' => $facts['open_signals'] ?? null,
+            'Open cases' => $facts['open_cases'] ?? null,
+            'Pending recommendations' => $facts['pending_recommendations'] ?? null,
+        ] as $label => $value) {
+            if ($value !== null) {
+                $metrics[] = "{$label}: {$value}";
+            }
+        }
+
+        return [
+            'records' => $shown === 0 ? 'none listed' : implode("\n", $lines),
+            'metrics' => implode('; ', $metrics),
+            'record_count' => (string) $total,
+            'rows_shown' => (string) $shown,
+            'is_partial' => $total > $shown ? 'yes' : 'no',
+            'page_title' => (string) $source['label'],
+            'page_type' => 'list',
+            'filters' => 'none',
+            'search_query' => '',
+            'data_source' => $shown === 0 ? 'none' : 'the module',
+            'module' => $this->modules->label($moduleKey, $tenantId),
+            'entity_label' => '',
+            'organisation_name' => (string) ($this->organisation->name($tenantId) ?? ''),
+            'open_signals' => $this->stringify($facts['open_signals'] ?? null),
+            'open_cases' => $this->stringify($facts['open_cases'] ?? null),
+            'pending_recommendations' => $this->stringify($facts['pending_recommendations'] ?? null),
+            'evidence_count' => $this->stringify($facts['evidence_count'] ?? null),
+            'decision_count' => $this->stringify($facts['decision_count'] ?? null),
+            'capability_count' => $this->stringify($facts['capability_count'] ?? null),
+            'knowledge_asset_count' => $this->stringify($facts['knowledge_asset_count'] ?? null),
+        ];
+    }
+
+    /**
+     * `- Label: value, Label: value` — the populated, non-identifier fields of one row.
+     *
+     * @param  array<string, mixed>   $row
+     * @param  array<string, string>  $labels
+     */
+    private function describeRow(array $row, array $labels): string
+    {
+        $fields = [];
+
+        foreach ($row as $key => $value) {
+            if ($value === null || trim((string) $value) === '' || str_ends_with((string) $key, '_id')) {
+                continue;
+            }
+
+            $fields[] = ($labels[$key] ?? $key) . ': ' . mb_strimwidth(trim((string) $value), 0, 120, '…');
+
+            if (count($fields) === 6) {
+                break;
+            }
+        }
+
+        return $fields === [] ? '- (a record with no populated fields)' : '- ' . implode(', ', $fields);
     }
 
     /** @return array{0: array<int, string>, 1: ?int} */

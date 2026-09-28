@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Schema;
  * The hpbrain_ai_* tables of the AI & Intelligence console, on the suite's
  * in-memory SQLite connection.
  *
- * A hand-maintained model of database/migrations/2026_09_25_100001..100003 —
+ * A hand-maintained model of database/migrations/2026_09_25_100001..100003 and
+ * 2026_09_28_100001 (the per-module AI Stack) —
  * those migrations are raw MySQL DDL and cannot run on SQLite (see
  * BuildsBrainSchema for the full argument). Every column below is copied from
  * them; keep the two in step.
@@ -63,6 +64,9 @@ trait BuildsAiIntelligenceSchema
             $t->string('icon', 60)->nullable();
             $t->unsignedSmallInteger('sort_order')->default(0);
             $t->boolean('status')->default(true);
+            // 2026_09_28_100001 (AI Stack).
+            $t->text('capabilities')->nullable();
+            $t->text('registry_keys')->nullable();
             $stamps($t);
             $t->unique(['module_key', 'tenant_id']);
         });
@@ -284,7 +288,77 @@ trait BuildsAiIntelligenceSchema
             $stamps($t);
         });
 
-        // The platform catalogues, from the real seed migration (portable inserts).
+        // The per-module AI Stack tables (2026_09_28_100001).
+        Schema::create('hpbrain_ai_module_model_bindings', function ($t) use ($stamps) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('product_module', 80);
+            $t->string('capability', 100);
+            $t->string('provider', 60)->nullable();
+            $t->string('model', 190)->nullable();
+            $t->string('api_key_id', 36)->nullable();
+            $t->unsignedInteger('max_output_tokens')->nullable();
+            $t->tinyInteger('status')->default(1);
+            $t->string('created_by', 64)->nullable();
+            $t->string('updated_by', 64)->nullable();
+            $stamps($t);
+            $t->unique(['product_module', 'capability', 'tenant_id']);
+        });
+
+        Schema::create('hpbrain_ai_generated_reports', function ($t) use ($stamps) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('module_key', 80);
+            $t->string('layout_template_id', 36)->nullable();
+            $t->string('title', 250);
+            $t->longText('html_content');
+            $t->text('question')->nullable();
+            $t->string('source_tool', 120)->nullable();
+            $t->longText('arguments')->nullable();
+            $t->unsignedInteger('row_count')->default(0);
+            $t->unsignedTinyInteger('status')->default(1);
+            $t->string('created_by', 64)->nullable();
+            $stamps($t);
+        });
+
+        Schema::create('hpbrain_ai_tool_agents', function ($t) use ($stamps) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('name', 191);
+            $t->text('description')->nullable();
+            $t->string('module', 80);
+            $t->text('tools_allowed')->nullable();
+            $t->text('instructions')->nullable();
+            $t->string('status', 16)->default('draft');
+            $t->string('created_by', 64)->nullable();
+            $t->string('updated_by', 64)->nullable();
+            $stamps($t);
+        });
+
+        Schema::create('hpbrain_ai_tool_agent_runs', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('agent_id', 36);
+            $t->string('module', 80);
+            $t->string('tool', 120)->nullable();
+            $t->string('status', 16);
+            $t->string('trigger', 24)->default('manual');
+            $t->text('input')->nullable();
+            $t->text('output')->nullable();
+            $t->unsignedInteger('row_count')->default(0);
+            $t->text('error_message')->nullable();
+            $t->unsignedInteger('duration_ms')->default(0);
+            $t->dateTime('started_at')->nullable();
+            $t->dateTime('completed_at')->nullable();
+            $t->string('created_by', 64)->nullable();
+            $t->dateTime('created_date')->nullable();
+        });
+
+        // The platform catalogues, from the real seed migrations (portable inserts).
         (require base_path('database/migrations/2026_09_25_100004_seed_hpbrain_ai_catalogues.php'))->up();
+        (require base_path('database/migrations/2026_09_28_100002_seed_hpbrain_ai_stack_modules.php'))->up();
+        // product_module / forked_from / presets + the platform labels and presets
+        // (schema-builder DDL, portable to SQLite, so the real file runs here as-is).
+        (require base_path('database/migrations/2026_09_29_100001_ai_stack_module_attribution_and_presets.php'))->up();
     }
 }

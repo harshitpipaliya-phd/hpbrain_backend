@@ -15,6 +15,11 @@ use Throwable;
  *
  * The precedence is G2G's, narrowest first:
  *
+ *   0. `module_binding` / `module_binding_platform` — ONLY when the caller names
+ *                          the product module (an hpbrain_ai_modules key): that
+ *                          area's own AI Stack Models choice for this capability
+ *                          (hpbrain_ai_module_model_bindings). A caller that does
+ *                          not pass one resolves exactly as before.
  *   1. `module`          — this tenant saved a row for this capability.
  *   2. `module_platform` — the platform saved a row for this capability.
  *   3. `pool`            — this tenant's key for the configured driver.
@@ -39,11 +44,27 @@ final class AiConfigurationResolver
         private readonly AiModuleRegistry $modules,
         private readonly ProviderKeyResolver $keys,
         private readonly ApiKeyVault $vault,
+        private readonly ModuleModelBindings $bindings,
     ) {
     }
 
-    public function resolve(?string $moduleKey, string $tenantId): ResolvedAiConfiguration
+    /**
+     * @param  string|null  $productModule  An hpbrain_ai_modules key when the call is
+     *                                      made from inside one area's AI Stack. Step 0
+     *                                      applies only when this is given.
+     */
+    public function resolve(?string $moduleKey, string $tenantId, ?string $productModule = null): ResolvedAiConfiguration
     {
+        // Step 0. This product module's own choice for this capability — tenant row
+        // first, then platform. Skipped entirely when no product module is named.
+        if ($productModule !== null && $productModule !== '' && $moduleKey !== null && $moduleKey !== '') {
+            $binding = $this->bindings->find($productModule, $moduleKey, $tenantId);
+
+            if ($binding !== null && $this->providers->exists((string) $binding->provider)) {
+                return $this->fromBinding($binding, $tenantId);
+            }
+        }
+
         $moduleKey = $moduleKey !== null && $this->modules->exists($moduleKey) ? $moduleKey : null;
 
         $row = $this->findModuleRow($moduleKey, $tenantId);
@@ -110,6 +131,64 @@ final class AiConfigurationResolver
         }
 
         return $out;
+    }
+
+    /**
+     * A module binding turned into a resolution (G2G's fromBinding).
+     *
+     * The binding chooses provider and model. The credential is the one it names when
+     * that one is active and visible to this tenant; otherwise the provider's own
+     * pool / env key — the same lookup an unbound call makes, so a binding never
+     * invents a credential.
+     */
+    private function fromBinding(object $binding, string $tenantId): ResolvedAiConfiguration
+    {
+        $provider = (string) $binding->provider;
+        $apiKey = null;
+        $keyId = null;
+        $limit = null;
+
+        if (($binding->api_key_id ?? null) !== null && (string) $binding->api_key_id !== '' && Schema::hasTable('hpbrain_ai_api_keys')) {
+            try {
+                $row = Platform::visible(
+                    DB::table('hpbrain_ai_api_keys')->where('id', (string) $binding->api_key_id)->where('status', 1),
+                    $tenantId
+                )->first();
+            } catch (Throwable) {
+                $row = null;
+            }
+
+            $plain = $row === null ? null : $this->vault->open($row->api_key ?? null);
+
+            if ($plain !== null) {
+                $apiKey = $plain;
+                $keyId = (string) $row->id;
+                $limit = $row->api_limit ?? null;
+            }
+        }
+
+        if ($apiKey === null) {
+            $key = $this->keys->resolve(
+                $this->providers->apiType($provider),
+                $tenantId,
+                $this->providers->envKey($provider),
+            );
+            $apiKey = $key['api_key'] ?? null;
+            $keyId = $key['id'] ?? null;
+            $limit = $key['api_limit'] ?? null;
+        }
+
+        $max = $binding->max_output_tokens ?? null;
+
+        return new ResolvedAiConfiguration(
+            provider: $provider,
+            model: $this->modelFor($provider, $binding->model ?? null, $tenantId),
+            apiKey: $apiKey,
+            source: (string) ($binding->source ?? 'module_binding'),
+            keyId: $keyId,
+            scope: Platform::isPlatform($binding) ? 'platform' : 'institute',
+            maxOutputTokens: is_numeric($max) && (int) $max > 0 ? (int) $max : $this->maxTokens($limit),
+        );
     }
 
     /** @param array<string, mixed>|null $key */
