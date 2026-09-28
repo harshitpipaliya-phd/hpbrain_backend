@@ -145,6 +145,39 @@ final class CreationWorkflowTest extends TestCase
             ->assertJsonFragment(['error' => 'email_already_exists']);
     }
 
+    /**
+     * Regression: the email uniqueness check in PersonController::store()
+     * used to query `tbluser` for the email with no tenant filter at all, so
+     * a person could not be created if ANY tenant already used that email.
+     * The check is now scoped to the caller's own tenant, matching the
+     * employeeId check right below it.
+     *
+     * @test
+     */
+    public function duplicate_person_email_in_a_different_tenant_is_allowed(): void
+    {
+        // A person belonging to a wholly different tenant, inserted directly
+        // (avoids re-running seedErpFixture, whose fixture ids would collide).
+        DB::table('tbluser')->insert([
+            'id' => 9001, 'sub_institute_id' => 9999, 'employee_no' => 'FOREIGN-1',
+            'first_name' => 'Foreign', 'last_name' => 'Person',
+            'email' => 'shared.email@example.com',
+            'department_id' => null, 'user_profile_id' => 1, 'status' => 1,
+        ]);
+
+        $payload = [
+            'employeeId' => 'EMP-4444',
+            'firstName'  => 'Own',
+            'lastName'   => 'Tenant',
+            'email'      => 'shared.email@example.com',
+        ];
+
+        $response = $this->withHeaders($this->auth())->postJson('/api/v1/people', $payload);
+
+        $response->assertStatus(201);
+        $this->assertSame('shared.email@example.com', $response->json('email'));
+    }
+
     /** @test */
     public function person_cannot_be_assigned_to_department_of_another_tenant(): void
     {

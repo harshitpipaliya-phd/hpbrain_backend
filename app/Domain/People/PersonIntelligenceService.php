@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\People;
 
+use App\Domain\Scoring\Banding;
 use App\Domain\Universal\EntityResolver;
 use App\Domain\Universal\ResolvedSource;
 use Illuminate\Support\Facades\DB;
@@ -513,16 +514,14 @@ final class PersonIntelligenceService
     private function band(float $score): string
     {
         $b = config('scoring.person.bands', []);
-        if ($score >= ($b['steady'] ?? 85)) {
-            return 'steady';
-        }
-        if ($score >= ($b['watch'] ?? 70)) {
-            return 'watch';
-        }
-        if ($score >= ($b['support'] ?? 55)) {
-            return 'support';
-        }
-        return 'support';
+
+        // The floor below 'support' is 'support' itself — there is no fourth,
+        // lower band today. Reproduced as-is rather than invented a new label.
+        return Banding::classify($score, [
+            [(float) ($b['steady'] ?? 85), 'steady'],
+            [(float) ($b['watch'] ?? 70), 'watch'],
+            [(float) ($b['support'] ?? 55), 'support'],
+        ], 'support');
     }
 
     private function standingReason(array $components, array $person, array $mismatches, string $band): string

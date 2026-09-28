@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Intelligence\IntelligenceSummaryComposer;
 use App\Domain\Operations\IntelligenceLoopMetrics;
 use App\Domain\Operations\OperationalIntelligence;
 use App\Domain\Operations\OperationalNarrator;
 use App\Domain\Operations\OrganizationScorecard;
 use App\Domain\Organization\FoundationCounts;
+use App\Domain\Universal\EntityResolver;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The derived operational intelligence, one endpoint per screen.
@@ -34,6 +37,8 @@ final class OperationalIntelligenceController extends Controller
         private readonly OrganizationScorecard $scorecard,
         private readonly OperationalNarrator $narrator,
         private readonly FoundationCounts $foundation,
+        private readonly IntelligenceSummaryComposer $summaries,
+        private readonly EntityResolver $resolver,
     ) {
     }
 
@@ -248,7 +253,37 @@ final class OperationalIntelligenceController extends Controller
      */
     public function scorecard(Request $request): JsonResponse
     {
-        return response()->json($this->scorecard->forTenant($this->tenantId($request), $request->boolean('fresh')));
+        $tenant = $this->tenantId($request);
+        $scorecard = $this->scorecard->forTenant($tenant, $request->boolean('fresh'));
+
+        // Additive: every existing key above is unchanged, so any consumer
+        // reading this endpoint today keeps working exactly as it does now.
+        return response()->json($scorecard + [
+            'summary' => $this->summaries->forOrganization($scorecard, $this->organizationName($tenant)),
+        ]);
+    }
+
+    private function organizationName(string $tenant): ?string
+    {
+        try {
+            $source = $this->resolver->resolve($tenant, 'Organization');
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! $source->has('name')) {
+            return null;
+        }
+
+        $row = DB::table($source->table)->where($source->tenantKey, $tenant)->first();
+
+        if ($row === null) {
+            return null;
+        }
+
+        $name = ((array) $row)[$source->field('name')] ?? null;
+
+        return is_string($name) && trim($name) !== '' ? $name : null;
     }
 
     private function relativeStatement(float $rate, float $average): string

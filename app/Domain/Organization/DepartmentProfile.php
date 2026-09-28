@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Organization;
 
+use App\Domain\Scoring\Banding;
+
 /**
  * ONE DEPARTMENT, EVERYTHING KNOWN ABOUT IT.
  *
@@ -45,23 +47,26 @@ namespace App\Domain\Organization;
 final class DepartmentProfile
 {
     /**
-     * The dimensions, and what each is worth.
+     * The dimensions, and what each is worth — read from config/scoring.php's
+     * `department.dimensions`, with these as the fallback if that key is ever
+     * absent. Execution and operational performance carry the most because
+     * they measure what the unit DID; data confidence carries least because it
+     * measures how well the organization records, not how well the unit works.
      *
-     * Execution and operational performance carry the most because they measure
-     * what the unit DID; data confidence carries least because it measures how
-     * well the organization records, not how well the unit works.
-     *
-     * @var array<string, array{label: string, weight: float}>
+     * @return array<string, array{label: string, weight: float}>
      */
-    private const DIMENSIONS = [
-        'operational' => ['label' => 'Operational performance', 'weight' => 1.5],
-        'workload'    => ['label' => 'Workload health',         'weight' => 1.25],
-        'execution'   => ['label' => 'Execution reliability',   'weight' => 1.25],
-        'people'      => ['label' => 'People coverage',         'weight' => 1.0],
-        'service'     => ['label' => 'Service health',          'weight' => 1.0],
-        'signal'      => ['label' => 'Signal health',           'weight' => 1.0],
-        'confidence'  => ['label' => 'Data confidence',         'weight' => 0.75],
-    ];
+    private static function dimensionWeights(): array
+    {
+        return config('scoring.department.dimensions', [
+            'operational' => ['label' => 'Operational performance', 'weight' => 1.5],
+            'workload'    => ['label' => 'Workload health',         'weight' => 1.25],
+            'execution'   => ['label' => 'Execution reliability',   'weight' => 1.25],
+            'people'      => ['label' => 'People coverage',         'weight' => 1.0],
+            'service'     => ['label' => 'Service health',          'weight' => 1.0],
+            'signal'      => ['label' => 'Signal health',           'weight' => 1.0],
+            'confidence'  => ['label' => 'Data confidence',         'weight' => 0.75],
+        ]);
+    }
 
     /** Below this many classified records a rate is arithmetic, not evidence. */
     private const RATE_FLOOR = 30;
@@ -158,7 +163,7 @@ final class DepartmentProfile
      */
     public static function weights(): array
     {
-        return self::DIMENSIONS;
+        return self::dimensionWeights();
     }
 
     /**
@@ -387,10 +392,12 @@ final class DepartmentProfile
     {
         $rounded = $score === null ? null : (int) round(max(0, min(100, $score)));
 
+        $weights = self::dimensionWeights();
+
         return [
             'key' => $key,
-            'label' => self::DIMENSIONS[$key]['label'],
-            'weight' => self::DIMENSIONS[$key]['weight'],
+            'label' => $weights[$key]['label'],
+            'weight' => $weights[$key]['weight'],
             'score' => $rounded,
             'status' => $rounded === null ? null : $this->band($rounded),
             'basis' => $basis,
@@ -429,12 +436,13 @@ final class DepartmentProfile
 
     private function band(int $score): string
     {
-        return match (true) {
-            $score >= 85 => 'healthy',
-            $score >= 70 => 'good',
-            $score >= 50 => 'watch',
-            default => 'critical',
-        };
+        $b = config('scoring.department.bands', []);
+
+        return Banding::classify((float) $score, [
+            [(float) ($b['healthy'] ?? 85), 'healthy'],
+            [(float) ($b['good'] ?? 70), 'good'],
+            [(float) ($b['watch'] ?? 50), 'watch'],
+        ], 'critical');
     }
 
     private function confidence(int $measured, int $total): string

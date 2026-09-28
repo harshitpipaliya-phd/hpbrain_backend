@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Ai;
 
 use App\Domain\Ai\Providers\NullAiProvider;
+use App\Services\QuotaService;
 use Illuminate\Support\Facades\DB;
 use Ramsey\Uuid\Uuid;
 use Throwable;
@@ -15,16 +16,30 @@ use Throwable;
  * INVARIANT 7: every AI recommendation is traceable. That is a claim about
  * rows, not about intentions — so this class writes exactly one
  * hpbrain_ai_executions row per call, BEFORE returning anything to the caller,
- * and it writes it whether the call succeeded or threw. An AI call with no
- * execution row is an untraceable recommendation; a failed call with no row is
- * worse, because the failure is the thing nobody would otherwise know about.
+ * and it writes it whether the call succeeded, threw, or was refused for
+ * quota. An AI call with no execution row is an untraceable recommendation; a
+ * failed call with no row is worse, because the failure is the thing nobody
+ * would otherwise know about.
  *
- * Calling an AiProvider directly bypasses that write. Don't.
+ * Calling an AiProvider directly bypasses that write, AND bypasses the quota
+ * check below. Don't.
+ *
+ * QUOTA IS CHECKED HERE, ONCE, NOT BY EACH CALLER. QuotaService::check() and
+ * ::recordUsage() existed with a passing unit test and zero production
+ * callers — every verb that called complete() was individually responsible
+ * for checking first, and none of them did. Wiring the check into this one
+ * choke point means every existing and future caller is covered without
+ * having to remember to ask. A tenant with no configured quota for a
+ * feature is unaffected (QuotaService::check() reports `allowed: true` for
+ * an unconfigured feature — metering, not capping, until an admin sets a
+ * real limit).
  */
 final class AiGateway
 {
-    public function __construct(private readonly AiProvider $provider)
-    {
+    public function __construct(
+        private readonly AiProvider $provider,
+        private readonly QuotaService $quota,
+    ) {
     }
 
     /**
@@ -59,7 +74,8 @@ final class AiGateway
      * @param  string|null  $templateId the prompt VERSION that produced this, so
      *                                  output can be traced to its exact prompt
      *
-     * @throws Throwable  the provider's own failure, re-thrown after recording
+     * @throws AiQuotaExceededException  the tenant's quota for $service is exhausted; no provider call was made
+     * @throws Throwable                 the provider's own failure, re-thrown after recording
      */
     public function complete(
         AiRequest $request,
@@ -71,6 +87,25 @@ final class AiGateway
         ?string $entityId = null,
     ): AiResponse {
         $startedAt = microtime(true);
+
+        $quotaResult = $this->quota->check($tenantId, $actorId, $service);
+
+        if (! $quotaResult->allowed) {
+            $this->record(
+                $tenantId, $actorId, $service, $templateId, $entityType, $entityId,
+                model: $request->model ?? (string) config('brain.ai.model', ''),
+                status: 'quota_exceeded',
+                inputTokens: null,
+                outputTokens: null,
+                latencyMs: (int) round((microtime(true) - $startedAt) * 1000),
+                error: sprintf(
+                    'Quota exceeded: %d/%d used this %s period.',
+                    $quotaResult->used, $quotaResult->limit, $quotaResult->resetPeriod,
+                ),
+            );
+
+            throw new AiQuotaExceededException($tenantId, $service, $quotaResult);
+        }
 
         try {
             $response = $this->provider->complete($request);
@@ -90,6 +125,16 @@ final class AiGateway
 
             throw $e;
         }
+
+        $cost = $this->estimateCost($response->model, $response->inputTokens, $response->outputTokens);
+
+        $this->quota->recordUsage(
+            $tenantId,
+            $actorId,
+            $service,
+            ($response->inputTokens ?? 0) + ($response->outputTokens ?? 0),
+            $cost ?? 0.0,
+        );
 
         $this->record(
             $tenantId, $actorId, $service, $templateId, $entityType, $entityId,

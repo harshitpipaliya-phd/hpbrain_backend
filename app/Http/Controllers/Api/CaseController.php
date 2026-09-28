@@ -160,6 +160,18 @@ final class CaseController extends Controller
         $evidenceId = (string) $request->input('evidenceId');
         $tenant = $this->tenantId($request);
 
+        // Both ends of the link must belong to this tenant. Without these
+        // checks, a caller could attach an evidence id from another tenant to
+        // one of their own cases, or attach evidence to a case id that is not
+        // even theirs — the insert below has no other tenant guard.
+        if (! $this->repository->findById($tenant, $id)) {
+            return response()->json(['error' => 'case_not_found'], 404);
+        }
+
+        if (! DB::table('hpbrain_evidence')->where('tenant_id', $tenant)->where('id', $evidenceId)->exists()) {
+            return response()->json(['error' => 'evidence_not_found'], 404);
+        }
+
         // hpbrain_case_evidence is a join table with composite PK
         // (case_id, evidence_id) and NO id column. Probing for `id` here threw
         // ER_BAD_FIELD_ERROR in the Node build and broke the loop at stage 4.

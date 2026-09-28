@@ -201,4 +201,69 @@ final class UniversalOrganizationEngineTest extends TestCase
 
         $this->assertEquals('draft', $session['status']);
     }
+
+    /**
+     * Regression for the hardcoded-'platform'-tenant bug: completeStep(),
+     * getNextStep(), validateStep(), activateOrganization() and
+     * abandonOnboarding() used to resolve their session's tenant via a lookup
+     * scoped to the literal tenant 'platform', which no real session is ever
+     * stored under — so every one of these calls silently 404'd regardless of
+     * which tenant started the session. They now take the authenticated
+     * tenant directly from the caller instead of trying to rediscover it.
+     *
+     * @test
+     */
+    public function onboarding_engine_can_progress_a_session_through_its_steps(): void
+    {
+        $engine = app(OnboardingEngine::class);
+        $session = $engine->startOnboarding(self::TENANT, [
+            'org_id'     => 'org-'.self::TENANT,
+            'started_by' => 'test',
+        ]);
+
+        $completed = $engine->completeStep(self::TENANT, $session['id'], '1', ['foo' => 'bar']);
+        $this->assertNotNull($completed, 'completeStep must find the session it just started');
+        $this->assertEquals(2, $completed['current_step']);
+
+        $next = $engine->getNextStep(self::TENANT, $session['id']);
+        $this->assertSame(2, $next['step']);
+
+        $validation = $engine->validateStep(self::TENANT, $session['id'], '1');
+        $this->assertTrue($validation['valid']);
+
+        $activated = $engine->activateOrganization(self::TENANT, $session['id']);
+        $this->assertNotNull($activated);
+        $this->assertEquals('activated', $activated['status']);
+    }
+
+    /**
+     * Regression: runReadinessChecks() used to write every tenant's checks
+     * into a shared 'platform' bucket keyed only by org_id, so two tenants
+     * reusing the same org_id (a small/sequential value in practice) could
+     * read each other's readiness results via getReadinessStatus(). Checks
+     * are now written and read under the caller's own tenant.
+     *
+     * @test
+     */
+    public function readiness_checks_are_isolated_per_tenant_even_for_the_same_org_id(): void
+    {
+        $engine = app(OnboardingEngine::class);
+
+        $engine->runReadinessChecks(self::TENANT, 'shared-org-id');
+        $engine->runReadinessChecks('tenant-other', 'shared-org-id');
+
+        $mine = $engine->getReadinessStatus(self::TENANT, 'shared-org-id');
+        $theirs = $engine->getReadinessStatus('tenant-other', 'shared-org-id');
+
+        $this->assertGreaterThan(0, $mine['total']);
+        $this->assertGreaterThan(0, $theirs['total']);
+
+        $mineIds = array_column($mine['checks'], 'id');
+        $theirIds = array_column($theirs['checks'], 'id');
+
+        $this->assertEmpty(
+            array_intersect($mineIds, $theirIds),
+            'a readiness check row must never be visible from both tenants'
+        );
+    }
 }

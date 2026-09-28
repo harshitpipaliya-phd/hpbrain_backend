@@ -964,6 +964,7 @@ trait BuildsBrainSchema
             $t->text('message')->nullable();
             $t->text('metadata')->nullable();
             $t->timestamp('checked_date')->nullable();
+            $t->text('created_by')->default('system');
             $t->timestamp('created_date')->nullable();
             $t->timestamp('updated_date')->nullable();
         });

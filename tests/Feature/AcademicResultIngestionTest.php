@@ -13,7 +13,7 @@ use Tests\TestCase;
 
 /**
  * Academic results as an operational dataset, alongside the fee dataset.
- *
+
  * THE IDENTITY PROBLEM IS THE WHOLE POINT. A result row is unique per student
  * per year per subject per exam. enrollment_no alone repeats roughly forty
  * times per student across a transcript, so binding it as the natural key would
