@@ -56,6 +56,7 @@ trait BuildsErpFixture
             $t->integer('parent_id')->default(0);
             $t->integer('status')->default(1);
             $t->integer('is_calculated')->default(0);
+            $t->integer('head_user_id')->nullable();
             $t->integer('created_by')->nullable();
             $t->timestamp('created_at')->nullable();
             $t->timestamp('updated_at')->nullable();
@@ -121,14 +122,20 @@ trait BuildsErpFixture
         ]);
 
         DB::table('hrms_departments')->insert([
+            // Nursing is the one genuinely headless department (no head_user_id) —
+            // this is what departments_without_manager must now detect. Surgery
+            // and Radiology have a real head_user_id, including Radiology, whose
+            // parent_id is non-zero (a non-root unit) proving the rule no longer
+            // tests org-hierarchy position — only Nursing (root AND headless)
+            // fires, not every root-level department.
             ['id' => 1, 'sub_institute_id' => $tenantId, 'department' => 'Nursing',
-             'roles_responsibility' => 'Ward care', 'parent_id' => 0, 'status' => 1,
+             'roles_responsibility' => 'Ward care', 'parent_id' => 0, 'status' => 1, 'head_user_id' => null,
              'created_by' => 1, 'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00'],
             ['id' => 2, 'sub_institute_id' => $tenantId, 'department' => 'Surgery',
-             'roles_responsibility' => null, 'parent_id' => 1, 'status' => 1,
+             'roles_responsibility' => null, 'parent_id' => 1, 'status' => 1, 'head_user_id' => 101,
              'created_by' => 1, 'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00'],
             ['id' => 3, 'sub_institute_id' => $tenantId, 'department' => 'Radiology',
-             'roles_responsibility' => null, 'parent_id' => 1, 'status' => 1,
+             'roles_responsibility' => null, 'parent_id' => 1, 'status' => 1, 'head_user_id' => 102,
              'created_by' => 1, 'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00'],
         ]);
 

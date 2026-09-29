@@ -61,15 +61,16 @@ final class EntityMappingSeeder extends Seeder
         'name'        => 'department',
         'description' => 'roles_responsibility',
         'parent'      => 'parent_id',
+        // Correction: hrms_departments DOES carry a real head column —
+        // head_user_id — verified against the live schema and written by
+        // OrganizationSignupService and the school seed commands
+        // (e.g. SeedV1AcademySchool::seedErpStaff()). The prior comment here
+        // claiming "no manager column" was stale. Mapping it lets
+        // "departments_without_manager" test the actual head relationship
+        // instead of the org-hierarchy parent field (see SignalRuleSeeder.php).
+        'head'        => 'head_user_id',
         'status'      => 'status',
         'deletedAt'   => 'deleted_at',
-        // 'head' is deliberately absent. hrms_departments has no manager column
-        // (verified against the live schema). The existing "Departments Without
-        // Manager" rule tests parent_id IS NULL OR = 0, which detects ROOT
-        // departments, not headless ones. Mapping head => parent_id here would
-        // launder that conflation into the vocabulary layer and make it look
-        // deliberate. The rule is left exactly as it is in Phase 1; the naming
-        // is recorded in the progress log instead.
     ]];
 
     private const PERSON = ['tbluser', [

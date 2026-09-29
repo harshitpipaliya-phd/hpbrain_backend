@@ -100,6 +100,7 @@ final class EntityMappingSeederTest extends TestCase
         $this->assertSame('roles_responsibility', $unit->field('description'));
         $this->assertSame('parent_id', $unit->field('parent'));
         $this->assertSame('status', $unit->field('status'));
+        $this->assertSame('head_user_id', $unit->field('head'));
     }
 
     /** @test */
@@ -119,11 +120,11 @@ final class EntityMappingSeederTest extends TestCase
     /** @test */
     public function fields_the_erp_has_no_column_for_stay_unmapped(): void
     {
-        // The honesty requirement, enforced. hrms_departments has no manager
-        // column and hrms_job_titles has neither a reporting line nor a vacancy
+        // The honesty requirement, enforced. hrms_departments DOES have a real
+        // head_user_id column (see organization_unit_resolves_to_hrms_departments
+        // above — this was previously, incorrectly, believed absent) but
+        // hrms_job_titles genuinely has neither a reporting line nor a vacancy
         // flag. None of them may be quietly pointed at a lookalike column.
-        $this->assertFalse($this->resolver()->resolve('4', 'OrganizationUnit')->has('head'));
-
         $position = $this->resolver()->resolve('4', 'Position');
         $this->assertSame('hrms_job_titles', $position->table);
         $this->assertSame('title', $position->field('title'));

@@ -266,7 +266,12 @@ final class StudentRepository
             'tenantId'          => (string) ($row['tenant_id'] ?? ''),
             'studentRef'        => (string) ($row['student_ref'] ?? ''),
             'studentName'       => (string) ($row['student_name'] ?? ''),
-            'standard'          => $row['standard'] ?? null,
+            // academic_standard (from the results export) is the reliable field;
+            // standard alone can hold a non-academic value (e.g. payment status)
+            // when a student's only source is the fee dataset. Same fallback
+            // convention already used in GraphProjection.php and
+            // AcademicIntelligenceService.php.
+            'standard'          => (!empty($row['academic_standard']) ? $row['academic_standard'] : ($row['standard'] ?? null)),
             'division'          => $row['division'] ?? null,
             'batch'             => $row['batch'] ?? null,
             'studentQuota'      => $row['student_quota'] ?? null,
