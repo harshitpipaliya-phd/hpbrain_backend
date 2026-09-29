@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -53,6 +54,21 @@ final class TaskController extends Controller
     public function registry(): JsonResponse
     {
         return response()->json(self::REGISTRY);
+    }
+
+    /**
+     * The cron schedule declared in routes/console.php, as Laravel resolves it.
+     *
+     * Read through `schedule:list --json` rather than restated here, so the
+     * Scheduler screen can never disagree with what `schedule:run` actually
+     * fires. Global, not per tenant: every scheduled command sweeps all tenants.
+     * Returns [{expression, command, description, next_due_date, timezone, ...}].
+     */
+    public function schedule(): JsonResponse
+    {
+        Artisan::call('schedule:list', ['--json' => true]);
+
+        return response()->json(json_decode(trim(Artisan::output()), true) ?: []);
     }
 
     public function run(Request $request): JsonResponse
