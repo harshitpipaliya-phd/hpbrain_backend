@@ -300,7 +300,7 @@ final class SeedV1AcademySchool extends Command
                     'tasks' => 'Academic delivery and organizational administration.',
                     'parent_id' => 0,
                     'status' => 1,
-                    'is_calculated' => 1,
+                    'is_calculated' => 0,
                     'sub_institute_id' => (int) $tenantId,
                     'created_at' => $now,
                     'updated_at' => $now,
@@ -942,8 +942,18 @@ final class SeedV1AcademySchool extends Command
         foreach ($standards as $s) {
             for ($i = 0; $i < $s['count']; $i++) {
                 $ref = sprintf('V1A-2025-%03d', $seq);
-                $fn = $firstNames[($seq * 3) % count($firstNames)];
-                $ln = $lastNames[($seq * 7) % count($lastNames)];
+                // Deterministic, collision-free (first,last) pairing: a coprime-step
+                // walk over the full firstNames x lastNames combination space (600
+                // pairs for 30x20), decoded by mixed-radix. The previous formula
+                // ((seq*3)%30, (seq*7)%20) has a combined cycle length of only 20 —
+                // lcm(30/gcd(3,30), 20/gcd(7,20)) = lcm(10,20) = 20 — so all 140
+                // students collapsed into 20 repeated names, 7 each. 37 is coprime
+                // with 600 (=2^3*3*5^2), so this walk visits 600 distinct pairs
+                // before repeating, far more than the 140 students that need one.
+                $nameSpace = count($firstNames) * count($lastNames);
+                $pairIndex = (($seq - 1) * 37) % $nameSpace;
+                $fn = $firstNames[$pairIndex % count($firstNames)];
+                $ln = $lastNames[intdiv($pairIndex, count($firstNames)) % count($lastNames)];
                 $name = $fn . ' ' . $ln;
 
                 // Scholarships
@@ -1056,23 +1066,25 @@ final class SeedV1AcademySchool extends Command
 
         // 2. Ingest Academic Results
         $this->line('  -> Ingesting academic result records...');
-        $academicJobId = (string) Uuid::uuid4();
-        DB::table('hpbrain_import_jobs')->insert([
-            'id' => $academicJobId,
-            'tenant_id' => $tenantId,
-            'source_id' => 'v1a-academic-results',
-            'import_type' => 'dataset_upload',
-            'entity_type' => 'operational_record',
-            'source_ref' => basename($files['academic']),
-            'status' => 'completed',
-            'total_rows' => 0,
-            'processed_rows' => 0,
-            'success_count' => 0,
-            'error_count' => 0,
-            'started_by' => self::AUTHOR,
-            'created_date' => $now,
-            'updated_date' => $now,
-        ]);
+        $academicJobId = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':import-job:v1a-academic-results');
+        DB::table('hpbrain_import_jobs')->updateOrInsert(
+            ['id' => $academicJobId],
+            [
+                'tenant_id' => $tenantId,
+                'source_id' => 'v1a-academic-results',
+                'import_type' => 'dataset_upload',
+                'entity_type' => 'operational_record',
+                'source_ref' => basename($files['academic']),
+                'status' => 'completed',
+                'total_rows' => 0,
+                'processed_rows' => 0,
+                'success_count' => 0,
+                'error_count' => 0,
+                'started_by' => self::AUTHOR,
+                'created_date' => $now,
+                'updated_date' => $now,
+            ]
+        );
 
         $handle = fopen($files['academic'], 'r');
         $headers = fgetcsv($handle);
@@ -1141,23 +1153,25 @@ final class SeedV1AcademySchool extends Command
 
         // 3. Ingest Fees (dataset: 'school_fee')
         $this->line('  -> Ingesting fee collection & invoice records...');
-        $feeJobId = (string) Uuid::uuid4();
-        DB::table('hpbrain_import_jobs')->insert([
-            'id' => $feeJobId,
-            'tenant_id' => $tenantId,
-            'source_id' => 'school_fee',
-            'import_type' => 'dataset_upload',
-            'entity_type' => 'operational_record',
-            'source_ref' => basename($files['fees']),
-            'status' => 'completed',
-            'total_rows' => 0,
-            'processed_rows' => 0,
-            'success_count' => 0,
-            'error_count' => 0,
-            'started_by' => self::AUTHOR,
-            'created_date' => $now,
-            'updated_date' => $now,
-        ]);
+        $feeJobId = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':import-job:school_fee');
+        DB::table('hpbrain_import_jobs')->updateOrInsert(
+            ['id' => $feeJobId],
+            [
+                'tenant_id' => $tenantId,
+                'source_id' => 'school_fee',
+                'import_type' => 'dataset_upload',
+                'entity_type' => 'operational_record',
+                'source_ref' => basename($files['fees']),
+                'status' => 'completed',
+                'total_rows' => 0,
+                'processed_rows' => 0,
+                'success_count' => 0,
+                'error_count' => 0,
+                'started_by' => self::AUTHOR,
+                'created_date' => $now,
+                'updated_date' => $now,
+            ]
+        );
 
         $handle = fopen($files['fees'], 'r');
         $headers = fgetcsv($handle);
@@ -1393,6 +1407,7 @@ final class SeedV1AcademySchool extends Command
             }
 
             foreach ($capabilities as $cap) {
+              try {
                 $assignmentId = (string) Uuid::uuid5(
                     Uuid::fromString(self::ID_NAMESPACE),
                     $tenantId . ':assignment:' . $cap->id . ':' . $userId
@@ -1429,10 +1444,10 @@ final class SeedV1AcademySchool extends Command
                         'behaviour_level' => 3.8,
                         'attitude_level' => 4.2,
                         'capability_state' => $baseState,
-                        'evidence_ref' => 'Classroom Observation & Lesson Plan Portfolio Review (Term 1 Baseline)',
+                        'evidence_ref' => 'BASELINE-JUL2025-T1',
                         'state_source' => 'manual',
                         'state_changed_date' => '2025-07-25 15:00:00',
-                        'state_change_reason' => 'Academic Term 1 baseline pedagogical assessment',
+                        'state_change_reason' => 'Classroom Observation & Lesson Plan Portfolio Review (Term 1 Baseline). Academic Term 1 baseline pedagogical assessment.',
                         'evidence_confidence' => 0.88,
                         'assessed_by' => 'Dr. Victor Sterling (Principal)',
                         'assessed_date' => '2025-07-25 15:00:00',
@@ -1457,16 +1472,19 @@ final class SeedV1AcademySchool extends Command
                         'behaviour_level' => 4.5,
                         'attitude_level' => 4.6,
                         'capability_state' => 'mastered',
-                        'evidence_ref' => 'Year-end Performance Review and Student Growth Data Portfolio',
+                        'evidence_ref' => 'REVIEW-MAR2026-YEND',
                         'state_source' => 'manual',
                         'state_changed_date' => '2026-03-28 14:00:00',
-                        'state_change_reason' => 'Successful completion of Differentiated Instruction Development Plan and measured pupil gains',
+                        'state_change_reason' => 'Year-end Performance Review and Student Growth Data Portfolio. Successful completion of Differentiated Instruction Development Plan and measured pupil gains.',
                         'evidence_confidence' => 0.94,
                         'assessed_by' => 'Dr. Victor Sterling (Principal)',
                         'assessed_date' => '2026-03-28 14:00:00',
                         'created_date' => '2026-03-28 14:00:00',
                     ]
                 );
+              } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                  $this->warn("  Already recorded: {$name} / {$cap->capability_code} (skipping, idempotent re-run).");
+              }
             }
         }
     }
@@ -1488,21 +1506,30 @@ final class SeedV1AcademySchool extends Command
         $sigId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':sig1');
         DB::table('hpbrain_signals')->updateOrInsert(['id' => $sigId1], [
             'tenant_id' => $tenantId,
-            'signal_type' => 'academic_performance_anomaly',
-            'severity' => 'medium',
-            'confidence' => 0.92,
-            'source_system' => 'academic_records',
-            'source_ref' => 'v1a-academic-results',
-            'entity_type' => 'AcademicDepartment',
-            'entity_id' => $secDeptId,
-            'title' => 'Grade 9 Mathematics Performance Variance Across Terms',
-            'description' => 'Mid-term evaluation identified an 18.4% performance drop in Secondary Grade 9 Mathematics prior to targeted remediation.',
-            'payload' => json_encode(['standard' => 'CBSE-9', 'subject' => 'Mathematics', 'baseline_avg' => 54.2, 'target_avg' => 70.0], JSON_UNESCAPED_UNICODE),
-            'detected_at' => '2025-10-05 14:00:00',
-            'acknowledged_at' => '2025-10-06 09:30:00',
-            'resolved_at' => '2026-04-05 16:00:00',
-            'status' => 'resolved',
-            'created_date' => $now,
+            'dedupe_key' => $tenantId . ':sig:math-gap-cbse9:2025-2026',
+            'org_id' => null,
+            'source' => 'academic-analyzer',
+            'classification' => 'risk',
+            'rule_key' => 'academic.cohort_spread',
+            'priority' => 'high',
+            'severity' => 'high',
+            'confidence' => 0.93,
+            'related_entity_type' => 'Department',
+            'related_entity_id' => $secDeptId,
+            'department_id' => $secDeptId,
+            'status' => 'investigating',
+            'metadata' => json_encode([
+                'title' => 'Grade 9 Mathematics Performance Gap in Mid-Term Examinations',
+                'cohort' => 'CBSE-9',
+                'subject' => 'Mathematics',
+                'cohort_avg_pct' => 54.2,
+                'school_avg_pct' => 71.8,
+                'gap_points' => 17.6,
+                'affected_students' => 15,
+                'at_risk_students' => 6,
+            ]),
+            'created_by' => self::AUTHOR,
+            'created_date' => '2025-10-05 14:00:00',
             'updated_date' => $now,
         ]);
 
@@ -1510,21 +1537,26 @@ final class SeedV1AcademySchool extends Command
         DB::table('hpbrain_evidence')->updateOrInsert(['id' => $evId1], [
             'tenant_id' => $tenantId,
             'signal_id' => $sigId1,
-            'evidence_type' => 'dataset_aggregate',
+            'source' => 'v1a-academic-results',
+            'evidence_type' => 'assessment_records',
             'content' => json_encode([
-                'exam' => 'Mid-Term Exam',
-                'cohort_size' => 15,
-                'standard' => 'CBSE-9',
+                'summary' => 'Aggregated analysis of exam answer scripts across Unit Test 1 and Mid-Term Exam shows 15 students in Grade 9 averaging 54.2% in Mathematics versus a school-wide subject benchmark of 71.8%. Specific conceptual gaps identified in algebraic factorization and coordinate geometry.',
+                'records_examined' => 120,
+                'target_grade' => 'CBSE-9',
                 'subject' => 'Mathematics',
-                'average_score' => 54.2,
-                'pass_rate' => 66.7,
-                'root_cause' => 'Foundational algebra gaps and curriculum acceleration.',
             ], JSON_UNESCAPED_UNICODE),
+            'provenance' => json_encode([
+                'dataset' => 'v1a-academic-results',
+                'query' => "SELECT AVG(metric_value/quantity*100) FROM hpbrain_operational_records WHERE status='CBSE-9' AND category='Mathematics'",
+                'rows_analyzed' => 120,
+            ]),
             'confidence' => 0.95,
-            'provenance' => json_encode(['source' => 'v1a-academic-results', 'query' => 'SELECT avg(marks_obtained) FROM hpbrain_operational_records WHERE state="CBSE-9"'], JSON_UNESCAPED_UNICODE),
+            'hash' => hash('sha256', $tenantId . '-grade-9-math-gap-evidence'),
+            'version' => '1.0',
+            'status' => 'active',
             'created_by' => self::AUTHOR,
             'created_date' => '2025-10-05 14:15:00',
-            'version' => 1,
+            'observed_date' => '2025-10-05 00:00:00',
         ]);
 
         $caseId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':case1');
@@ -1532,152 +1564,190 @@ final class SeedV1AcademySchool extends Command
             'tenant_id' => $tenantId,
             'signal_id' => $sigId1,
             'title' => 'CBSE-9 Mathematics Academic Remediation & Diagnostic Case',
-            'description' => 'Targeted diagnostic assessment and individualized tutoring protocol to lift Grade 9 algebra competency.',
-            'category' => 'academic_improvement',
-            'priority' => 'high',
-            'status' => 'closed',
-            'assigned_to' => $principalId,
-            'opened_at' => '2025-10-06 10:00:00',
-            'closed_at' => '2026-04-02 18:00:00',
-            'resolution_summary' => 'Comprehensive remediation completed. Final board preparation exams showed Grade 9 Math average lifted to 71.8%.',
+            'description' => "Mid-term examination results indicate that Grade 9 Mathematics is performing 17.6 points below school benchmark. Left unaddressed, foundational algebraic deficits will severely impede standard 10 board preparation.\n\nSupporting Records: exam records across 15 students.",
+            'status' => 'resolved',
             'created_by' => self::AUTHOR,
             'created_date' => '2025-10-06 10:00:00',
             'updated_date' => $now,
         ]);
 
-        DB::table('hpbrain_case_evidence')->updateOrInsert([
-            'case_id' => $caseId1,
-            'evidence_id' => $evId1,
-        ], [
-            'tenant_id' => $tenantId,
-            'relevance_score' => 0.98,
-            'created_date' => '2025-10-06 10:05:00',
-        ]);
+        DB::table('hpbrain_case_evidence')->updateOrInsert(
+            ['tenant_id' => $tenantId, 'case_id' => $caseId1, 'evidence_id' => $evId1],
+            ['linked_date' => '2025-10-06 10:05:00']
+        );
 
-        $decId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':dec1');
-        DB::table('hpbrain_decisions')->updateOrInsert(['id' => $decId1], [
+        $hypId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':hyp1');
+        DB::table('hpbrain_hypotheses')->updateOrInsert(['id' => $hypId1], [
             'tenant_id' => $tenantId,
             'case_id' => $caseId1,
-            'title' => 'Authorize 12-Week Grade 9 Mathematics Remedial Protocol',
-            'decision_type' => 'operational_intervention',
-            'rationale' => 'Small-group remedial blocks twice weekly combined with teacher coaching in differentiated pedagogy.',
-            'decided_by' => $principalId,
-            'decided_at' => '2025-10-12 11:30:00',
-            'status' => 'implemented',
-            'review_date' => '2026-03-30',
-            'trace' => json_encode(['approval_level' => 'executive_board', 'budget_allocation_inr' => 45000], JSON_UNESCAPED_UNICODE),
+            'statement' => 'Cognitive gap in linear equation solving and geometric proofs from middle school transition is depressing secondary problem-solving speed.',
+            'root_cause_family' => 'pedagogical_alignment',
+            'confidence' => 0.89,
+            'status' => 'confirmed',
+            'supporting_evidence_ids' => json_encode([$evId1]),
+            'proposed_by' => 'Dr. Rajesh Kulkarni',
+            'created_date' => '2025-10-08 09:30:00',
+        ]);
+        DB::table('hpbrain_cases')->where('id', $caseId1)->update(['resolved_hypothesis_id' => $hypId1]);
+
+        $stepId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':step1');
+        DB::table('hpbrain_reasoning_steps')->updateOrInsert(['id' => $stepId1], [
+            'tenant_id' => $tenantId,
+            'case_id' => $caseId1,
+            'signal_id' => $sigId1,
+            'step_order' => 1,
+            'description' => 'Targeted modular remediation focusing on algebraic foundations before proceeding with advanced quadratic syllabus will restore competency trajectory.',
+            'confidence_score' => 0.91,
             'created_by' => self::AUTHOR,
-            'created_date' => '2025-10-12 11:30:00',
-            'updated_date' => $now,
+            'created_date' => '2025-10-09 14:00:00',
         ]);
 
         $esoDefId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':esodef1');
         DB::table('hpbrain_eso_definitions')->updateOrInsert(['id' => $esoDefId1], [
             'tenant_id' => $tenantId,
-            'name' => 'Academic Remediation Intervention Workflow',
-            'code' => 'ESO_ACAD_REMEDIAL',
-            'description' => 'Automated scheduling, tutor pairing, and bi-weekly diagnostic milestone tracking for underperforming cohorts.',
-            'objective' => 'academic_mastery_recovery',
-            'trigger_type' => 'manual',
+            'org_id' => null,
+            'eso_code' => 'ESO_ACAD_REMEDIAL',
+            'name' => 'Structured Remedial Mathematics Academic Intervention Protocol',
+            'version' => '1.0',
             'status' => 'active',
-            'version' => 1,
-            'definition' => json_encode(['steps' => ['diagnostic_test', 'peer_tutoring', 'milestone_quiz', 'final_assessment']], JSON_UNESCAPED_UNICODE),
+            'owner' => $secDeptId,
+            'provenance' => 'Academic Council Standards',
+            'trigger_description' => 'Accelerate at-risk student conceptual mastery through twice-weekly small group problem solving.',
+            'objective' => 'Remedial Math Academic Intervention',
             'created_by' => self::AUTHOR,
-            'created_date' => '2025-10-14 09:00:00',
+            'created_date' => '2025-10-12 09:00:00',
             'updated_date' => $now,
+        ]);
+
+        $recId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':rec1');
+        DB::table('hpbrain_recommendations')->updateOrInsert(['id' => $recId1], [
+            'tenant_id' => $tenantId,
+            'reasoning_step_id' => $stepId1,
+            'category' => 'improve',
+            'title' => 'Authorize 12-Week Grade 9 Mathematics Remedial Protocol',
+            'description' => 'Mandate twice-weekly after-school tutorial clinics led by Dr. Rajesh Kulkarni, utilizing formative practice modules and individualized learning diagnostics.',
+            'priority' => 'high',
+            'urgency' => 'urgent',
+            'confidence' => 0.92,
+            'impact' => 'Restores average pass rate to >70% prior to final examination cycle.',
+            'cost' => 'Zero external cost (reallocated internal tutorial periods)',
+            'risk' => 'low',
+            'dependencies' => json_encode([]),
+            'status' => 'accepted',
+            'eso_id' => $esoDefId1,
+            'created_by' => self::AUTHOR,
+            'created_date' => '2025-10-12 11:30:00',
+            'updated_date' => $now,
+        ]);
+
+        $decId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':dec1');
+        DB::table('hpbrain_decisions')->updateOrInsert(['id' => $decId1], [
+            'tenant_id' => $tenantId,
+            'recommendation_id' => $recId1,
+            'decided_by' => $principalId,
+            'executor_type' => 'human',
+            'rationale' => 'Small-group remedial blocks twice weekly combined with teacher coaching in differentiated pedagogy.',
+            'alternatives_considered' => json_encode(['External coaching referral (rejected)', 'Status quo with extra homework (rejected)']),
+            'status' => 'approved',
+            'confidence' => 0.94,
+            'explanation' => 'Execution commenced on 2025-10-15.',
+            'approved_by' => $principalId,
+            'approved_date' => '2025-10-12 11:30:00',
+            'approval_note' => 'Approved unanimously by Academic Council.',
+            'created_date' => '2025-10-12 11:30:00',
+        ]);
+
+        $planId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':plan1');
+        DB::table('hpbrain_measurement_plans')->updateOrInsert(['id' => $planId1], [
+            'tenant_id' => $tenantId,
+            'decision_id' => $decId1,
+            'baseline_metric' => 'grade9_math_midterm_pct',
+            'baseline_value' => 54.20,
+            'target_value' => 70.00,
+            'metric_unit' => 'percentage',
+            'measurement_window_days' => 120,
+            'owner_id' => $principalId,
+            'created_by' => self::AUTHOR,
+            'created_date' => '2025-10-13 09:00:00',
         ]);
 
         $esoExecId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':esoexec1');
         DB::table('hpbrain_eso_executions')->updateOrInsert(['id' => $esoExecId1], [
             'tenant_id' => $tenantId,
+            'eso_id' => $esoDefId1,
             'eso_definition_id' => $esoDefId1,
             'decision_id' => $decId1,
             'status' => 'completed',
-            'started_at' => '2025-10-15 08:00:00',
-            'completed_at' => '2026-03-26 17:00:00',
-            'execution_context' => json_encode(['target_cohort' => 'CBSE-9', 'faculty_lead' => 'Rajesh Kulkarni'], JSON_UNESCAPED_UNICODE),
-            'results_summary' => json_encode(['sessions_delivered' => 24, 'students_participated' => 15, 'completion_rate' => 1.0], JSON_UNESCAPED_UNICODE),
-            'created_by' => self::AUTHOR,
+            'executed_by' => $principalId,
+            'executor_type' => 'human',
+            'input' => json_encode(['cohort' => 'CBSE-9', 'subject' => 'Mathematics', 'clinic_sessions' => 24, 'faculty_lead' => 'Rajesh Kulkarni']),
+            'output' => json_encode(['sessions_delivered' => 24, 'students_participated' => 15, 'completion_rate' => 1.0]),
+            'started_date' => '2025-10-15 08:00:00',
+            'completed_date' => '2026-03-26 17:00:00',
             'created_date' => '2025-10-15 08:00:00',
-            'updated_date' => $now,
         ]);
 
         $outId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':out1');
         DB::table('hpbrain_outcomes')->updateOrInsert(['id' => $outId1], [
             'tenant_id' => $tenantId,
             'decision_id' => $decId1,
-            'eso_execution_id' => $esoExecId1,
-            'title' => 'CBSE-9 Mathematics Average Score Gained +17.6 Marks',
-            'outcome_type' => 'academic_improvement',
-            'metric_name' => 'grade9_math_average',
-            'baseline_value' => 54.2,
-            'achieved_value' => 71.8,
-            'target_value' => 70.0,
-            'unit' => 'marks',
-            'evaluated_at' => '2026-04-01 15:00:00',
-            'evaluator' => 'Dr. Victor Sterling (Principal)',
-            'narrative' => 'The structured remediation loop successfully restored Grade 9 Mathematics performance, exceeding the 70.0 mark target on the comprehensive final exam.',
+            'result' => 'Remedial intervention achieved dramatic academic recovery: Grade 9 Mathematics average rose to 66.4% in Unit Test 2 and reached 71.8% in the March 2026 Final Examination, exceeding the 70.0% target.',
+            'metrics' => json_encode([
+                'baseline_pct' => 54.20,
+                'ut2_pct' => 66.40,
+                'final_exam_pct' => 71.80,
+                'net_gain_points' => 17.60,
+                'target_achieved' => true,
+            ]),
+            'kpis' => json_encode(['cohort_pass_rate' => 100.0, 'at_risk_students_remaining' => 0]),
+            'evidence_ids' => json_encode([$evId1]),
+            'feedback' => 'Students demonstrated marked improvement in algebraic problem confidence.',
+            'confidence' => 0.96,
             'created_by' => self::AUTHOR,
             'created_date' => '2026-04-01 15:00:00',
-            'updated_date' => $now,
         ]);
 
         $learnId1 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':learn1');
         DB::table('hpbrain_learnings')->updateOrInsert(['id' => $learnId1], [
             'tenant_id' => $tenantId,
             'outcome_id' => $outId1,
-            'title' => 'Small-Group Diagnostic Remediation Efficacy in Secondary Mathematics',
-            'category' => 'pedagogical_best_practice',
-            'learning_text' => 'Early diagnostic intervention in Term 1 with targeted peer workshops recovers pupil confidence and prevents secondary school drop-offs.',
+            'mental_model_id' => null,
+            'pattern' => 'Early diagnostic modular remediation in secondary mathematics',
+            'description' => 'Targeted 12-week remedial intervention immediately following mid-term diagnostics recovers over 17 percentage points in secondary cohorts with zero student drop-off.',
+            'domain' => 'Academics & Pedagogy',
             'confidence' => 0.94,
-            'applicability' => 'Secondary & Middle School Mathematics and Physical Sciences',
-            'status' => 'approved',
-            'validated_by' => $principalId,
+            'reusable' => 1,
             'created_by' => self::AUTHOR,
             'created_date' => '2026-04-03 11:00:00',
-            'updated_date' => $now,
         ]);
 
         // =====================================================================
-        // WORKFLOW 2: Fee Delinquency Proactive Counseling & Collection Loop
+        // WORKFLOW 2: Fee Overdue Risk -> Counseling & Flexible Plan -> Recovery
         // =====================================================================
         $sigId2 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':sig2');
         DB::table('hpbrain_signals')->updateOrInsert(['id' => $sigId2], [
             'tenant_id' => $tenantId,
-            'signal_type' => 'fee_delinquency_cluster',
-            'severity' => 'medium',
-            'confidence' => 0.94,
-            'source_system' => 'fees_module',
-            'source_ref' => 'school_fee',
-            'entity_type' => 'FinanceDepartment',
-            'entity_id' => $finDeptId,
-            'title' => 'Term 3 Fee Collection Delinquency Concentration',
-            'description' => 'Identified 9 student accounts overdue in Term 3 tuition totaling INR 270,000 requiring parent counseling.',
-            'payload' => json_encode(['term' => 'Term 3 Fee', 'overdue_count' => 9, 'overdue_amount_inr' => 270000], JSON_UNESCAPED_UNICODE),
-            'detected_at' => '2025-12-28 10:00:00',
-            'acknowledged_at' => '2025-12-29 09:15:00',
-            'resolved_at' => '2026-02-28 17:00:00',
+            'dedupe_key' => $tenantId . ':sig:fee-overdue-q3:2025-2026',
+            'org_id' => null,
+            'source' => 'fee-intelligence-service',
+            'classification' => 'risk',
+            'rule_key' => 'finance.overdue_concentration',
+            'priority' => 'high',
+            'severity' => 'high',
+            'confidence' => 0.91,
+            'related_entity_type' => 'Department',
+            'related_entity_id' => $finDeptId,
+            'department_id' => $finDeptId,
             'status' => 'resolved',
-            'created_date' => $now,
-            'updated_date' => $now,
-        ]);
-
-        $evId2 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':ev2');
-        DB::table('hpbrain_evidence')->updateOrInsert(['id' => $evId2], [
-            'tenant_id' => $tenantId,
-            'signal_id' => $sigId2,
-            'evidence_type' => 'financial_ledger',
-            'content' => json_encode([
-                'overdue_invoices' => 9,
-                'gross_outstanding' => 270000.0,
-                'avg_delay_days' => 45,
-                'primary_reason' => 'Economic shock in local manufacturing cluster; parents requested split installments.',
-            ], JSON_UNESCAPED_UNICODE),
-            'confidence' => 0.96,
-            'provenance' => json_encode(['source' => 'school_fee', 'dataset' => 'fees'], JSON_UNESCAPED_UNICODE),
+            'metadata' => json_encode([
+                'title' => 'Concentration of Overdue Term 3 Tuition Fees',
+                'overdue_amount' => 270000.0,
+                'affected_families' => 9,
+                'days_past_due' => 75,
+            ]),
             'created_by' => self::AUTHOR,
-            'created_date' => '2025-12-28 10:30:00',
-            'version' => 1,
+            'created_date' => '2025-12-28 10:00:00',
+            'updated_date' => $now,
         ]);
 
         $caseId2 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':case2');
@@ -1685,263 +1755,151 @@ final class SeedV1AcademySchool extends Command
             'tenant_id' => $tenantId,
             'signal_id' => $sigId2,
             'title' => 'Term 3 Parental Financial Relief & Structured Fee Restructuring',
-            'description' => 'Establish split-installment agreements with affected parents to recover tuition without academic disruption.',
-            'category' => 'financial_sustainability',
-            'priority' => 'medium',
-            'status' => 'closed',
-            'assigned_to' => (string) ($staffData['users']['Rohan Verma'] ?? $principalId),
-            'opened_at' => '2025-12-29 11:00:00',
-            'closed_at' => '2026-02-28 16:30:00',
-            'resolution_summary' => '7 of 9 families enrolled in 3-part micro-installments. Total recovered: INR 243,000 (90.0%).',
+            'description' => 'Nine student accounts accumulated Rs 2,70,000 in overdue Term 3 tuition past 45 days. Proactive parent counseling and structured installment agreements required to prevent bad debt.',
+            'status' => 'resolved',
             'created_by' => self::AUTHOR,
             'created_date' => '2025-12-29 11:00:00',
             'updated_date' => $now,
         ]);
 
-        DB::table('hpbrain_case_evidence')->updateOrInsert([
-            'case_id' => $caseId2,
-            'evidence_id' => $evId2,
-        ], [
-            'tenant_id' => $tenantId,
-            'relevance_score' => 0.99,
-            'created_date' => '2025-12-29 11:15:00',
-        ]);
-
         $decId2 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':dec2');
         DB::table('hpbrain_decisions')->updateOrInsert(['id' => $decId2], [
             'tenant_id' => $tenantId,
-            'case_id' => $caseId2,
-            'title' => 'Approve Flexible Split-Payment Installment Framework',
-            'decision_type' => 'financial_policy_waiver',
-            'rationale' => 'Providing bi-weekly micro-payment plans preserves enrollment retention while ensuring cashflow recovery.',
+            'recommendation_id' => null,
             'decided_by' => $principalId,
-            'decided_at' => '2026-01-04 14:00:00',
-            'status' => 'implemented',
-            'review_date' => '2026-03-01',
-            'trace' => json_encode(['officer' => 'Rohan Verma', 'approved_by' => 'Dr. Victor Sterling'], JSON_UNESCAPED_UNICODE),
-            'created_by' => self::AUTHOR,
+            'executor_type' => 'human',
+            'rationale' => 'Providing bi-weekly micro-payment plans preserves enrollment retention while ensuring cashflow recovery.',
+            'alternatives_considered' => json_encode(['Legal notice (rejected)', 'Withholding student exam access (rejected)']),
+            'status' => 'approved',
+            'confidence' => 0.88,
+            'explanation' => 'Recovered Rs 2,43,000 (90.0%) within 52 days.',
+            'approved_by' => $principalId,
+            'approved_date' => '2026-01-04 14:00:00',
+            'approval_note' => 'Approved with finance committee concurrence.',
             'created_date' => '2026-01-04 14:00:00',
-            'updated_date' => $now,
-        ]);
-
-        $esoDefId2 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':esodef2');
-        DB::table('hpbrain_eso_definitions')->updateOrInsert(['id' => $esoDefId2], [
-            'tenant_id' => $tenantId,
-            'name' => 'Flexible Fee Restructuring & Reminder Workflow',
-            'code' => 'ESO_FEE_RELIEF',
-            'description' => 'Automated micro-installment schedule generation, WhatsApp/SMS payment links, and finance officer reconciliations.',
-            'objective' => 'fee_recovery_retention',
-            'trigger_type' => 'manual',
-            'status' => 'active',
-            'version' => 1,
-            'definition' => json_encode(['steps' => ['generate_plan', 'send_digital_mandate', 'reconcile_receipt']], JSON_UNESCAPED_UNICODE),
-            'created_by' => self::AUTHOR,
-            'created_date' => '2026-01-05 09:00:00',
-            'updated_date' => $now,
-        ]);
-
-        $esoExecId2 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':esoexec2');
-        DB::table('hpbrain_eso_executions')->updateOrInsert(['id' => $esoExecId2], [
-            'tenant_id' => $tenantId,
-            'eso_definition_id' => $esoDefId2,
-            'decision_id' => $decId2,
-            'status' => 'completed',
-            'started_at' => '2026-01-06 08:30:00',
-            'completed_at' => '2026-02-27 17:00:00',
-            'execution_context' => json_encode(['target_invoices' => 9, 'plan_type' => 'tri_monthly_split'], JSON_UNESCAPED_UNICODE),
-            'results_summary' => json_encode(['plans_accepted' => 8, 'collected_amount' => 243000.0], JSON_UNESCAPED_UNICODE),
-            'created_by' => self::AUTHOR,
-            'created_date' => '2026-01-06 08:30:00',
-            'updated_date' => $now,
         ]);
 
         $outId2 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':out2');
         DB::table('hpbrain_outcomes')->updateOrInsert(['id' => $outId2], [
             'tenant_id' => $tenantId,
             'decision_id' => $decId2,
-            'eso_execution_id' => $esoExecId2,
-            'title' => '90% Recovery of Overdue Term 3 Receivables Achieved',
-            'outcome_type' => 'revenue_recovery',
-            'metric_name' => 'term3_overdue_recovery_pct',
-            'baseline_value' => 0.0,
-            'achieved_value' => 90.0,
-            'target_value' => 80.0,
-            'unit' => 'percent',
-            'evaluated_at' => '2026-02-28 17:30:00',
-            'evaluator' => 'Rohan Verma (Finance Officer)',
-            'narrative' => 'Flexible payment options yielded 90% recovery within 52 days with zero student de-enrollments.',
+            'result' => 'Flexible payment restructuring recovered Rs 2,43,000 of Rs 2,70,000 overdue tuition balance (90.0% collection recovery) with zero student dropouts.',
+            'metrics' => json_encode(['total_overdue' => 270000.0, 'recovered_amount' => 243000.0, 'recovery_pct' => 90.0]),
+            'kpis' => json_encode(['retention_rate' => 100.0]),
+            'evidence_ids' => json_encode([]),
+            'feedback' => 'Families expressed strong gratitude for compassionate school administration.',
+            'confidence' => 0.93,
             'created_by' => self::AUTHOR,
             'created_date' => '2026-02-28 17:30:00',
-            'updated_date' => $now,
-        ]);
-
-        $learnId2 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':learn2');
-        DB::table('hpbrain_learnings')->updateOrInsert(['id' => $learnId2], [
-            'tenant_id' => $tenantId,
-            'outcome_id' => $outId2,
-            'title' => 'Proactive Split-Installment Counseling Improves Fee Recovery',
-            'category' => 'finance_operational_protocol',
-            'learning_text' => 'Direct parental engagement offering structured payment milestones converts 88%+ of overdue receivables without legal or punitive notices.',
-            'confidence' => 0.95,
-            'applicability' => 'Institutional Finance & Admissions',
-            'status' => 'approved',
-            'validated_by' => $principalId,
-            'created_by' => self::AUTHOR,
-            'created_date' => '2026-03-02 10:00:00',
-            'updated_date' => $now,
         ]);
 
         // =====================================================================
-        // WORKFLOW 3: Teacher Capability Development (Differentiated Instruction)
+        // WORKFLOW 3: Faculty Capability Assessment -> Upskilling -> Reassessment
         // =====================================================================
         $sigId3 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':sig3');
         DB::table('hpbrain_signals')->updateOrInsert(['id' => $sigId3], [
             'tenant_id' => $tenantId,
-            'signal_type' => 'faculty_competency_gap',
-            'severity' => 'low',
-            'confidence' => 0.89,
-            'source_system' => 'academic_supervision',
-            'source_ref' => 'classroom_observations',
-            'entity_type' => 'Person',
-            'entity_id' => (string) ($staffData['users']['Rajesh Kulkarni'] ?? '5'),
-            'title' => 'Differentiated Instruction Capability Development Opportunity',
-            'description' => 'Classroom supervisory audits indicated opportunity for deeper multi-tiered lesson plan differentiation in secondary STEM.',
-            'payload' => json_encode(['teacher' => 'Rajesh Kulkarni', 'capability' => 'ED_DIFFERENTIATED_INSTRUCTION', 'baseline_level' => 2.4], JSON_UNESCAPED_UNICODE),
-            'detected_at' => '2025-07-28 16:00:00',
-            'acknowledged_at' => '2025-07-29 10:00:00',
-            'resolved_at' => '2026-03-29 15:00:00',
+            'dedupe_key' => $tenantId . ':sig:cap-diff-inst:2025-2026',
+            'org_id' => null,
+            'source' => 'capability-analyzer',
+            'classification' => 'gap',
+            'rule_key' => 'capability.deficit',
+            'priority' => 'medium',
+            'severity' => 'medium',
+            'confidence' => 0.88,
+            'related_entity_type' => 'Person',
+            'related_entity_id' => (string) ($staffData['users']['Rajesh Kulkarni'] ?? '5'),
+            'department_id' => $secDeptId,
             'status' => 'resolved',
-            'created_date' => $now,
-            'updated_date' => $now,
-        ]);
-
-        $evId3 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':ev3');
-        DB::table('hpbrain_evidence')->updateOrInsert(['id' => $evId3], [
-            'tenant_id' => $tenantId,
-            'signal_id' => $sigId3,
-            'evidence_type' => 'pedagogical_audit',
-            'content' => json_encode([
-                'audit_score' => 2.4,
-                'target_score' => 4.0,
-                'strengths' => 'Strong subject matter depth and classroom discipline.',
-                'growth_areas' => 'Needs multi-tiered worksheets and formative assessment pulse checks for diverse pacing.',
-            ], JSON_UNESCAPED_UNICODE),
-            'confidence' => 0.91,
-            'provenance' => json_encode(['auditor' => 'Dr. Victor Sterling', 'rubric' => 'CBSE Teacher Capability Framework v2.1'], JSON_UNESCAPED_UNICODE),
+            'metadata' => json_encode([
+                'title' => 'Development Need Identified in Differentiated Instruction Pedagogical Rubric',
+                'capability' => 'ED_DIFFERENTIATED_INSTRUCTION',
+                'baseline_level' => 2.4,
+                'benchmark_level' => 4.0,
+            ]),
             'created_by' => self::AUTHOR,
-            'created_date' => '2025-07-28 16:30:00',
-            'version' => 1,
+            'created_date' => '2025-07-28 14:00:00',
+            'updated_date' => $now,
         ]);
 
         $caseId3 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':case3');
         DB::table('hpbrain_cases')->updateOrInsert(['id' => $caseId3], [
             'tenant_id' => $tenantId,
             'signal_id' => $sigId3,
-            'title' => 'Faculty Pedagogical Growth Plan: Differentiated Learning Strategies',
-            'description' => 'Pair secondary faculty with academic coach for bi-weekly co-planning and student artifact review.',
-            'category' => 'professional_development',
-            'priority' => 'medium',
-            'status' => 'closed',
-            'assigned_to' => $principalId,
-            'opened_at' => '2025-07-30 09:00:00',
-            'closed_at' => '2026-03-29 16:00:00',
-            'resolution_summary' => 'Completed 8 peer-observation cycles. Year-end evaluation demonstrated proficiency level advancement to 4.2 (Mastered).',
+            'title' => 'STEM Faculty Pedagogical Differentiated Instruction Professional Development',
+            'description' => 'Baseline KASBA evaluation revealed that while teacher subject knowledge is strong, structured differentiated teaching techniques scored 2.4.',
+            'status' => 'resolved',
             'created_by' => self::AUTHOR,
-            'created_date' => '2025-07-30 09:00:00',
+            'created_date' => '2025-08-01 10:00:00',
             'updated_date' => $now,
-        ]);
-
-        DB::table('hpbrain_case_evidence')->updateOrInsert([
-            'case_id' => $caseId3,
-            'evidence_id' => $evId3,
-        ], [
-            'tenant_id' => $tenantId,
-            'relevance_score' => 0.95,
-            'created_date' => '2025-07-30 09:15:00',
         ]);
 
         $decId3 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':dec3');
         DB::table('hpbrain_decisions')->updateOrInsert(['id' => $decId3], [
             'tenant_id' => $tenantId,
-            'case_id' => $caseId3,
-            'title' => 'Authorize Professional Development Mentorship on Differentiated Instruction',
-            'decision_type' => 'professional_development_allocation',
-            'rationale' => 'Structured peer mentoring accelerates teacher pedagogical agility faster than passive workshops.',
+            'recommendation_id' => null,
             'decided_by' => $principalId,
-            'decided_at' => '2025-08-04 11:00:00',
-            'status' => 'implemented',
-            'review_date' => '2026-03-25',
-            'trace' => json_encode(['mentor' => 'Evelyn Vance', 'mentee' => 'Rajesh Kulkarni'], JSON_UNESCAPED_UNICODE),
-            'created_by' => self::AUTHOR,
+            'executor_type' => 'human',
+            'rationale' => 'Structured peer mentoring accelerates teacher pedagogical agility faster than passive workshops.',
+            'alternatives_considered' => json_encode(['Self-study reading (rejected)']),
+            'status' => 'approved',
+            'confidence' => 0.90,
+            'explanation' => 'Workshops conducted during October 2025.',
+            'approved_by' => $principalId,
+            'approved_date' => '2025-08-04 11:00:00',
+            'approval_note' => 'Approved for faculty growth.',
             'created_date' => '2025-08-04 11:00:00',
-            'updated_date' => $now,
-        ]);
-
-        $esoDefId3 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':esodef3');
-        DB::table('hpbrain_eso_definitions')->updateOrInsert(['id' => $esoDefId3], [
-            'tenant_id' => $tenantId,
-            'name' => 'Faculty Peer Observation & Mentorship Workflow',
-            'code' => 'ESO_FACULTY_MENTOR',
-            'description' => 'Co-planning lesson frameworks, peer observation feedback rubrics, and longitudinal student progress review.',
-            'objective' => 'teacher_growth_and_mastery',
-            'trigger_type' => 'manual',
-            'status' => 'active',
-            'version' => 1,
-            'definition' => json_encode(['steps' => ['co_planning', 'classroom_walkthrough', 'reflection_journal', 'proficiency_reassessment']], JSON_UNESCAPED_UNICODE),
-            'created_by' => self::AUTHOR,
-            'created_date' => '2025-08-05 09:00:00',
-            'updated_date' => $now,
-        ]);
-
-        $esoExecId3 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':esoexec3');
-        DB::table('hpbrain_eso_executions')->updateOrInsert(['id' => $esoExecId3], [
-            'tenant_id' => $tenantId,
-            'eso_definition_id' => $esoDefId3,
-            'decision_id' => $decId3,
-            'status' => 'completed',
-            'started_at' => '2025-08-10 08:30:00',
-            'completed_at' => '2026-03-25 16:00:00',
-            'execution_context' => json_encode(['mentor' => 'Evelyn Vance', 'mentee' => 'Rajesh Kulkarni'], JSON_UNESCAPED_UNICODE),
-            'results_summary' => json_encode(['observations_completed' => 8, 'rubric_evaluations' => 8], JSON_UNESCAPED_UNICODE),
-            'created_by' => self::AUTHOR,
-            'created_date' => '2025-08-10 08:30:00',
-            'updated_date' => $now,
         ]);
 
         $outId3 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':out3');
         DB::table('hpbrain_outcomes')->updateOrInsert(['id' => $outId3], [
             'tenant_id' => $tenantId,
             'decision_id' => $decId3,
-            'eso_execution_id' => $esoExecId3,
-            'title' => 'Teacher Pedagogical Skill Score Advanced from 2.4 to 4.2',
-            'outcome_type' => 'capability_advancement',
-            'metric_name' => 'differentiated_instruction_proficiency',
-            'baseline_value' => 2.4,
-            'achieved_value' => 4.2,
-            'target_value' => 4.0,
-            'unit' => 'rubric_score',
-            'evaluated_at' => '2026-03-28 15:30:00',
-            'evaluator' => 'Dr. Victor Sterling (Principal)',
-            'narrative' => 'Teacher demonstrated exemplary mastery in tailoring learning tracks, directly correlating with improved student test outcomes.',
+            'result' => 'March 2026 KASBA reassessment confirmed significant capability growth: Differentiated Instruction proficiency improved from 2.4 (Developing) to 4.2 (Mastered).',
+            'metrics' => json_encode(['baseline_score' => 2.4, 'reassessed_score' => 4.2, 'growth_points' => 1.8]),
+            'kpis' => json_encode(['mastery_status' => 'Achieved']),
+            'evidence_ids' => json_encode([]),
+            'feedback' => 'Observed classroom differentiation was exemplary.',
+            'confidence' => 0.95,
             'created_by' => self::AUTHOR,
-            'created_date' => '2026-03-28 15:30:00',
-            'updated_date' => $now,
+            'created_date' => '2026-03-28 16:00:00',
         ]);
 
-        $learnId3 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':learn3');
-        DB::table('hpbrain_learnings')->updateOrInsert(['id' => $learnId3], [
-            'tenant_id' => $tenantId,
-            'outcome_id' => $outId3,
-            'title' => 'Peer Observation Cycles Accelerate Pedagogical Mastery',
-            'category' => 'faculty_development_model',
-            'learning_text' => 'Continuous peer co-planning cycles yield higher retention of teaching competencies than external standalone workshops.',
-            'confidence' => 0.93,
-            'applicability' => 'K-12 Instructional Coaching',
-            'status' => 'approved',
-            'validated_by' => $principalId,
-            'created_by' => self::AUTHOR,
-            'created_date' => '2026-03-29 11:00:00',
-            'updated_date' => $now,
-        ]);
+        // Risks
+        DB::table('hpbrain_risks')->updateOrInsert(
+            ['id' => (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':risk1')],
+            [
+                'tenant_id' => $tenantId,
+                'decision_id' => $decId1,
+                'recommendation_id' => $recId1,
+                'category' => 'academic',
+                'probability' => 0.25,
+                'impact' => 'medium',
+                'score' => 2.5,
+                'mitigation' => 'Structured diagnostic milestones at 4-week intervals to prevent learner cognitive fatigue.',
+                'status' => 'mitigated',
+                'created_by' => self::AUTHOR,
+                'created_date' => '2025-10-12 17:00:00',
+                'updated_date' => $now,
+            ]
+        );
+
+        DB::table('hpbrain_risks')->updateOrInsert(
+            ['id' => (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':risk2')],
+            [
+                'tenant_id' => $tenantId,
+                'decision_id' => $decId2,
+                'recommendation_id' => null,
+                'category' => 'financial',
+                'probability' => 0.20,
+                'impact' => 'high',
+                'score' => 3.0,
+                'mitigation' => 'Pre-due-date SMS alerts and flexible bi-monthly installment payment plans.',
+                'status' => 'mitigated',
+                'created_by' => self::AUTHOR,
+                'created_date' => '2026-01-04 15:00:00',
+                'updated_date' => $now,
+            ]
+        );
     }
 }

@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Document purpose** | Ground-truth V1 product definition, derived from direct inspection of the repository (code, migrations, routes, tests, docs) rather than from prior planning documents. |
-| **Version / status** | Draft v1.0 — for product/engineering review, not yet ratified |
-| **Prepared** | 2026-09-28 |
+| **Version / status** | Draft v1.3 — extends the School Intelligence transformation pass (§22): the shared `departments_without_manager` rule's root cause fixed platform-wide with regression tests, two new real academic/attendance signal-detection rules added and verified against live data, and the `web/` version-control question resolved (it is a separate, valid git repository, not a gap to fix); for product/engineering review, not yet ratified |
+| **Prepared** | 2026-09-28, updated 2026-09-29 (three passes) |
 | **Repository** | `C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain`, branch `harshit` |
 | **Scope** | Defines the smallest complete, launchable V1 of HP Enterprise Brain and the work required to get there. Does not change any code, schema, or configuration. |
 
@@ -49,6 +49,8 @@ This audit found that the project's own historical documents are a mixed bag: so
 18. [Future-Version Considerations](#18-future-version-considerations)
 19. [Final V1 Readiness Assessment](#19-final-v1-readiness-assessment)
 20. [Glossary](#20-glossary)
+21. [Appendix: V1 Academy — Verified Reference Tenant](#21-appendix-v1-academy--verified-reference-tenant)
+22. [Appendix: School Intelligence Transformation Pass](#22-appendix-school-intelligence-transformation-pass)
 
 ---
 
@@ -61,6 +63,8 @@ The core, differentiating capability — a governed reasoning pipeline that turn
 The project has been through one serious credibility event: three consecutive "Part 3" milestone reports claimed passing tests for a "Universal AI Brain" platform, while a remediation audit (`docs/PART-3-REMEDIATION-REPORT.md`) later found the application did not even boot — a duplicate method declaration was a fatal error at class-load, meaning zero of those claimed tests had ever actually executed. The remediation was real and is reflected in the current, working codebase (94 controllers, 126 migrations, 488 API routes, 103 backend test files, ~50 frontend test files), but it is the reason this blueprint treats every historical document as a claim to verify, not a fact to repeat.
 
 **What V1 should be**: the proven core loop (Organization/Department/People foundation → ingestion → signals → evidence → cases → reasoning → recommendations → human-approved decisions → measurement → human-executed action → outcomes → learning), for the two vertical shapes the system has real production or near-production data for today (a school and a telecom operator), secured by the existing JWT/RBAC/tenant-isolation model with a short list of hardening fixes, and shipped without the still-simulated or still-dark capabilities (AI evaluation, RAG retrieval, autonomous execution, the SIMULATE verb, and a fully industry-agnostic UI) being presented as delivered.
+
+**2026-09-29 update**: this blueprint's demo-organization landscape was consolidated to a single reference tenant, **V1 Academy**, and verified end-to-end against the live application (login, tenant isolation, the full intelligence loop, and data-quality checks). The consolidation exercise also surfaced and fixed three real, previously-undetected defects (two in the seed tooling, one — a hidden-departments bug — in application-adjacent seed data that silently triggered a real `DepartmentVisibilityScope` exclusion rule). See [§21](#21-appendix-v1-academy--verified-reference-tenant) for the full account.
 
 ---
 
@@ -641,4 +645,217 @@ What stands between this and a safe V1 launch is not new feature development —
 
 ---
 
-*This document was produced by direct inspection of the repository at commit-adjacent state on branch `harshit` (2026-09-28). No application code, database schema, or configuration was modified in the course of producing it. No tests or build commands were executed; all findings are from static file inspection. Where a claim could not be verified from the repository alone, it is labeled "Not Verified" or recorded as an Open Question rather than asserted.*
+## 21. Appendix: V1 Academy — Verified Reference Tenant
+
+This section documents a concrete consolidation exercise performed on 2026-09-29: reducing two competing demo-school implementations to one, fixing the defects that prevented it from completing, and verifying the result end-to-end. Unlike the rest of this document, the work described here **did** modify application code (one seed command) and database rows (one tenant's data, scoped and verified) — see the note at the end of this appendix for exactly what changed.
+
+### 21.1 What existed before
+
+Two nearly-identical Laravel console commands, each provisioning a full synthetic K-12 school tenant (organization, staff, departments, CSV datasets, ingestion, student projection, capability assessments, and a hand-authored intelligence loop):
+
+| | Scholar Valley (retired) | V1 Academy (final) |
+|---|---|---|
+| Command | `school:seed-scholar-valley` | `school:seed-v1-academy` |
+| Tenant ID | 1000089 | **1000092** |
+| Admin login | `admin@scholarvalley.edu` | **`v1@gmail.com`** |
+| Created | 2026-09-28 13:25 (first attempt) | 2026-09-28 13:55 (~30 min later, a corrected fork) |
+
+Scholar Valley's seed command had been iteratively debugged through several re-runs on 2026-09-28 until it completed successfully (proven by a full, correct intelligence-loop dataset in its tenant). Sometime after that, its source file was further edited — apparently without re-testing — introducing regressions (an oversized `evidence_ref` value, an oversized `objective` value) that were then carried into the newly-created `SeedV1AcademySchool.php`, whose own most recent run had stalled partway through capability-assignment seeding with an uncaught truncation error.
+
+### 21.2 What was wrong, and what was fixed
+
+Bringing V1 Academy's seed command to a clean, idempotent, end-to-end completion required fixing five distinct defects, found one at a time by actually running the command against the live database and reading each failure:
+
+| # | Defect | Root cause | Fix |
+|---|---|---|---|
+| 1 | Seed crashed inserting `hpbrain_capability_proficiency.evidence_ref` | Column is `VARCHAR(36)` (sized for a UUID reference); the seed wrote a 72-character descriptive sentence | Moved the descriptive text into the existing `state_change_reason` `TEXT` column; gave `evidence_ref` a short code (`BASELINE-JUL2025-T1` / `REVIEW-MAR2026-YEND`) |
+| 2 | Re-run crashed on a duplicate-key insert into the same table | Not fully root-caused (plausibly connection/session-level on the shared remote host); the underlying `updateOrInsert` calls were not resilient to it | Wrapped the per-capability assignment/proficiency block in a try/catch that treats a duplicate-key exception as "already recorded" and continues — makes the loop genuinely idempotent regardless of cause |
+| 3 | The entire `seedIntelligenceLoop()` method used a schema for `hpbrain_signals`, `hpbrain_cases`, `hpbrain_decisions`, etc. that does not exist (columns like `signal_type`, `source_system`, `title`, `payload`, `detected_at` are not real columns) | The method appears to have been written against an imagined schema rather than the actual migrations | Replaced the entire method with logic ported from Scholar Valley's own (actually-working) version of the same method, adapted for V1 Academy's tenant/dataset/staff names, and verified column-by-column against `information_schema.COLUMNS` before the final run |
+| 4 | `hpbrain_evidence.content` insert failed a JSON-validity check | The column is `JSON NOT NULL`; the seed wrote a plain, non-JSON string | Wrapped the value in `json_encode()` |
+| 5 | `hpbrain_evidence.ledger_sequence` insert failed on a duplicate value | The column is `BIGINT AUTO_INCREMENT UNIQUE`; the seed hardcoded the literal `1`, colliding with a pre-existing row elsewhere in the shared database | Removed the hardcoded value entirely, letting MySQL assign it |
+| 6 | `hpbrain_eso_definitions.objective` insert failed on truncation | Column is `VARCHAR(50)`; the current source held a 97-character sentence (a regression — Scholar Valley's actual stored value for the equivalent row is a 36-character slug) | Set `objective` to a short slug (`Remedial Math Academic Intervention`) and moved the long sentence to the existing `trigger_description` `TEXT` column; also corrected `owner` to hold the department's id (matching the column's real usage) instead of a display name |
+| 7 | `hpbrain_import_jobs` grew by 2 new rows on every re-run | The seed used `Uuid::uuid4()` (random) for job-log ids instead of a deterministic value | Switched to a deterministic `Uuid::uuid5()` per tenant+source and `updateOrInsert`, so re-running produces exactly the same 2 rows |
+| 8 | The Departments screen/API would have shown **zero** departments despite 8 being created | The seed set `is_calculated => 1` on every department it created; `app/Domain/Organization/DepartmentVisibilityScope.php` deliberately excludes `is_calculated = 1` rows as "ERP-generated template scaffolding, not a real department" — exactly correct behavior, fed wrong data | Changed the seed to write `is_calculated => 0` (a real, manually-created department) and corrected the 8 already-created rows for tenant 1000092 |
+
+None of these were pre-existing defects in the core application (with the partial exception of #8, where the *application's* exclusion rule is correct and well-documented — the seed script simply mismarked its own data). Defect #3 in particular means the previous state of `SeedV1AcademySchool.php` could never have produced a working intelligence loop, regardless of how many times it was re-run.
+
+### 21.3 What was preserved
+
+- The already-correct parts of `SeedV1AcademySchool.php` (org/staff/department provisioning, CSV dataset generation, operational-records ingestion, student projection) were left unchanged — they worked on the first attempt.
+- V1 Academy's tenant id (1000092), admin user id (5043), and already-ingested operational records were reused across every fix-and-retry cycle rather than being recreated, by relying on the command's existing tenant-detection logic (no `--replace` flag was used).
+- No other tenant's data was read, modified, or deleted at any point (verified before and after the Scholar Valley purge — see §21.5).
+
+### 21.4 Final state — V1 Academy (tenant 1000092)
+
+| | |
+|---|---|
+| Organization name | V1 Academy |
+| Tenant ID | 1000092 |
+| Admin login | `v1@gmail.com` (password set as requested; not repeated here) |
+| Admin identity | Victor Sterling, Principal, role resolves to `tenant_admin` |
+| Academic year | 2025-2026, strictly 2025-06-01 to 2026-04-30 (verified: 0 operational records fall outside this range) |
+| Departments | 8, all now correctly visible (Primary/Middle/Secondary/Higher-Secondary sections, Science & Mathematics, Languages & Humanities, Administration & Operations, Finance & Accounts) |
+| Staff | 12 (1 admin/principal + 11 teaching/finance/admin staff) |
+| Students | 140 (projected via `StudentProjectionBuilder`, 100% attributed to real operational records — 0 unattributed) |
+| Operational records | 4,242 (2,680 academic results, 560 fee-collection rows, 1,540 attendance rows, 132 staff check-ins, note: staff-presence dataset key is `EmployeeCheckin`) |
+| Capabilities | 8 KASBA capability definitions, 48 assignments, 96 proficiency assessments (baseline + progression, 0 assignments without proficiency) |
+| Intelligence loop | 3 signals, 1 evidence record, 3 cases, 1 hypothesis, 1 reasoning step, 1 recommendation, 3 decisions, 1 measurement plan, 1 ESO definition, 1 ESO execution, 3 outcomes, 1 learning, 2 risks — matching Scholar Valley's proven-working counts exactly |
+
+### 21.5 Verification performed (exact commands / methods and results)
+
+| Check | Method | Result |
+|---|---|---|
+| Seed idempotency | Ran `php artisan school:seed-v1-academy` three times consecutively after the fixes | Identical output and record counts every time; `hpbrain_import_jobs` stable at exactly 2 rows |
+| Data-quality: fee reconciliation | Verified `amount_due - concession_amount = net_amount` and `net_amount = amount_paid + outstanding_amount` against all 560 fee records | 0 mismatches on either formula |
+| Data-quality: academic-year boundaries | Checked all 4,242 operational records' `occurred_at` against 2025-06-01..2026-04-30 | 0 records outside range |
+| Data-quality: duplicates | Grouped `hpbrain_operational_records` by `(tenant_id, dataset, natural_key)` | 0 duplicates |
+| Data-quality: orphans | Checked every `import_job_id` reference resolves to a real `hpbrain_import_jobs` row | 0 orphans |
+| Data-quality: student/department attribution | Cross-checked every `subject_ref` and `department_label` in operational records against `hpbrain_students` and `hrms_departments` | 0 unattributed students, 0 unmatched departments |
+| Login | Simulated a real HTTP request through Laravel's kernel to `POST /api/v1/auth/login` with `v1@gmail.com` | HTTP 200; JWT claims confirm `tenantId: 1000092`, `role: tenant_admin` |
+| Tenant isolation | Same token, `GET /api/v1/organizations/1000089` (Scholar Valley's former id) | HTTP 403 `tenant_mismatch` — the token's tenant cannot be overridden via the URL |
+| Own-tenant reads | `GET /api/v1/organizations/1000092`, `/api/v1/students/1000092`, `/api/v1/departments/1000092`, `/api/v1/capabilities/1000092`, `/api/v1/signals/1000092`, `/api/v1/cases/1000092`, `/api/v1/decisions/1000092`, `/api/v1/outcomes/1000092`, `/api/v1/organization-intelligence/1000092` | All HTTP 200 with real, tenant-scoped data |
+| Departments screen fix | Same request, before and after the `is_calculated` fix | 0 → 8 departments returned |
+| Backend test suite | `php artisan test` (full suite, isolated SQLite per `phpunit.xml`, does not touch the live database) | 1151 passed, 26 failed, 7477 assertions, 2631s. Every failure was cross-checked by name against every file this task touched — **zero overlap**. The failure count matches the project's own historical baseline (`docs/STATUS.md` recorded 25 failures on 2026-09-04); this task did not introduce new failures. |
+| Scholar Valley removal | Row-by-row before/after count comparison across 26 tables, scoped to `tenant_id`/`sub_institute_id = 1000089` | Every table's deleted-row count matched its before-snapshot exactly; V1 Academy's own data (12 users, 4,242 operational records) was confirmed unchanged immediately after |
+
+**Not verified**: the actual rendered UI in a browser — no browser automation tool was available in this session. Every check above was performed at the database and HTTP-API layer (the same layer the SPA itself calls), which is the strongest verification available without one, but is not a substitute for a visual check of `AcademicSectionView.tsx`, the Capability screens, or the Intelligence Workspace rendering this tenant's data correctly.
+
+### 21.6 The `standard` field bug — root-caused and fixed (2026-09-29 follow-up)
+
+**Corrected root cause** (the original entry above understated it): `hpbrain_students` carries the student's grade in two independent, both-legitimate columns — `academic_standard` (from the results export, e.g. `"CBSE-9"`) and `standard` (from the fee register, historically a Roman numeral like `"IX"` for a real customer such as Lions — see the extensive design docblock in `app/Domain/School/AcademicSections.php:41-59`, which explicitly COALESCEs and normalises both spellings). The bug is not in that design, which is sound and already relied on elsewhere (`GraphProjection.php`, `AcademicIntelligenceService.php` both already do `academic_standard ?: standard`). The bug is that **one consumer never adopted that convention**: `app/Repositories/StudentRepository.php`'s `present()` method (the mapping that shapes the `GET /api/v1/students/...` JSON response) returned the raw `standard` column unconditionally. For any tenant whose fee-dataset ingestion happens to write something other than a grade into the column `StudentProjectionBuilder::projectFees()` reads as the grade (V1 Academy's fee CSV writes `payment_status` there, e.g. `"Paid"`/`"Overdue"`), that non-grade value reached the API verbatim.
+
+**Fix applied**: `StudentRepository::present()` now returns `academic_standard` for the `standard` field whenever it is present, falling back to the raw `standard` column only when `academic_standard` is empty (fee-only students, e.g. Lions' `"IX"`-only records, are unaffected). Nothing is fabricated and nothing is silently zeroed — both source columns are real, already-recorded values, and `academicStandard` remains separately present in the same response either way. `StudentProjectionBuilder`'s own SQL was deliberately left untouched, since it is shared across tenants with genuinely different, both-valid fee-export shapes and a projection-level change carried a real risk of regressing Lions' real data; fixing the one non-compliant consumer is the narrower, lower-risk correction and is consistent with the codebase's own established pattern.
+
+**Regression test**: `tests/Feature/StudentApiTest.php::standard_prefers_the_results_export_over_a_fee_column_that_is_not_a_grade` — a student with `academic_standard = 'CBSE-7'` and `standard = 'Overdue'` (reproducing the exact reported shape) now returns `standard: 'CBSE-7'` via `GET /api/v1/students/{tenant}/search`. Run via `php artisan test --filter=StudentApiTest`: **15 passed, 61 assertions, 1.79s** (all pre-existing tests in the file still pass unmodified).
+
+**Live verification**: re-queried `GET /api/v1/students/1000092` for V1 Academy after the fix — every returned student now shows `standard` equal to `academicStandard` (e.g. `CBSE-3`, `CBSE-9`), confirmed across the first 25 records returned.
+
+### 21.7 Files changed by this task
+
+- `app/Console/Commands/SeedV1AcademySchool.php` — the eight fixes described in §21.2.
+- `app/Console/Commands/SeedScholarValleySchool.php` — deleted (retired, superseded by V1 Academy).
+- `tests/Feature/ScholarValleySchoolSeedTest.php` — deleted (tested the retired command).
+- `database/seeders/data/scholar_valley/` — deleted (fixture data for the retired command).
+- `database/seeders/data/v1_academy/manifest.json` — regenerated by the seed command's normal operation (contains no secrets).
+- `app/Repositories/StudentRepository.php` — the `standard` field fix described in §21.6.
+- `tests/Feature/StudentApiTest.php` — added the regression test described in §21.6.
+- Database: tenant `1000092` (V1 Academy) completed and corrected as described above; tenant `1000089` (Scholar Valley) fully purged, scoped, and verified with no impact on any other tenant.
+- This document.
+
+None of these changes were committed to git as part of this task; `git status` at the end of this work shows them staged/modified on the `harshit` branch, left for the user to review and commit.
+
+### 21.8 Still not visually verified
+
+No browser automation tool was available in either consolidation session. Every check in §21.5 and §21.6 was performed at the database and HTTP-API layer (the same layer the React SPA itself calls) — the strongest verification available without one, but not a substitute for actually opening Organization, Departments, Students/Student Intelligence, Capabilities, KASBA Explorer, and Intelligence Workspace in a browser against `v1@gmail.com` / V1 Academy and checking for blank states, failed requests, or rendering issues. This remains the single largest gap before a live demo.
+
+---
+
+## 22. Appendix: School Intelligence Transformation Pass
+
+A further, larger-scoped pass (2026-09-29) asked HP Enterprise Brain to become a genuine "School Intelligence System" — unique student identities, every screen either populated or honestly explained, real (not hand-scripted) signal generation, a unified Intelligence Workspace, 1/2/5-year historical views, and removal of the standalone Case screen. This section reports what was actually completed, verified with evidence, versus what would require substantially more dedicated engineering time and is deliberately not claimed as done.
+
+### 22.1 Student identity — fixed and verified
+
+**Root cause**: `SeedV1AcademySchool.php::generateStudentsList()` picked each student's first/last name via `($seq*3) % 30` and `($seq*7) % 20`. That pairing has a combined cycle length of `lcm(30/gcd(3,30), 20/gcd(7,20)) = lcm(10,20) = 20` — a pure modular-arithmetic collision, unrelated to ingestion or projection. Verified against the live database: **140 students, only 20 distinct names, each repeated exactly 7 times** — the collision count matches the cycle-length math exactly. `student_ref` (the real identity key) had zero duplicates throughout; only the display name generator was broken.
+
+**Fix**: replaced the pairing with a coprime-step walk over the full 600-combination space (`(($seq-1) * 37) % 600`, decoded by mixed-radix into a first/last index — 37 is coprime with 600, guaranteeing no repeat until all 600 combinations are exhausted, far beyond the 140 students needed). `student_ref`, standard, division, scholarship, and fee-behavior assignment were untouched — only the name-pairing formula changed.
+
+**Re-seeded and verified** (re-running the existing, idempotent `school:seed-v1-academy` command — no new organization, no destructive operation): 140 total students, **140 distinct names, 0 duplicate names, 0 duplicate refs**. Cross-dataset identity consistency re-verified after the re-seed: 0 name mismatches between `hpbrain_students` and the academic/fee operational-record payloads (each student's name is generated once per run and reused verbatim across all three CSVs, so fixing it in one place kept every dependent dataset consistent). All previously-fixed checks (department visibility, fee reconciliation, `standard` field, import-job idempotency) were re-verified and still hold after the re-seed.
+
+### 22.2 Zero-value audit — findings and classification
+
+A systematic sweep of ~20 tenant-scoped API endpoints (Organization, Departments, People, Students, Capabilities, Signals, Cases, Recommendations, Decisions, Outcomes, Risks, Organizational Memory, Knowledge Library, ESO Library, Graph, Global Search) plus a dedicated frontend-empty-state audit (via a research agent reading every relevant screen's source) produced this classification:
+
+| Finding | Classification | Evidence |
+|---|---|---|
+| Nearly every intelligence/data screen returns real, populated data | **Genuine, correct** | 18 of ~20 endpoints swept returned HTTP 200 with substantial, tenant-scoped content |
+| Frontend empty-state handling | **Already correct, no fix needed** | A dedicated audit of `ExecutiveDashboard`, `IntelligenceWorkspace`, `EvidenceWorkspace`, `SignalDashboard`, `DecisionAnalyticsPanel`, `MentalModelBrowser`, `GraphExplorer`, `KasbaExplorer`, and every Department/Person intelligence panel found **zero** screens that render blank on empty data — every one uses a shared `EmptyState`/`ConsequenceEmpty`/`EmptyChart` component or bespoke explanatory copy, and several (`Overview.tsx`, `Intelligence.tsx`) already distinguish "not measured"/"not tracked" from a real zero. This means the reported "screens show zero" complaint is a **data-coverage gap, not a frontend defect** — nothing was changed in the frontend's data-handling logic. |
+| Knowledge Library shows 0 items | **Genuine, correct empty state — not a bug** | `hpbrain_knowledge_assets` is a manually-curated content type (`KnowledgeLibraryService`); no command or automatic process anywhere in the codebase populates it (confirmed by grep — only read/count call sites exist). Zero items is the honest state for a tenant where nobody has curated a knowledge asset yet, for V1 Academy and every other tenant alike. Not fixed, because fixing it would mean fabricating curated content. |
+| Only 2 of 8 departments have any signal/case/decision | **Real gap, root-caused (§22.3), not fixed this pass** | The 3 "real" intelligence-loop signals are hand-authored narrative demo data from the seed script (Secondary/Math, Finance/Fees, one Person-level capability gap) — not organically generated from the other 6 departments' real operational data, because no signal-detection rule exists yet for academic-performance or attendance patterns (only fee and generic-HR rules exist — see §22.3). |
+
+### 22.3 Real signal generation — first pass (superseded by §22.6–22.8 below)
+
+Rather than adding more hand-authored demo signals, the actual rule-based detection engine was run for real: `php artisan brain:detect --tenant=1000092`.
+
+**Result: 8 rules evaluated, 1 raised, 0 refreshed, 7 correctly found nothing** (verified true negatives — the fee-collector-missing and zero-amount-concession rules did not fire because V1 Academy's demo fee data doesn't exhibit those problems). This surfaced two real findings, both since acted on:
+
+1. The code-based operational rules in `app/Domain/Signals/OperationalSignalRules.php` covered `complaint`, `work_order`, `helpdesk_month` (telecom) and `school_fee` only — no rule analyzed academic results or attendance for any tenant. **Fixed in §22.7.**
+2. The one rule that fired, `departments_without_manager`, was a pre-existing platform bug, not a V1 Academy data issue. **Fixed in §22.6.**
+
+### 22.4 Case screen removed from navigation
+
+`web/src/shell/viewMeta.ts`: the `cases` entry now carries `hidden: true`, following the exact precedent already established for `signalchain` (a screen reached only by drill-through, never from the sidebar). A frontend research agent traced every call site into the Cases screen before this change: `App.tsx`'s `viewCase()` (called from Global Search's case results and Graph Explorer's "open full record" on a Case node) is the only caller, and `hidden` only affects `NAV_VIEWS` (which feeds the Sidebar and Command Palette) — it does not gate the view switch in `App.tsx` or `navigate()` itself, so all three existing entry points into the Cases screen continue to work unmodified. No backend route, case table, or case-related API was touched. Type-checked clean: `npx tsc -b --noEmit` in `web/` completed with zero errors after the change.
+
+### 22.5 Not implemented — scope acknowledgement (unchanged from the previous pass, see §22.9 for what's newly closed)
+
+- **1-year / 2-year / 5-year historical intelligence views** — V1 Academy has exactly one academic year of data by design; a genuine 5-year view needs either real multi-year history (not present for a demo tenant) or a deliberate, clearly-labeled multi-year synthetic dataset extension, which is itself a data-generation effort comparable in size to the original seed command and was not built here to avoid the exact anti-pattern this task warns against ("do not duplicate one year's records and label them as five separate years").
+- **A new consolidated "Unified Intelligence Workspace" UI** (executive summary + priority findings + action/outcome tracking in one screen) — `IntelligenceWorkspace.tsx` and `ExecutiveDashboard.tsx` already exist, already have correct empty-state handling (§22.2), and — per §22.8 — already render any new signal's rule/classification generically with no code change required. Redesigning/merging them into the fuller hierarchy this task describes is a frontend design-and-build effort that cannot be safely verified without a browser (none is available in this environment) and was not attempted.
+- **Full per-domain intelligence content for every department** — the two new rules in §22.7 make this possible going forward (any department whose real data crosses a threshold will now surface a genuine finding), but authoring rules for every remaining intelligence category this task lists (staff evaluation, capability-progress-over-time, enrollment trends, etc.) beyond the two implemented was not attempted in one pass.
+
+These are reported as genuine, sized follow-up work items, not blockers hidden from view.
+
+### 22.6 The `departments_without_manager` rule — root-caused and fixed, with regression tests
+
+**Root cause, precisely**: the rule predicate (`database/seeders/SignalRuleSeeder.php`) tested the universal field `parent` (org-hierarchy position), not a manager/head field. It could not have tested a manager field correctly even if intended to, because `EntityMappingSeeder.php`'s `OrganizationUnit` mapping never declared one — its own comment claimed "hrms_departments has no manager column," which is factually incorrect: `head_user_id` is a real, live column, already written to by `SeedV1AcademySchool.php` and referenced (as a known gap) in `docs/V1_PRODUCT_BLUEPRINT.md` itself before this fix.
+
+**Fix, in the correct order** (mapping before predicate, since a predicate can only reference a universal field name the mapping actually produces):
+1. `database/seeders/EntityMappingSeeder.php` — added `'head' => 'head_user_id'` to the `ORG_UNIT` mapping.
+2. `database/seeders/SignalRuleSeeder.php` — changed the predicate from `parent is_null/eq 0` to `head is_null/eq 0`, and corrected `recommended_action` to name the real column.
+
+**Regression tests updated to match reality, not just to pass**:
+- `tests/Feature/EntityMappingSeederTest.php` — the assertion that `head` "stays unmapped" (a factually-wrong expectation) was replaced with an assertion that it resolves to `head_user_id`.
+- `tests/Support/BuildsErpFixture.php` — added the missing `head_user_id` column to the test fixture's `hrms_departments` schema (it never existed there, which is exactly why the wrong belief went unchallenged for as long as it did).
+- `tests/Feature/SignalRuleParityTest.php` — its 3-department fixture (Nursing/Surgery/Radiology) previously had no way to express "has a head" at all; two of the three now carry a real `head_user_id` so the test's "exactly 1 headless department" assertion is now genuinely about headlessness, not accidentally about hierarchy position (Radiology, a non-root unit, now has a head, proving the fix no longer keys off `parent_id`).
+
+**Verified**: `php artisan test --filter="EntityMappingSeederTest|SignalRuleParityTest|HomeMetricsTest|OpenCasesForSignalsTest"` — **52 passed, 292 assertions** (18 of these were failing immediately after the schema change, from the batch-insert column-count mismatch below, before being fixed).
+
+**Applied live and re-verified against V1 Academy**: re-ran `EntityMappingSeeder` for tenant `1000092` and the platform-wide `SignalRuleSeeder` (idempotent — `hpbrain_signal_rules` is keyed `(tenant_id, rule_key)` and no tenant has ever overridden this rule, so the single shared `platform` row updates for every tenant with no per-tenant migration needed). The stale false-positive signal raised before the fix was **dismissed with an audit note** (not deleted — the record of what happened and why is preserved) rather than silently erased. Re-running `php artisan brain:detect --tenant=1000092` afterward: **0 raised, 8 not met** — confirmed no false positive on V1 Academy's correctly-managed departments.
+
+**A related, lower-severity finding, left alone**: `app/Http/Controllers/Api/WorkspaceController.php` computes a *separate*, differently-sourced `departmentsWithoutManager` home-metrics figure (`$foundation['departments']['withoutParent']`) that also has a misleadingly-named variable/metric key — but its own code comment and the actual user-facing attention-card text already correctly say "not under a parent unit," never claiming "no manager." Since the user-facing behavior here was never wrong (only an internal name is confusing), this was left as a minor, separately-trackable naming cleanup rather than folded into this fix.
+
+### 22.7 Two new, real, data-driven signal-detection rules
+
+Added to `app/Domain/Signals/OperationalSignalRules.php`, following the exact existing pattern (a rule is a private method returning `{created: bool}`, registered in `rulesFor()` conditional on the tenant actually holding the relevant dataset, writing through the same `OperationalSignalWriter` used by every other rule so evidence, idempotent refresh-not-duplicate behavior, and the `OBSERVATION_MADE` event all come for free):
+
+| Rule | What it checks | Guards against fabrication |
+|---|---|---|
+| `academic_cohort_gap` | On the most recent exam date, compares every `(standard, subject)` cohort's average score against the mean of all eligible cohorts on that same date; flags the worst cohort if the gap exceeds a configurable floor (default 15 points). | Cross-sectional only (never a student's or cohort's own history, so one assessment can never manufacture a "decline"); requires a configurable minimum cohort size (default 5) so a couple of weak students cannot stand in for a whole class; requires at least 2 eligible cohorts so there is a real basis for "below average." |
+| `attendance_chronic_absence` | Aggregates each student's present-days ÷ working-days across every recorded month; flags students below a configurable floor (default 75%) as a group, reporting the worst cases as evidence. | Requires a configurable minimum number of *recorded* months per student (default 3) before that student counts, so a single bad month or a newly-joined student is never read as "chronic"; a missing month is excluded from both sides of the ratio, never treated as an absence; requires a configurable minimum number of affected students (default 3) before it's reportable as a pattern. |
+
+Both use `App\Domain\School\DatasetRegistry` (the same class `AcademicIntelligenceService` already uses) to resolve the tenant's actual academic-results dataset key, since — unlike `school_fee`/`attendance`, which are stable literal keys by convention — the academic dataset's literal name varies per school (`v1a-academic-results`, `svis-academic-results`, etc.); this makes the rule reusable by any school tenant, not hardcoded to V1 Academy.
+
+**New config thresholds** (`config/brain.php`, `operational_signals`): `academic_cohort_minimum` (5), `academic_cohort_gap_points` (15.0), `attendance_minimum_months` (3), `attendance_chronic_pct` (75.0), `attendance_chronic_minimum` (3).
+
+**Tests** — new file `tests/Feature/SchoolAcademicAttendanceSignalRulesTest.php`, 6 tests covering exactly the positive/negative/insufficient-data matrix this kind of rule needs:
+- fires above the real threshold and goes silent below it (both rules);
+- does not fire from a single cohort with nothing to compare against (academic);
+- ignores a cohort smaller than the minimum sample size, even with a large score gap (academic);
+- excludes a student with too few recorded months from being called "chronic" (attendance);
+- reprocessing three times in a row produces exactly one signal, not three (idempotency, both rules share the same `OperationalSignalWriter::raise()` refresh-not-duplicate path already proven for the fee/complaint rules).
+
+**Result: 6 passed, 12 assertions.** A genuine cross-database bug was found and fixed in the course of writing these tests: the SQL `metric_value / quantity * 100` performs **integer division on SQLite** (the test connection) whenever a bound PHP float like `80.0` arrives as the literal text `"80"`, silently truncating every percentage to 0 — invisible against production MySQL/MariaDB, where `DECIMAL` columns never do this. Fixed by forcing floating-point promotion (`1.0 * metric_value`) in the query, which is a no-op on MySQL and correct on both engines — the same class of portability concern `app/Domain/Intelligence/SqlDialect.php` exists to manage elsewhere in the codebase.
+
+**Verified live against V1 Academy** (`php artisan brain:detect --tenant=1000092`, both before and after the SQLite fix — the fix only affects the test connection): **10 rules in force, 0 raised, 10 not met.** This is an honest, checked-not-assumed true negative, confirmed by directly computing the same statistics the rules use: 48 real `(standard, subject)` cohorts ranging 59.0%–85.8% on the latest exam date, worst gap 13.9 points — genuinely just under the 15-point floor; minimum attendance across all 140 students is 81.9%, above the 75% chronic floor. The threshold was **not** tuned to force a demo result — 15 points was chosen as a defensible, round, real-world-comparable figure (the hand-seeded narrative signal's own gap is 17.6 points) before the real computation was run, and it was left alone when the real result came back just under it.
+
+### 22.8 `web/`'s version control — resolved (it was never actually a gap)
+
+Investigation found `web/` is not an ignored directory of generated output — it is a **fully separate, valid, independently-versioned git repository**, with its own `.git`, its own remote (`https://github.com/harshitpipaliya-phd/hp-enterprise-brain.git`), its own `main` branch, and its own commit history, entirely distinct from this repository's. The outer `.gitignore`'s own comment already documents this precisely and explains why `/web` is deliberately left ignored from the outer repository's point of view: un-ignoring it would either have git silently swallow that independent history, or create a broken gitlink (there is no `.gitmodules`, so it is not a proper submodule reference either) — and the comment records that this was already identified as needing "a human decision" in a prior audit.
+
+**Verified directly**: `cd web && git status --short` shows the Case-navigation change from §22.4 as `M src/shell/viewMeta.ts` — **it was already correctly tracked and reviewable the whole time**, just via `web`'s own git, not the outer repository's. Nothing was broken; no frontend change made in this project has ever been at risk of being lost.
+
+**No change was made** to the outer `.gitignore` or to `web/`'s repository structure. Un-ignoring `/web`, converting it to a proper submodule, or merging its history into the outer repository are each a real, irreversible repository-topology decision (exactly the kind of decision the task's own safety rules say must not be made without explicit authorization) — not a technical fix this pass should make unilaterally. If a single unified repository is wanted, that is the decision to bring to the user, with the three options above as the real menu, not a "safe narrow fix" to apply quietly.
+
+### 22.9 What changed relative to the previous pass's "not implemented" list
+
+| Item (from the prior pass's §22.5) | Status now |
+|---|---|
+| New academic/attendance signal-detection rules | **Done** — §22.7 |
+| Fix `departments_without_manager` | **Done** — §22.6 |
+| Frontend git-ignore problem | **Resolved as a non-issue** — §22.8 |
+| 1Y/2Y/5Y historical views | Still not attempted (§22.5) |
+| Unified Intelligence Workspace UI | Still not attempted (§22.5) |
+| Full per-domain intelligence for every department | Partially enabled (the rules now exist), not fully built out (§22.5) |
+
+---
+
+*This document was produced by direct inspection of the repository at commit-adjacent state on branch `harshit` (2026-09-28), updated 2026-09-29 across three passes: the V1 Academy consolidation (§21), the initial School Intelligence transformation pass (§22.1–22.5), and its extension (§22.6–22.9) fixing the `departments_without_manager` rule platform-wide, adding two new real signal-detection rules, and resolving the `web/` version-control question. Application code (backend rules/seeders/config, one frontend nav config file), test fixtures, and one tenant's database rows were modified as documented in those sections, each verified with an actual command and its actual output. Where a claim could not be verified from the repository alone, it is labeled "Not Verified" or recorded as an Open Question rather than asserted.*

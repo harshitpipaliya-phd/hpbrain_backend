@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Signals;
 
+use App\Domain\School\DatasetRegistry;
 use App\Repositories\OperationalRecordRepository;
 use Illuminate\Support\Facades\DB;
 
@@ -32,6 +33,7 @@ final class OperationalSignalRules
 {
     public function __construct(
         private readonly OperationalRecordRepository $records,
+        private readonly DatasetRegistry $datasets,
     ) {
     }
 
@@ -66,7 +68,201 @@ final class OperationalSignalRules
             $rules[] = fn () => $this->feeCollectorConcentration($generator, $tenantId);
         }
 
+        // Academic results: the dataset holding exam marks is named per-tenant
+        // (e.g. 'v1a-academic-results', 'svis-academic-results'), unlike
+        // 'school_fee'/'attendance' which are stable literal keys by
+        // convention. DatasetRegistry is the established way every academic
+        // screen already resolves this (see AcademicIntelligenceService), so
+        // the rule below is reused by any school tenant, not just one.
+        $academicDataset = $this->datasets->academic($tenantId);
+
+        if ($academicDataset !== null) {
+            $rules[] = fn () => $this->academicCohortGap($generator, $tenantId, $academicDataset);
+        }
+
+        if (($datasets['attendance'] ?? 0) > 0) {
+            $rules[] = fn () => $this->attendanceChronicAbsence($generator, $tenantId);
+        }
+
         return $rules;
+    }
+
+    /**
+     * Rule: a (standard, subject) cohort scoring well below the school's other
+     * cohorts on the most recent examination date.
+     *
+     * CROSS-SECTIONAL ONLY. This compares cohorts against each other on the
+     * SAME exam date — never a student's or a cohort's own history — so a
+     * single assessment can never manufacture a "decline"; there is nothing to
+     * decline from. A minimum cohort size guards against one weak student
+     * dragging a small standard's average below the floor and being reported
+     * as if it were a cohort-wide finding. Requires at least two eligible
+     * cohorts on the same date so "below the floor" has something real to be
+     * below.
+     */
+    private function academicCohortGap(OperationalSignalWriter $generator, string $tenantId, string $academicDataset): array
+    {
+        $latestDate = DB::table('hpbrain_operational_records')
+            ->where('tenant_id', $tenantId)
+            ->where('dataset', $academicDataset)
+            ->max('occurred_at');
+
+        if ($latestDate === null) {
+            return ['created' => false, 'reason' => 'no_data'];
+        }
+
+        $latestDay = substr((string) $latestDate, 0, 10);
+
+        $rows = DB::table('hpbrain_operational_records')
+            ->where('tenant_id', $tenantId)
+            ->where('dataset', $academicDataset)
+            ->whereBetween('occurred_at', ["{$latestDay} 00:00:00", "{$latestDay} 23:59:59"])
+            ->where('quantity', '>', 0)
+            // 1.0 * forces floating-point division on every engine. Without it,
+            // SQLite (the test connection, per phpunit.xml) performs INTEGER
+            // division whenever a bound parameter's storage class looks like a
+            // whole number (e.g. a PHP float such as 80.0 arrives as the text
+            // "80"), silently truncating every percentage to 0. MySQL/MariaDB
+            // never has this problem, so it is invisible against production.
+            ->select('status', 'category', DB::raw('AVG((1.0 * metric_value) / quantity * 100) as avg_pct'), DB::raw('COUNT(*) as n'))
+            ->groupBy('status', 'category')
+            ->get();
+
+        $minSample = (int) config('brain.operational_signals.academic_cohort_minimum', 5);
+        $eligible = $rows->filter(fn ($r) => $r->n >= $minSample)->values();
+
+        if ($eligible->count() < 2) {
+            return ['created' => false, 'reason' => 'insufficient_cohorts'];
+        }
+
+        $schoolAvg = $eligible->avg('avg_pct');
+        $worst = $eligible->sortBy('avg_pct')->first();
+        $gap = $schoolAvg - $worst->avg_pct;
+
+        $floor = (float) config('brain.operational_signals.academic_cohort_gap_points', 15.0);
+
+        if ($gap < $floor) {
+            return ['created' => false, 'reason' => 'below_threshold'];
+        }
+
+        $samples = $this->records->sample($tenantId, $academicDataset, ['status' => $worst->status, 'category' => $worst->category], null, 5);
+        $evidenceIds = [];
+
+        foreach ($samples as $record) {
+            $pct = ((float) ($record['quantity'] ?? 0)) > 0
+                ? round(((float) $record['metric_value'] / (float) $record['quantity']) * 100, 1)
+                : null;
+
+            $evidenceIds[] = $generator->recordEvidence($tenantId, [
+                'source'     => "import.{$academicDataset}",
+                'recordId'   => (string) $record['natural_key'],
+                'studentRef' => (string) ($record['subject_ref'] ?? ''),
+                'standard'   => (string) $worst->status,
+                'subject'    => (string) $worst->category,
+                'examDate'   => $latestDay,
+                'scorePct'   => $pct,
+                'issue'      => "{$worst->status} {$worst->category} averaged {$pct}% against a school-wide {$schoolAvg}% on the {$latestDay} assessment",
+            ]);
+        }
+
+        return $generator->raise($tenantId, [
+            'source'         => "import.{$academicDataset}",
+            'classification' => 'academic_performance_gap',
+            'severity'       => $gap >= 25 ? 'high' : 'medium',
+            'priority'       => $gap >= 25 ? 'high' : 'medium',
+            'confidence'     => 1.0,
+            'metadata'       => [
+                'rule'            => 'academic_cohort_gap',
+                'examDate'        => $latestDay,
+                'standard'        => (string) $worst->status,
+                'subject'         => (string) $worst->category,
+                'cohortAvgPct'    => round((float) $worst->avg_pct, 1),
+                'schoolAvgPct'    => round((float) $schoolAvg, 1),
+                'gapPoints'       => round($gap, 1),
+                'cohortSize'      => (int) $worst->n,
+                'cohortsCompared' => $eligible->count(),
+            ],
+        ], $evidenceIds);
+    }
+
+    /**
+     * Rule: students whose attendance across every recorded month is
+     * meaningfully below the floor.
+     *
+     * Reports one signal for the affected group — like feeCollectorConcentration
+     * and zoneConcentration — carrying the count and a sample of the worst cases
+     * as evidence, rather than one signal per student. Requires a minimum
+     * number of RECORDED months per student before that student counts, so a
+     * single bad month (or a student who just joined) cannot be read as
+     * "chronic". A missing month is absent from the source data, not a zero —
+     * it is excluded from both the numerator and denominator here, never
+     * counted as an absence.
+     */
+    private function attendanceChronicAbsence(OperationalSignalWriter $generator, string $tenantId): array
+    {
+        $minMonths = (int) config('brain.operational_signals.attendance_minimum_months', 3);
+
+        $rows = DB::table('hpbrain_operational_records')
+            ->where('tenant_id', $tenantId)
+            ->where('dataset', 'attendance')
+            ->where('quantity', '>', 0)
+            ->select(
+                'subject_ref',
+                DB::raw('SUM(metric_value) as present_days'),
+                DB::raw('SUM(quantity) as working_days'),
+                DB::raw('COUNT(*) as months')
+            )
+            ->groupBy('subject_ref')
+            ->having('months', '>=', $minMonths)
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return ['created' => false, 'reason' => 'insufficient_history'];
+        }
+
+        $floor = (float) config('brain.operational_signals.attendance_chronic_pct', 75.0);
+        $minAffected = (int) config('brain.operational_signals.attendance_chronic_minimum', 3);
+
+        $chronic = $rows
+            ->filter(fn ($r) => $r->working_days > 0 && (($r->present_days / $r->working_days) * 100) < $floor)
+            ->sortBy(fn ($r) => $r->present_days / $r->working_days)
+            ->values();
+
+        if ($chronic->count() < $minAffected) {
+            return ['created' => false, 'reason' => 'below_threshold'];
+        }
+
+        $evidenceIds = [];
+
+        foreach ($chronic->take(5) as $r) {
+            $pct = round(($r->present_days / $r->working_days) * 100, 1);
+
+            $evidenceIds[] = $generator->recordEvidence($tenantId, [
+                'source'         => 'import.attendance',
+                'studentRef'     => (string) $r->subject_ref,
+                'attendancePct'  => $pct,
+                'monthsRecorded' => (int) $r->months,
+                'issue'          => "attendance of {$pct}% across {$r->months} recorded months is below the {$floor}% floor",
+            ]);
+        }
+
+        return $generator->raise($tenantId, [
+            'source'         => 'import.attendance',
+            'classification' => 'attendance_risk',
+            'severity'       => $chronic->count() >= 10 ? 'high' : 'medium',
+            'priority'       => 'high',
+            'confidence'     => 1.0,
+            'metadata'       => [
+                'rule'           => 'attendance_chronic_absence',
+                'affectedCount'  => $chronic->count(),
+                'thresholdPct'   => $floor,
+                'minimumMonths'  => $minMonths,
+                'sampleStudents' => $chronic->take(5)->map(fn ($r) => [
+                    'studentRef'    => $r->subject_ref,
+                    'attendancePct' => round(($r->present_days / $r->working_days) * 100, 1),
+                ])->values()->all(),
+            ],
+        ], $evidenceIds);
     }
 
     /**

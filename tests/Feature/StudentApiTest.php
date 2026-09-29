@@ -319,6 +319,29 @@ final class StudentApiTest extends TestCase
     }
 
     /** @test */
+    public function standard_prefers_the_results_export_over_a_fee_column_that_is_not_a_grade(): void
+    {
+        // Some tenants' fee ingestion writes a non-grade value (e.g. a payment
+        // status) into the same generic `standard` column the fee register
+        // normally carries a Roman-numeral grade in. Where a real, results-export
+        // `academic_standard` is also on the row, the API must surface that one
+        // as `standard` rather than the fee column's unrelated value — never
+        // fabricated, never silently dropped, just the more reliable of the two
+        // real values already on the row.
+        $this->student(self::LIONS, '1004', 'KAVYA MENON', [
+            'in_academic' => 1, 'in_fees' => 1, 'academic_standard' => 'CBSE-7', 'standard' => 'Overdue',
+            'academic_records' => 4, 'fee_records' => 2, 'avg_percentage' => 70.0,
+        ]);
+
+        $response = $this->withHeaders($this->auth(self::LIONS))
+            ->getJson('/api/v1/students/'.self::LIONS.'/search?q=KAVYA');
+
+        $response->assertOk();
+        $this->assertSame('CBSE-7', $response->json('data.0.standard'));
+        $this->assertSame('CBSE-7', $response->json('data.0.academicStandard'));
+    }
+
+    /** @test */
     public function another_tenants_student_id_is_not_found(): void
     {
         $response = $this->withHeaders($this->auth(self::LIONS))

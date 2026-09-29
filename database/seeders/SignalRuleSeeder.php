@@ -61,8 +61,8 @@ final class SignalRuleSeeder extends Seeder
                 ['field' => 'deletedAt', 'op' => 'is_null'],
                 ['field' => 'status', 'op' => 'eq', 'value' => 1],
                 ['any' => [
-                    ['field' => 'parent', 'op' => 'is_null'],
-                    ['field' => 'parent', 'op' => 'eq', 'value' => 0],
+                    ['field' => 'head', 'op' => 'is_null'],
+                    ['field' => 'head', 'op' => 'eq', 'value' => 0],
                 ]],
             ]],
             'classification'   => 'leadership',
@@ -70,13 +70,18 @@ final class SignalRuleSeeder extends Seeder
             'priority'         => 'medium',
             'confidence'       => 1.0,
             'evidence_fields'  => ['name' => 'name'],
-            // NAME AND PREDICATE DISAGREE, and the row is the honest place to
-            // say so. This ERP's unit table has no manager column, so what the
-            // predicate finds is ROOT units. Carried forward verbatim because
-            // Phase 3's gate is byte-identical signals. Now that the rule is a
-            // row, correcting it is an UPDATE with its own gate rather than a
-            // deploy — which is the entire point of this phase.
-            'recommended_action' => 'parent_id is null or zero — no manager assigned',
+            // Correction: this predicate previously tested `parent` (org
+            // hierarchy) instead of `head` (the actual manager relationship),
+            // so it flagged every root-level department as "without a manager"
+            // regardless of whether hrms_departments.head_user_id was set —
+            // confirmed empirically against a demo tenant whose 8 departments
+            // all had a real head_user_id yet were all flagged. `head` is now
+            // mapped in EntityMappingSeeder's ORG_UNIT block to the real column.
+            // For a tenant whose mapping has no `head` entry at all (none exist
+            // today), RuleEvaluator's per-rule try/catch skips this rule rather
+            // than raising a false positive — a fail-closed "insufficient data"
+            // outcome, not a silent wrong answer.
+            'recommended_action' => 'head_user_id is null or zero — no manager assigned',
             'owner_role'         => 'hr',
         ],
         [

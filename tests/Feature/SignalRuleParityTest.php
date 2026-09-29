@@ -180,8 +180,9 @@ final class SignalRuleParityTest extends TestCase
         $this->assertArrayNotHasKey('email', $noEmail);
 
         // departments_without_manager — name only, and the issue string carries
-        // the ERP column name exactly as before.
-        $noManager = $evidence['parent_id is null or zero — no manager assigned'];
+        // the ERP column the rule actually tests (head_user_id, since the
+        // predicate fix — see SignalRuleSeeder.php).
+        $noManager = $evidence['head_user_id is null or zero — no manager assigned'];
         $this->assertSame('erp.hrms_departments', $noManager['source']);
         $this->assertSame('Nursing', $noManager['name']);
 

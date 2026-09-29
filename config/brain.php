@@ -204,6 +204,19 @@ return [
 
         // Share of offered help-desk calls dropped rather than answered.
         'call_drop_rate'              => 0.20,
+
+        // Academic: minimum students in a (standard, subject) cohort before it
+        // is compared to the school average, and the point gap below that
+        // average before the cohort is reportable.
+        'academic_cohort_minimum'     => 5,
+        'academic_cohort_gap_points'  => 15.0,
+
+        // Attendance: minimum recorded months before a student's attendance
+        // rate is trusted, the percentage below which it counts as chronic,
+        // and the minimum number of students affected before it is reportable.
+        'attendance_minimum_months'   => 3,
+        'attendance_chronic_pct'      => 75.0,
+        'attendance_chronic_minimum'  => 3,
     ],
 
     /*
