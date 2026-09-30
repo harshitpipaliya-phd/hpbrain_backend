@@ -56,6 +56,36 @@ Schedule::command('brain:detect')
     ->withoutOverlapping()
     ->runInBackground();
 
+// The two DATABASE-ONLY steps between detection and reasoning. Until these were
+// scheduled, signals piled up with no case and no stated cause unless a person
+// remembered to run the commands, so the loop stalled silently after detection.
+//
+// Both are idempotent (a signal that already has a case / a case that already has
+// a non-rejected hypothesis is skipped), tenant-scoped, bounded by --limit, and
+// free of any model call: they only write 'new' cases and 'proposed' hypotheses
+// for a human to review. Nothing here approves, executes or spends.
+//
+// :15 and :20 — after brain:detect at :10 whose signals they consume, in order
+// (a hypothesis hangs off a case), and before intelligence:warm at :25 so the
+// warm computes over settled input.
+Schedule::command('brain:open-cases')
+    ->hourlyAt(15)
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('brain:propose-hypotheses')
+    ->hourlyAt(20)
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// DELIBERATELY NOT SCHEDULED, and pinned by tests/Feature/SchedulerDefinitionTest:
+//   brain:reason-signals       buys a provider call per signal on EVERY run (a second
+//                              run spends again on the same signals). Paid AI is an
+//                              explicit operator or user act, never a timer.
+//   brain:compute-eso-efficacy appends a new efficacy row on every run.
+//   brain:dedupe-signals       destructive under --apply; a deliberate operator act.
+//   events:process             legacy consumer that completes loop events unhandled.
+
 // Intelligence warming. The engine caches against a data fingerprint, so this
 // is a no-op for every organization whose records have not changed — but when
 // they have, the recomputation is a multi-minute scan and somebody has to pay

@@ -20,23 +20,18 @@ GET /api/v1/signals/{tenantId} ->  EnsureTenantScope -> compare, 403 on mismatch
 Controllers call `$this->tenantId($request)`, which returns only the trusted
 value. No controller reads a tenant from user input.
 
-## The admin cross-tenant exception
+## No admin cross-tenant exception
 
-The Brain keys data by the institute's `sub_institute_id`. A platform admin
-working across organizations needs to address tenants that their single token
-claim does not name. `EnsureTenantScope` allows exactly that, bounded three ways:
+An earlier design let an `admin` address any live organization from a token that
+named another. **That exception has been retired.** `EnsureTenantScope` compares the
+route `{tenantId}` with the token's tenant claim and returns 403 `tenant_mismatch`
+on any difference, for every role, whether or not the named organization exists.
+An operator who must work in another organization signs in to it.
 
-1. **Role** — only `admin` may cross tenants. Every other role stays pinned to
-   its own token claim.
-2. **Existence** — the tenant must match a live `sub_institute_id` in
-   `institute_detail`, so the segment cannot be used to probe for arbitrary
-   values.
-3. **Resolution** — the tenant is still decided here and written to the request
-   attributes, so controllers keep reading `$this->tenantId($request)` and
-   cannot be handed a tenant by the client any other way.
-
-A non-admin crossing tenants, or anyone naming an organization that does not
-exist, still gets 403.
+The tenant is decided in the middleware and written to the request attributes, so
+controllers keep reading `$this->tenantId($request)` and cannot be handed a tenant by
+the client any other way. `ApiAuthorizationTest` pins this for `admin` and
+`tenant_admin` (section 3b).
 
 ## ERP-owned tables
 

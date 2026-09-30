@@ -1711,11 +1711,21 @@ final class OperationalIntelligence
             'available' => false,
             'reason' => $reason,
             'support' => ['records' => false],
-            'totals' => ['records' => 0, 'datasets' => 0, 'departmentsWithActivity' => 0],
+            // Every key buildTotals() emits, with nothing-ingested values. The overview controller
+            // and the narrator read these unconditionally, so a shorter shape here is a 500 on the
+            // home screen of every organization before its first import.
+            'totals' => [
+                'records' => 0, 'datasets' => 0, 'departmentsWithActivity' => 0,
+                'distinctCategories' => 0, 'distinctZones' => 0, 'largestActorPoolInADataset' => 0,
+                'earliest' => null, 'latest' => null, 'spanDays' => null, 'largestDataset' => null,
+            ],
             'execution' => ['supported' => false, 'reason' => $reason],
             'service' => ['supported' => false, 'reason' => $reason],
             'responsiveness' => ['supported' => false, 'reason' => $reason],
-            'trend' => ['supported' => false, 'reason' => $reason, 'points' => [], 'byDataset' => []],
+            'trend' => [
+                'supported' => false, 'reason' => $reason, 'points' => [], 'byDataset' => [],
+                'momentum' => $this->momentum([]), 'busiestMonth' => null, 'note' => null,
+            ],
             'datasets' => [],
             'departments' => [],
             'rankings' => ['datasets' => [], 'departments' => [], 'categories' => [], 'zones' => []],

@@ -231,13 +231,13 @@ final class ApiAuthorizationTest extends TestCase
         }
     }
 
-    // ---- 3b. The admin cross-tenant exception ------------------------------
+    // ---- 3b. There is NO admin cross-tenant exception ----------------------
     //
-    // The Brain keys its data by the institute's sub_institute_id, so an
-    // operator working across organizations needs to address a tenant their
-    // single token claim does not name. EnsureTenantScope allows exactly that,
-    // for admins only, and only for organizations that exist. These tests pin
-    // both halves of that bargain — the permission AND its limits.
+    // An earlier design let an `admin` address any live organization from a token
+    // that named another. EnsureTenantScope retired that: "Route parameters can narrow
+    // to that same tenant, but they cannot switch the request to another organization,
+    // including for admin users." These tests pin the retirement, including for an
+    // organization that really exists — the case the old exception was built for.
 
     /** Creates the ERP table the middleware consults, with one organization. */
     private function seedOrganization(string $subInstituteId): void
@@ -257,16 +257,18 @@ final class ApiAuthorizationTest extends TestCase
         $this->installEntityMappings([$subInstituteId]);
     }
 
-    public function test_an_admin_may_address_an_organization_that_exists(): void
+    public function test_an_admin_may_not_address_another_organization_even_when_it_exists(): void
     {
         $this->seedOrganization('6');
 
-        $status = $this->getJson('/api/v1/workspace/6', $this->auth('admin', 'tenant-alpha'))->status();
-
-        self::assertNotSame(403, $status, 'admin should be able to address organization 6');
+        foreach (['admin', 'tenant_admin'] as $role) {
+            $this->getJson('/api/v1/workspace/6', $this->auth($role, 'tenant-alpha'))
+                ->assertStatus(403)
+                ->assertJson(['error' => 'tenant_mismatch']);
+        }
     }
 
-    /** The widening is for admins alone; every other role stays pinned. */
+    /** Every role stays pinned to its own token's tenant, whether or not the target exists. */
     public function test_a_non_admin_may_not_cross_tenants_even_to_a_real_organization(): void
     {
         $this->seedOrganization('6');
@@ -278,7 +280,7 @@ final class ApiAuthorizationTest extends TestCase
         }
     }
 
-    /** An archived organization is not an organization. */
+    /** An archived organization is not addressable either. */
     public function test_an_admin_may_not_address_a_soft_deleted_organization(): void
     {
         \Illuminate\Support\Facades\Schema::create('institute_detail', function ($t) {

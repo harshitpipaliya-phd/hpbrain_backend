@@ -119,7 +119,7 @@ final class RecommendationRepository
      * conditional UPDATE re-checks the status so two administrators deciding at
      * once cannot both succeed.
      *
-     * @return array{ok: bool, message: string, status?: string}
+     * @return array{ok: bool, message: string, status?: string, code?: string}
      */
     public function decide(string $id, string $tenantId, string $decision): array
     {
@@ -142,6 +142,33 @@ final class RecommendationRepository
             ];
         }
 
+        // A recommendation is only ever ACCEPTED through the governed decision
+        // workflow (POST /decisions, then /decisions/{t}/{id}/approve), which
+        // enforces decision.approve, separation of duties (the proposer cannot
+        // approve) and a DecisionReached event. This console must not be a second,
+        // weaker door to the same state: 'accepted' here means a canonical,
+        // approved decision already exists for this recommendation.
+        $governed = $this->governedDecisionStatuses($id, $tenantId);
+
+        if ($decision === 'approve' && ! in_array('approved', $governed, true)) {
+            return [
+                'ok' => false,
+                'code' => 'decision_required',
+                'message' => in_array('proposed', $governed, true)
+                    ? 'A decision for this recommendation is awaiting approval. It must be approved in the decision workflow by someone other than its proposer.'
+                    : 'A recommendation is accepted through the decision workflow: propose a decision, then have a different approver approve it.',
+            ];
+        }
+
+        // Once governance has approved a decision, this queue may not contradict it.
+        if ($decision !== 'approve' && in_array('approved', $governed, true)) {
+            return [
+                'ok' => false,
+                'code' => 'decision_already_approved',
+                'message' => 'A decision for this recommendation has already been approved, so it cannot be rejected or deferred here.',
+            ];
+        }
+
         $next = self::DECISIONS[$decision];
 
         $changed = DB::table(self::TABLE)
@@ -155,6 +182,28 @@ final class RecommendationRepository
         }
 
         return ['ok' => true, 'message' => 'Decision recorded.', 'status' => $next];
+    }
+
+    /**
+     * Statuses of the canonical decisions recorded against a recommendation,
+     * scoped to the tenant. Empty when there are none or the table is absent.
+     *
+     * @return list<string>
+     */
+    private function governedDecisionStatuses(string $recommendationId, string $tenantId): array
+    {
+        if (! Schema::hasTable('hpbrain_decisions')) {
+            return [];
+        }
+
+        return DB::table('hpbrain_decisions')
+            ->where('tenant_id', $tenantId)
+            ->where('recommendation_id', $recommendationId)
+            ->pluck('status')
+            ->map(static fn ($s) => strtolower(trim((string) $s)))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /** @return array{total:int, pending:int, accepted:int, rejected:int, deferred:int} */

@@ -179,6 +179,50 @@ final class OutboxProducerTest extends TestCase
             $t->string('eso_definition_id', 36)->nullable();
         });
 
+        // The library table EsoExecutionController now consults: a run against an ESO that
+        // does not exist is refused (422 eso_not_found), so the loop needs a real definition.
+        // Same columns as the shared BuildsBrainSchema helper.
+        Schema::create('hpbrain_eso_definitions', function ($t) {
+            $t->string('id', 36)->primary();
+            $t->string('tenant_id', 36);
+            $t->string('org_id', 36)->nullable();
+            $t->string('eso_code');
+            $t->string('name');
+            $t->integer('version')->default(1);
+            $t->string('status', 50)->default('draft');
+            $t->string('owner', 36)->nullable();
+            $t->string('provenance', 100)->default('authored');
+            $t->string('kasba_node_id', 36)->nullable();
+            $t->string('kasba_node_type', 100)->nullable();
+            $t->boolean('is_cognitive_primitive')->default(false);
+            $t->text('trigger_description')->nullable();
+            $t->text('applicable_contexts')->default('[]');
+            $t->text('gap_types')->default('[]');
+            $t->string('objective', 50)->nullable();
+            $t->text('inputs')->default('[]');
+            $t->text('outputs')->default('[]');
+            $t->text('preconditions')->default('[]');
+            $t->text('prerequisites')->default('[]');
+            $t->text('constraints_policies')->default('[]');
+            $t->text('procedure_steps')->default('[]');
+            $t->text('allowed_executor_classes')->default('[]');
+            $t->string('trust_level', 50)->default('observe');
+            $t->text('routing_criteria')->default('{}');
+            $t->text('escalation_path')->default('[]');
+            $t->text('scaffolding')->default('{}');
+            $t->text('gotchas')->default('[]');
+            $t->text('assessment')->default('{}');
+            $t->text('evidence_hooks')->default('{}');
+            $t->text('resources')->default('[]');
+            $t->text('composed_of')->default('[]');
+            $t->text('composes_into')->default('[]');
+            $t->string('supersedes', 36)->nullable();
+            $t->string('superseded_by', 36)->nullable();
+            $t->string('created_by', 36)->nullable();
+            $t->timestamp('created_date')->nullable();
+            $t->timestamp('updated_date')->nullable();
+        });
+
         Schema::create('hpbrain_refresh_tokens', function ($t) {
             $t->string('jti', 36)->primary();
             $t->string('tenant_id', 36);
@@ -614,9 +658,19 @@ final class OutboxProducerTest extends TestCase
             'measurementWindowDays' => 14,
         ], $this->auth('manager', self::MANAGER))->assertStatus(201);
 
+        // A published ('active' is in EsoStatus::IN_SERVICE) definition with no declared
+        // inputs or preconditions, so EsoPreflight lets a human run start. A random UUID here
+        // asserted that the loop reaches stage 9 while the controller correctly refused it.
+        $esoDefinitionId = Uuid::uuid4()->toString();
+        DB::table('hpbrain_eso_definitions')->insert([
+            'id' => $esoDefinitionId, 'tenant_id' => self::TENANT, 'org_id' => 'org-alpha',
+            'eso_code' => 'ESO-FEE-REMIND', 'name' => 'Targeted fee reminder',
+            'objective' => 'improve', 'status' => 'active', 'created_by' => self::MANAGER,
+        ]);
+
         $this->postJson('/api/v1/eso-executions', [
             'decisionId'      => $decisionId,
-            'esoDefinitionId' => Uuid::uuid4()->toString(),
+            'esoDefinitionId' => $esoDefinitionId,
             'executorType'    => 'human',
         ], $this->auth('manager', self::MANAGER))->assertStatus(201);
 

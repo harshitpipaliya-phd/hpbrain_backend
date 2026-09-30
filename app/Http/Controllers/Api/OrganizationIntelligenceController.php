@@ -230,11 +230,36 @@ final class OrganizationIntelligenceController extends Controller
      */
     private function interpretation(Request $request, array $all): array
     {
+        // Passive read: serves a cached interpretation or reports that none exists.
+        // It never reaches a provider, whatever the caller's role and whatever `fresh` says.
         return $this->interpreter->interpret(
             tenantId: $this->tenantId($request),
             actorId: $this->actorId($request),
             intelligence: $all,
-            fresh: $request->boolean('fresh'),
+            fresh: false,
+            generate: false,
         );
+    }
+
+    /**
+     * POST /organization-intelligence/{tenantId}/interpretation — the one explicit,
+     * authorised way to spend a model call on the interpretation (`permission:create`
+     * on the route). Cached per data version and single-flight, so a retried or
+     * double-clicked request does not buy a second answer; `fresh` regenerates on
+     * purpose.
+     */
+    public function interpret(Request $request): JsonResponse
+    {
+        $all = $this->intelligence($request);
+
+        return $this->respond($all, [
+            'interpretation' => $this->interpreter->interpret(
+                tenantId: $this->tenantId($request),
+                actorId: $this->actorId($request),
+                intelligence: $all,
+                fresh: $request->boolean('fresh'),
+                generate: true,
+            ),
+        ]);
     }
 }

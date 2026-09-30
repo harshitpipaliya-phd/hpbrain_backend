@@ -10,6 +10,7 @@ use App\Domain\Undetermined\VerbResult;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -112,6 +113,18 @@ final class AiController extends Controller
             return response()->json(VerbResult::undetermined(['no_ai_provider_configured'], $refs), 200);
         }
 
+        // Idempotent for a repeated request: the same tenant, signal and evidence
+        // content returns the earlier answer instead of buying a second one, so a
+        // double click or a retry costs nothing.
+        $cacheKey = 'brain:ai:summarize:v1:'.$this->tenantId($request).':'.$data['signalId'].':'
+            .sha1($evidence->map(fn ($e) => $e->id.'|'.(string) $e->content)->implode("
+"));
+        $cachedSummary = Cache::store('file')->get($cacheKey);
+
+        if (is_array($cachedSummary)) {
+            return response()->json($cachedSummary, 200);
+        }
+
         try {
             $response = $this->ai->complete(
                 new AiRequest(
@@ -148,9 +161,13 @@ final class AiController extends Controller
             array_filter($parsed['evidenceRefs'] ?? [], 'is_string'), $refs
         ));
 
-        return response()->json(VerbResult::decided(
+        $result = VerbResult::decided(
             ['summary' => $parsed['summary']],
             $cited === [] ? $refs : $cited,
-        ), 200);
+        );
+
+        Cache::store('file')->put($cacheKey, json_decode((string) json_encode($result), true), 600);
+
+        return response()->json($result, 200);
     }
 }
