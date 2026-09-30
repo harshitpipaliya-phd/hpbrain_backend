@@ -30,13 +30,27 @@ final class ExecutiveIntelligenceInterpreter
      *
      * @return array<string, mixed>
      */
-    public function interpret(string $tenantId, string $actorId, array $intelligence, bool $fresh = false): array
+    public function interpret(string $tenantId, string $actorId, array $intelligence, bool $fresh = false, bool $generate = false): array
     {
         $version = (string) ($intelligence['dataVersion'] ?? '');
         $key = 'brain:intel:interpretation:v1:'.$tenantId.':'.$version;
 
         if (! $this->ai->isConfigured()) {
             return $this->unavailable($version, 'ai_provider_not_configured');
+        }
+
+        // A provider call costs money, so it happens only on an explicit, authorised
+        // request ($generate — the POST route behind `create`). Reading a page never
+        // spends: a passive read serves the cached interpretation or says plainly that
+        // none has been generated. Any role that can read can see a cached one; only a
+        // role that may spend can produce one, and `fresh` cannot force a paid call
+        // from a read.
+        if (! $generate) {
+            $cached = Cache::store('file')->get($key);
+
+            return is_array($cached)
+                ? $cached
+                : $this->unavailable($version, 'interpretation_not_generated', 'Not generated yet. Request it explicitly to spend a model call.');
         }
 
         if ($fresh) {
@@ -48,6 +62,33 @@ final class ExecutiveIntelligenceInterpreter
             }
         }
 
+        // Single flight: concurrent or retried requests for the same tenant and data
+        // version must not each buy an answer. The loser gets the winner's cache, or
+        // an honest "in progress".
+        $lock = Cache::store('file')->lock($key.':lock', 120);
+
+        if (! $lock->get()) {
+            $cached = Cache::store('file')->get($key);
+
+            return is_array($cached)
+                ? $cached
+                : $this->unavailable($version, 'generation_in_progress', 'An interpretation is already being generated for this data version.');
+        }
+
+        try {
+            return $this->generateInterpretation($tenantId, $actorId, $intelligence, $version, $key);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $intelligence
+     *
+     * @return array<string, mixed>
+     */
+    private function generateInterpretation(string $tenantId, string $actorId, array $intelligence, string $version, string $key): array
+    {
         $context = $this->context($intelligence);
 
         try {
@@ -68,7 +109,9 @@ final class ExecutiveIntelligenceInterpreter
                 entityId: $tenantId,
             );
         } catch (Throwable $e) {
-            return $this->unavailable($version, 'ai_call_failed', mb_substr($e->getMessage(), 0, 300));
+            // The provider's own message is not echoed: it can carry request internals. The
+            // gateway has already written the failed call to hpbrain_ai_executions.
+            return $this->unavailable($version, 'ai_call_failed', 'The provider call failed; see the AI execution ledger.');
         }
 
         $json = $response->json();

@@ -392,6 +392,9 @@ Route::prefix('v1')->group(function () {
         Route::get('organization-intelligence/{tenantId}/gaps', [OrganizationIntelligenceController::class, 'gaps']);
         Route::get('organization-intelligence/{tenantId}/recommendations', [OrganizationIntelligenceController::class, 'recommendations']);
         Route::get('organization-intelligence/{tenantId}/profile', [OrganizationIntelligenceController::class, 'profile']);
+        // The ONLY route that can spend a model call on the interpretation. Reads above are
+        // cache-only; generating needs `create`, so a Viewer cannot cause provider spend.
+        Route::post('organization-intelligence/{tenantId}/interpretation', [OrganizationIntelligenceController::class, 'interpret'])->middleware('permission:create');
         Route::get('organization-intelligence/{tenantId}', [OrganizationIntelligenceController::class, 'index']);
 
         // ---- Derived operational intelligence --------------------------------
@@ -591,7 +594,8 @@ Route::prefix('v1')->group(function () {
         // spending money per call and is expected to record an execution row,
         // which makes it a create. The gate must change in the same commit as
         // the provider client, not after.
-        Route::post('ai/evidence/summarize', [AiController::class, 'summarizeEvidence']);
+        // Calls a provider and is billed: an explicit action that needs `create`, never bare `read`.
+        Route::post('ai/evidence/summarize', [AiController::class, 'summarizeEvidence'])->middleware('permission:create');
 
         /*
           Graph Explorer's reads. Every one of them is a READ — no verb beyond
@@ -893,9 +897,9 @@ Route::prefix('v1')->group(function () {
             Route::get('workspace/sessions', [AiWorkspaceController::class, 'sessions']);
             Route::post('workspace/sessions', [AiWorkspaceController::class, 'store'])->middleware('permission:create');
             Route::get('workspace/sessions/{sessionId}/messages', [AiWorkspaceController::class, 'messages']);
-            Route::post('workspace/sessions/{sessionId}/messages', [AiWorkspaceController::class, 'send']);
-            Route::post('workspace/sessions/{sessionId}/messages/{messageId}/regenerate', [AiWorkspaceController::class, 'regenerate']);
-            Route::post('workspace/sessions/{sessionId}/messages/{messageId}/explain', [AiWorkspaceController::class, 'explain']);
+            Route::post('workspace/sessions/{sessionId}/messages', [AiWorkspaceController::class, 'send'])->middleware('permission:create');
+            Route::post('workspace/sessions/{sessionId}/messages/{messageId}/regenerate', [AiWorkspaceController::class, 'regenerate'])->middleware('permission:create');
+            Route::post('workspace/sessions/{sessionId}/messages/{messageId}/explain', [AiWorkspaceController::class, 'explain'])->middleware('permission:create');
             Route::get('workspace/sessions/{sessionId}/messages/{messageId}/follow-up', [AiWorkspaceController::class, 'followUp']);
             Route::get('workspace/sessions/{sessionId}/history', [AiWorkspaceController::class, 'history']);
         });
@@ -952,11 +956,14 @@ Route::prefix('v1')->group(function () {
             Route::get('recommendations/{recommendation}', [AiIntelligenceRecommendationController::class, 'show'])
                 ->where('recommendation', $uuid);
             Route::post('recommendations/{recommendation}/approve', [AiIntelligenceRecommendationController::class, 'approve'])
-                ->where('recommendation', $uuid);
+                ->where('recommendation', $uuid)
+                ->middleware('permission:decision.approve');
             Route::post('recommendations/{recommendation}/reject', [AiIntelligenceRecommendationController::class, 'reject'])
-                ->where('recommendation', $uuid);
+                ->where('recommendation', $uuid)
+                ->middleware('permission:decision.approve');
             Route::post('recommendations/{recommendation}/defer', [AiIntelligenceRecommendationController::class, 'defer'])
-                ->where('recommendation', $uuid);
+                ->where('recommendation', $uuid)
+                ->middleware('permission:decision.approve');
 
             Route::get('evaluations/options', [AiIntelligenceEvaluationController::class, 'options']);
             Route::get('evaluations', [AiIntelligenceEvaluationController::class, 'index']);

@@ -89,7 +89,11 @@ final class OrganizationIntelligenceTest extends TestCase
         for ($month = 0; $month < 12; $month++) {
             // Twelve months back to one month back, so nothing lands in the current
             // partial month — which PatternDetector drops as still filling.
-            $occurred = date('Y-m-15 09:00:00', strtotime('-'.(12 - $month).' months', $now));
+            // Anchored on the FIRST of the month: subtracting N months from today's date
+            // overflows on the 29th-31st ('29 Feb' becomes 1 Mar), which silently drops a
+            // month and doubles another, so the "perfect ramp" is not one and the fit
+            // quality assertion fails only on those days of the calendar.
+            $occurred = date('Y-m-15 09:00:00', strtotime('first day of -'.(12 - $month).' months', $now));
 
             // Rising: 10 in the first month, 120 in the last.
             $volume = 10 * ($month + 1);

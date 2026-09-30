@@ -88,6 +88,18 @@ final class AiIntelligenceConsoleTest extends TestCase
             ->assertJsonPath('data.recommendation.is_pending', true)
             ->assertJsonStructure(['data' => ['recommendation', 'reasoning', 'evidence', 'tenant_id']]);
 
+        // Accepting is governed: without an approved canonical decision the console refuses
+        // (RecommendationApprovalGateTest covers the gate in depth).
+        $this->withHeaders($this->auth())->postJson("/api/v1/ai-intelligence/recommendations/{$own}/approve", ['note' => 'Go'])
+            ->assertStatus(409);
+        $this->assertSame('pending', DB::table('hpbrain_recommendations')->where('id', $own)->value('status'));
+
+        DB::table('hpbrain_decisions')->insert([
+            'id' => Uuid::uuid4()->toString(), 'tenant_id' => self::TENANT_A, 'recommendation_id' => $own,
+            'decided_by' => 'someone-else', 'rationale' => 'Approved through the decision workflow.',
+            'status' => 'approved', 'approved_by' => 'a-manager', 'created_date' => '2026-09-01 00:00:00',
+        ]);
+
         $this->withHeaders($this->auth())->postJson("/api/v1/ai-intelligence/recommendations/{$own}/approve", ['note' => 'Go'])
             ->assertOk()
             ->assertJsonPath('data.recommendation.status', 'accepted');

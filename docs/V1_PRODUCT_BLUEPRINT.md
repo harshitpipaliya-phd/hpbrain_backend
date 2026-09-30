@@ -5,10 +5,26 @@
 | | |
 |---|---|
 | **Document purpose** | Ground-truth V1 product definition, derived from direct inspection of the repository (code, migrations, routes, tests, docs) rather than from prior planning documents. |
-| **Version / status** | Draft v1.3 — extends the School Intelligence transformation pass (§22): the shared `departments_without_manager` rule's root cause fixed platform-wide with regression tests, two new real academic/attendance signal-detection rules added and verified against live data, and the `web/` version-control question resolved (it is a separate, valid git repository, not a gap to fix); for product/engineering review, not yet ratified |
-| **Prepared** | 2026-09-28, updated 2026-09-29 (three passes) |
-| **Repository** | `C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain`, branch `harshit` |
-| **Scope** | Defines the smallest complete, launchable V1 of HP Enterprise Brain and the work required to get there. Does not change any code, schema, or configuration. |
+| **Version / status** | **v2.1 — v2.0 Final Version 1 Audit plus the pilot-readiness follow-up (§31, 2026-09-29).** §23–§30 are the original audit and are preserved unchanged; §31 records the fixes and re-verification. **v2.0 — Final Version 1 Audit.** Builds on v1.3 (School Intelligence pass, §22) and adds the final audit layer (§23–§30): a four-source reference reconciliation, a capability status register, fresh test evidence, corrections to earlier claims, and the ZIP pilot-checklist scorecard. For product/engineering review; not yet ratified. |
+| **Prepared** | 2026-09-28; updated 2026-09-29 (three passes); final audit 2026-09-29 (fourth pass) |
+| **Repository** | `C:\Users\omshivay\Desktop\ADK\hp-enterprise-brain`, branch `harshit`, HEAD `a6a3e13` at audit start |
+| **Scope** | Defines the smallest complete, launchable V1 of HP Enterprise Brain and the work required to get there. The v2.0 audit pass changed documentation only (this file and a companion Word document); it changed no application code, schema, configuration, or data. |
+| **Companion** | `HP_Enterprise_Brain_V1_Final_Audit.docx` (standalone Word edition, saved in the Desktop `V1` reference folder) |
+
+> **Reader's note (v2.0).** Sections §1–§22 are preserved from earlier passes, with **in-place corrections marked `[v2.0 corrected]`** where this audit found a claim the code does not support. Sections §23–§30 are new. If an older paragraph and a §23–§30 paragraph disagree, §23–§30 win: they were derived from the code and a test run on 2026-09-29. A crosswalk from the requested final structure to this document's sections is in §30.2.
+
+### Status vocabulary used by the final audit (§25)
+
+The six labels below are used in the capability register. They map onto the older six labels in the next table.
+
+| Final-audit status | Meaning | Closest older label |
+|---|---|---|
+| **Implemented and verified** | Code exists **and** a test that exercises the path passed in this audit's run (or the path was executed live). | Existing — Verified |
+| **Implemented, verification incomplete** | Code exists; the end-to-end path was not exercised by a passing test in this audit. | Existing — Not Verified |
+| **Partially implemented** | Some required behaviour exists; important parts are missing or unreachable. | Existing — Partially Verified |
+| **Documented only** | Described in a document; no implementation found. | Proposed / Deferred |
+| **Not found** | No supporting implementation located in the inspected scope. | — |
+| **Blocked / unknown** | Could not be established with available evidence (e.g. needs production access). | Open Question |
 
 ### How to read this document
 
@@ -51,6 +67,15 @@ This audit found that the project's own historical documents are a mixed bag: so
 20. [Glossary](#20-glossary)
 21. [Appendix: V1 Academy — Verified Reference Tenant](#21-appendix-v1-academy--verified-reference-tenant)
 22. [Appendix: School Intelligence Transformation Pass](#22-appendix-school-intelligence-transformation-pass)
+23. [Final Audit — Reference Sources & Identity](#23-final-audit--reference-sources--identity)
+24. [Cross-Document Reconciliation Matrix](#24-cross-document-reconciliation-matrix)
+25. [Capability Status Register](#25-capability-status-register)
+26. [Test & Verification Evidence (2026-09-29)](#26-test--verification-evidence-2026-09-29)
+27. [Corrections and Newly Found Discrepancies](#27-corrections-and-newly-found-discrepancies)
+28. [Lifecycle, Principles and Pilot-Checklist Scorecard](#28-lifecycle-principles-and-pilot-checklist-scorecard)
+29. [Final Verdict, Acceptance Criteria and Prioritized Next Steps](#29-final-verdict-acceptance-criteria-and-prioritized-next-steps)
+30. [Audit Methodology, Evidence Index, Structure Crosswalk and Change Summary](#30-audit-methodology-evidence-index-structure-crosswalk-and-change-summary)
+31. [Pilot-Readiness Implementation Report (follow-up, 2026-09-29)](#31-pilot-readiness-implementation-report-follow-up-2026-09-29)
 
 ---
 
@@ -60,9 +85,11 @@ HP Enterprise Brain is a Laravel 11 / PHP 8.2 / MySQL 8 backend, paired with a R
 
 The core, differentiating capability — a governed reasoning pipeline that turns raw operational data into an evidenced, human-approved decision, and then writes the outcome back as reusable organizational learning — is **real and proven**. `tests/Feature/GoldenIntelligenceFlowTest.php` exercises the entire chain (signal → evidence → reasoning → decision approval → measurement plan → execution → outcome → learning → memory grounding) over real HTTP endpoints against a real database, including two deliberate "honesty checkpoints" where the system must return an explicit `UNDETERMINED` result rather than fabricate an answer.
 
-The project has been through one serious credibility event: three consecutive "Part 3" milestone reports claimed passing tests for a "Universal AI Brain" platform, while a remediation audit (`docs/PART-3-REMEDIATION-REPORT.md`) later found the application did not even boot — a duplicate method declaration was a fatal error at class-load, meaning zero of those claimed tests had ever actually executed. The remediation was real and is reflected in the current, working codebase (94 controllers, 126 migrations, 488 API routes, 103 backend test files, ~50 frontend test files), but it is the reason this blueprint treats every historical document as a claim to verify, not a fact to repeat.
+The project has been through one serious credibility event: three consecutive "Part 3" milestone reports claimed passing tests for a "Universal AI Brain" platform, while a remediation audit (`docs/PART-3-REMEDIATION-REPORT.md`) later found the application did not even boot — a duplicate method declaration was a fatal error at class-load, meaning zero of those claimed tests had ever actually executed. The remediation was real and is reflected in the current, working codebase (**[v2.0 re-counted 2026-09-29]** 99 controller files, 126 migrations, 492 API routes via `php artisan route:list --json`, 98 Feature + 7 Unit backend test files, 44 frontend test files), but it is the reason this blueprint treats every historical document as a claim to verify, not a fact to repeat.
 
 **What V1 should be**: the proven core loop (Organization/Department/People foundation → ingestion → signals → evidence → cases → reasoning → recommendations → human-approved decisions → measurement → human-executed action → outcomes → learning), for the two vertical shapes the system has real production or near-production data for today (a school and a telecom operator), secured by the existing JWT/RBAC/tenant-isolation model with a short list of hardening fixes, and shipped without the still-simulated or still-dark capabilities (AI evaluation, RAG retrieval, autonomous execution, the SIMULATE verb, and a fully industry-agnostic UI) being presented as delivered.
+
+**v2.0 final-audit conclusion (2026-09-29)**: **READY WITH KNOWN LIMITATIONS** for an engineer-operated, controlled pilot; **not ready** for unattended production. The core loop passes its end-to-end tests in a fresh run (backend: 1,158 passed / 26 failed, of which 22 are a missing `ext-zip` PHP extension, 2 are test-fixture drift, 1 is a stale test and 1 is unexplained; frontend: type-check clean, 459 of 464 tests passed). Three of the four reference documents in the Desktop `V1` folder describe the sibling LMS/K12/G2G platform rather than this repository; only the ZIP is this product's design lineage, and it is a target-state spec. Neo4j, `max_verb`, `DecisionGate`, SIMULATE, EXECUTE, RAG on the verb path and AI evaluation are not part of the implemented V1. No browser, live-AI-provider or production-database verification was done. Details: §23–§30.
 
 **2026-09-29 update**: this blueprint's demo-organization landscape was consolidated to a single reference tenant, **V1 Academy**, and verified end-to-end against the live application (login, tenant isolation, the full intelligence loop, and data-quality checks). The consolidation exercise also surfaced and fixed three real, previously-undetected defects (two in the seed tooling, one — a hidden-departments bug — in application-adjacent seed data that silently triggered a real `DepartmentVisibilityScope` exclusion rule). See [§21](#21-appendix-v1-academy--verified-reference-tenant) for the full account.
 
@@ -119,7 +146,7 @@ The project has been through one serious credibility event: three consecutive "P
 
 - The SIMULATE verb (declared in the `Verb` enum, no concrete class anywhere in `app/Domain/Verbs/`).
 - Autonomous EXECUTE (by design — "EXECUTE stays dark: human only" is asserted directly in the golden-flow test).
-- A Neo4j-backed knowledge graph (ADR-008 explicitly defers this; the current Graph Explorer runs on MySQL recursive CTEs, revisit "if traversals exceed 3 hops or ~10⁶ relationships per tenant").
+- A Neo4j-backed knowledge graph (ADR-008 explicitly defers this, revisit "if traversals exceed 3 hops or ~10⁶ relationships per tenant"). **[v2.0 corrected]** The earlier text said the Graph Explorer "runs on MySQL recursive CTEs behind a `GraphQueryPort`". The v2.0 audit found **no `WITH RECURSIVE` anywhere** in `app/`, `config/`, `routes/` or migrations, and `GraphQueryPort` appears only in a comment in `GraphController.php`. The graph is a **read-time projection** over relational tables (`app/Domain/Graph/GraphProjection.php`, `GraphBuilder.php`, `GraphVocabulary.php`: 14 labels, 17 relationship types, node budget enforced); there are no node/edge tables and no multi-hop traversal.
 - A genuinely industry-neutral frontend for a third vertical.
 
 ---
@@ -201,7 +228,7 @@ HP Enterprise Brain
 │   ├── Decision Analytics / Decision Intelligence
 │   └── Organizational Knowledge (Mental Models)
 ├── Knowledge                                        [V1 Supporting]
-│   ├── Graph Explorer      (MySQL CTEs, not Neo4j — ADR-008)
+│   ├── Graph Explorer      (relational read-time projection, not Neo4j — ADR-008)
 │   ├── KASBA Explorer
 │   ├── Knowledge Library
 │   ├── Memory              (organizational learning)
@@ -394,7 +421,7 @@ flowchart TB
 | Evidence & provenance | SHA-256 hash on evidence, exponential freshness decay (built, only partially wired) | Existing — Partially Verified |
 | Decisions & outcomes | Approval workflow with separation of duties, measurement-plan gate before execution | Existing — Verified |
 | Memory & learning | `MemoryGrounding` — reusable learnings retrieved and cited across cases | Existing — Verified (was previously broken — referenced non-existent columns — fixed and now proven) |
-| Graph | MySQL `WITH RECURSIVE` CTEs behind a `GraphQueryPort` seam; Neo4j deliberately deferred (ADR-008) | Existing — Verified (as MySQL-based), Neo4j itself Deferred |
+| Graph | **[v2.0 corrected]** Read-time projection over relational tables (`GraphProjection`/`GraphBuilder`/`GraphVocabulary`); no recursive CTEs and no `GraphQueryPort` exist in code. Neo4j deliberately deferred (ADR-008). Only 3 dedicated tests (`GraphNodeEvidenceLinkTest`). | Existing — Partially Verified (projection works; multi-hop traversal Not found), Neo4j Deferred |
 | External services | Anthropic, Gemini, DeepSeek (real HTTP integrations); an external `HP_LOGIN_API_URL` env var exists but no active usage was found in the current login flow (**Open Question** — possibly vestigial) | Mixed |
 | Deployment | Manual Laravel deploy checklist (`docs/DEPLOYMENT.md`); **no CI/CD pipeline exists** (`.github/workflows/` absent) | Existing — Not Verified / Gap |
 
@@ -515,7 +542,7 @@ erDiagram
 | Database migrations | Open Question | This audit did not run `migrate:status` against the live database; confirm all 126 migrations are actually applied before go-live |
 | Scheduled jobs (`schedule:run` cron) | **Proposed for V1 — P0** | `routes/console.php` schedules `brain:process-events`, `brain:snapshot`, `brain:detect`, `intelligence:warm`, `operations:warm` — **none of these run unless a host cron calls `php artisan schedule:run` every minute**; confirm this is configured, since outcomes/learning depend on the event consumer |
 | Required integrations | Existing — Verified | At minimum one AI provider key (Anthropic, Gemini, or DeepSeek) — recall `AI_PROVIDER` can be intentionally left empty for a no-AI deployment, which is a valid, honest state (UNDETERMINED everywhere an AI call would be needed) |
-| Build & test execution | **Not executed in this audit** | 103 backend test files and ~50 frontend test files exist; none were run as part of producing this document (by design — this was a read-only inspection, and the shared database is sensitive to load) |
+| Build & test execution | **[v2.0 updated] Executed 2026-09-29 — see §26** | Backend: 1,158 passed / 26 failed (7,492 assertions). Frontend: `tsc -b --noEmit` clean; vitest 44 files, 464 tests, 5 failures (4 in `shell.test.tsx`, 1 in `OrganizationDeleteLifecycle.test.tsx`). Earlier passes did not run the suites. |
 | HTTPS / secure configuration | Open Question | Not discoverable from the application layer; presumably handled by a reverse proxy/load balancer outside this repo |
 | Backups | Open Question | No backup tooling found in-repo |
 | Logging & monitoring | Existing — Partially Verified | `hpbrain_logs`, `hpbrain_metrics`, `hpbrain_health_checks` exist as tables; no external APM/monitoring integration was found |
@@ -575,7 +602,7 @@ erDiagram
 | UI navigation & usability | Manual walkthrough of the V1 Core screens against a real tenant | Every V1 Core screen renders without error for at least one real tenant (school and telecom) | **Not Verified in this pass** — no UI was exercised in a browser during this audit |
 | Error handling | Confirm `UNDETERMINED` (not a crash or a fabricated answer) on missing evidence/AI config | Every verb call with insufficient grounding returns a structured `UNDETERMINED`, HTTP 200 | **Verified** (by code and test) |
 | Security verification | Re-run `tests/standalone/security.php`; confirm security headers and token-storage mitigation (P1 items) | Tenant isolation, role matrix, and (once implemented) headers/token-storage all pass | **Partially Verified** |
-| Automated tests | Execute the full PHP + frontend suite in CI | Suite passes with zero unexplained failures | **Not executed as part of this audit; no CI exists to run it automatically today** |
+| Automated tests | Execute the full PHP + frontend suite in CI | Suite passes with zero unexplained failures | **[v2.0 updated]** Executed locally 2026-09-29 (§26): 26 backend and 5 frontend failures, all characterised in §26.3 (one backend and one frontend cause not fully isolated) — none occurred in the core-loop tests. **No CI exists**, so this still depends on someone running the suites. |
 | Build & deployment | Execute the documented `DEPLOYMENT.md` checklist against a staging environment | Application boots, migrates, and serves the API | **Not Verified in this pass** |
 | Backup & recovery | Confirm a backup/restore procedure exists for the shared production database | A tested restore succeeds | **Not Verified — no such procedure found in-repo** |
 | Documentation & operational handover | This document, plus a refreshed `docs/STATUS.md` run against current `HEAD` | An engineer unfamiliar with the project can find current, accurate status | **Proposed for V1** — recommend regenerating `docs/STATUS.md` via `php artisan brain:status` as part of the release process, since the current one is dated 2026-09-04 and known-stale |
@@ -859,3 +886,519 @@ Investigation found `web/` is not an ignored directory of generated output — i
 ---
 
 *This document was produced by direct inspection of the repository at commit-adjacent state on branch `harshit` (2026-09-28), updated 2026-09-29 across three passes: the V1 Academy consolidation (§21), the initial School Intelligence transformation pass (§22.1–22.5), and its extension (§22.6–22.9) fixing the `departments_without_manager` rule platform-wide, adding two new real signal-detection rules, and resolving the `web/` version-control question. Application code (backend rules/seeders/config, one frontend nav config file), test fixtures, and one tenant's database rows were modified as documented in those sections, each verified with an actual command and its actual output. Where a claim could not be verified from the repository alone, it is labeled "Not Verified" or recorded as an Open Question rather than asserted.*
+
+
+---
+
+## 23. Final Audit — Reference Sources & Identity
+
+**Audit date:** 2026-09-29. **Method:** four reference sources read (three Word documents in full; the ZIP fully inventoried and read by importance), each claim then checked against the repository. Source documents are treated as untrusted reference data; nothing from the ZIP was executed. No source file was modified.
+
+### 23.1 Source inventory
+
+| # | Actual filename (`C:\Users\omshivay\Desktop\V1`) | Type / size | Main topics | Identity verdict |
+|---|---|---|---|---|
+| 1 | `AI_Intelligence_Centralized_Guide_Professional.docx` (the brief called it "…_Centered_…"; the on-disk name is *Centralized*) | Word, 51,706 B, dated 2026-09-28 | Centralized AI & Intelligence layer: provider/model/prompt/policy/agent registries, `/ai/*` console, tenant isolation via `sub_institute_id` + `McpContextHydrator`, centralized-vs-module responsibility, security & governance | **Sibling platform, not this repository.** It describes the LMS/K12/G2G Next.js + Laravel estate (`packages/ai-intelligence-core`, `app/ai/*`, `tblmenumaster`, `McpAuth`). It overlaps this repo in concept only. |
+| 2 | `knowledge-graph-architecture.docx` | Word, 38,989 B | One shared **Neo4j** graph across G2G / LMS+PAL / K12: centralized trigger→outbox→drain sync (`config/neo4j.php`, `GraphSchema`, `TableGraphProjection`), decentralized module writers (PAL Coherence Map, ULU), reconcile / failed-queue / node-excess governance, 881,734 nodes at 2026-09-04 | **Sibling platform, not this repository.** This repo has no Neo4j client, config or dependency (ADR-008 defers it). |
+| 3 | `Universalize_Platform_Services.docx` | Word, 16,531 B, modified 2026-09-28 | Eight shared platform services (RBAC, Workflow, Notification, Scheduler, Document, Integration, Audit, Event Bus) with a "working today / planned" status per service, in plain-language analogies | **School-ERP platform framing.** Concepts map partially onto this repo (§25.3). |
+| 4 | `Company brain.zip` | ZIP, 3,714,840 B, 122 entries (11 dirs, 42 `.md`, 24 `.docx`, 16 `.yaml`, 6 `.html`, 6 `.pdf`, 4 `.svg`, plus macOS `__MACOSX`/`.DS_Store` noise) | The HP Enterprise Brain **design corpus**: Manifesto, Product Bible, Architecture Invariants, ERC v1.0/v1.1, Engineering Blueprint, Delivery Playbook, Foundation Build Reference, five ADRs, eight OpenAPI 3.1 contracts, pilot acceptance checklist, component catalog, design-language PDFs, two SVG diagrams, HTML prototypes, CSOS baseline | **The same product family and the design lineage of this repository — but a design/spec set, not the codebase.** It contains no Laravel code. Its target stack (Laravel + Neo4j + Postgres + Redis) differs from the implemented stack (Laravel + MySQL, no Neo4j, database queue). |
+
+Inspection status: sources 1–3 read completely (293 / 302 / 68 non-empty paragraphs, including tables). None of the three contains embedded images (no `word/media` parts), so there were no embedded diagrams to inspect; their flows are text-drawn. ZIP: full manifest listed; all Markdown, YAML, `.docx` text and both SVGs read; the three PDFs and three large HTML prototypes were read for structure only; no nested archives were found; two `.~*.docx` entries are 162-byte Office lock files. One ZIP file (`Agent Executable.docx`) is a ChatGPT-conversation export about an adaptive-learning platform — a different product idea (its first line holds a private share URL, not reproduced here). No credentials or personal data were found in the ZIP text; the large HTML bundles were not deep-scanned.
+
+### 23.2 The central finding of the reference review
+
+**Three of the four references do not describe this repository's implementation.** Sources 1 and 2 are about the sibling LMS/K12/G2G platform (Next.js front end, Neo4j graph, `sub_institute_id` tenancy with a `McpContextHydrator`, `app/ai/*` routes). Source 3 is a plain-language services overview. Only the ZIP (source 4) is the design lineage of HP Enterprise Brain itself, and it is a *target-state* specification. Consequences:
+
+- Requirements in sources 1–3 are **not** counted as V1 requirements for this repository unless the code or the ZIP independently supports them.
+- Specific mechanisms asserted by sources 1–2 (`max_verb` ceilings, `DecisionGate`, `McpContextHydrator`, a Neo4j client) have **zero matches** in `app/`, `config/`, `routes/` and `database/migrations` here.
+- That does not make sources 1–3 wrong; they document another codebase. They remain useful architectural precedent, and the *pattern* they describe — centralized governance with module-owned business data — is mirrored by this repo's `hpbrain_ai_*` console.
+
+---
+
+## 24. Cross-Document Reconciliation Matrix
+
+Abbreviations: **S1** = `AI_Intelligence_Centralized_Guide_Professional.docx`; **S2** = `knowledge-graph-architecture.docx`; **S3** = `Universalize_Platform_Services.docx`; **ZIP** = `Company brain.zip`. "Code" = direct inspection of this repository on 2026-09-29.
+
+| Topic | S1 | S2 | S3 | ZIP evidence | Reconciled conclusion (with code evidence) |
+|---|---|---|---|---|---|
+| Product identity | Centralized AI layer for LMS / K12 / G2G | Shared Neo4j graph for G2G, LMS+PAL, K12 | "The product as an institute" — shared services for a school ERP | HP Enterprise Brain: Organizational Intelligence & Execution System (OIES) | **Different scopes.** S1–S3 describe the ERP/LMS estate the Brain sits *above*; the ZIP describes the Brain. Code: `README.md` and `EntityResolver` read ERP tables (`institute_detail`, `tbluser`). |
+| Centralized vs module ownership | Central governance + module "AI Stack" | Part I centralized graph pipeline + Part II module-owned Cypher | Shared plumbing, department-owned data | `eb-contracts` logic-free; "Company Brain is the single writer of memory" | **Same principle everywhere:** share mechanism, keep data owned. Code: `hpbrain_ai_*` central console (`ai-intelligence/*`) plus tenant-scoped repositories (`BaseRepository::scoped()`). Fully realized for AI config; not for the graph. |
+| Tenant isolation | `sub_institute_id` on every table; `McpContextHydrator` rejects foreign institute (422) | Not the focus; Neo4j has no RBAC and one credential for 56 tenants (accepted risk) | "Nothing shared that shouldn't be" | Contract header `X-Tenant-Id` on every request; `tenantId` on every node | **Three different mechanisms; unresolved as a standard.** Code: JWT `tenantId` claim + `EnsureTenantScope` (403 `tenant_mismatch`, no admin exception) + `BaseRepository::scoped()`. No `X-Tenant-Id` header (0 matches in `app/`); no hydrator middleware. |
+| Knowledge-graph store | "in-progress"; ontology endpoints exist | **Neo4j 4.4**, 881,734 nodes, trigger→outbox→drain, reconcile tooling | — | ADR-003 graph model on **Neo4j**; repo ADR-008 defers Neo4j | **Conflict: Neo4j (S2, ZIP ADR-003) vs deferred (repo ADR-008).** Code: no Neo4j client/config; `ObservabilityController` reports `neo4j: not_configured`. Graph = relational read-time projection (`GraphProjection`, 14 labels / 17 relationship types). **Reconciled: V1 has no graph database; ADR-008 governs.** |
+| Sync / durability | — | Transactional outbox + drain + nightly reconcile | Event Bus "viewing screen only" | ADR-002 event bus, outbox, idempotent handlers, DLQ | **Outbox is common to S2 and the ZIP and is implemented here for the loop, not for a graph.** Code: `EventPublisher::publishInTransaction` → `hpbrain_event_store`; `ProcessLoopEvents` claims atomically, retries 3×, dead-letters; tests `OutboxProducerTest` (2 fixture failures), `LoopConsumerTest` (passed). The Event Bus is more than a viewer here. |
+| AI configuration & governance | Provider/model/prompt/policy/agent registries; `ai_api_keys` | — | — | ADR-004: governance → grounding → reasoning → guardrail | Code: two AI-governance generations (older `hpbrain_ai_providers/_prompt_templates/_quotas/_safety_rules`; newer `hpbrain_ai_*` console, 12 controllers under `ai-intelligence/*`, `ApiKeyVault`). Policy rows exist; **no call-time policy enforcement found**. |
+| Seven verbs / "max_verb" | "`max_verb` ceilings"; `DecisionGate` hard-coded | — | — | ADR-004 seven verbs; "EXECUTE ships dark in v1" | **`max_verb` and `DecisionGate`: Not found.** Verbs in `app/Domain/Verbs/`: Explain, Assess, Coach, Evaluate, Recommend. **SIMULATE and EXECUTE have no class**; `VerbPipeline` throws `execute_verb_is_dark_in_v1`. The approval gate is `DecisionController::approve` + `permission:decision.approve`. |
+| Human approval gate | "No configuration kill-switch" | — | Workflow: accountant sign-off | Invariants 2/8; pilot A-76 | **Agree in principle; implemented.** `DecisionApprovalTest` (14 cases): analyst cannot approve, proposer cannot self-approve, cross-tenant blocked, one `DecisionReached` event, audited. Caveat: a weaker second path exists (§27.2 #3). |
+| Recommendations | "in-progress; rule-based drafter; `requires_approval` default true" | — | — | Invariant 1 "No evidence, no recommendation" | Code: `RecommendVerb` + `EsoBindingRule` + `hpbrain_recommendation_evidence`; `RecommendationValidationTest`. AI-assisted where a provider is configured, else `UNDETERMINED` — not purely rule-based. |
+| Knowledge / RAG | "coming-soon; no shared ingestion pipeline" | — | Document service "planned" | Not central to V1 | **All agree it is not delivered.** Code: `RagService`/`RetrievalService` exist but are on no production verb path (SQL `LIKE`, fixed score 0.8, no embeddings). Do not market. |
+| AI evaluation | "coming-soon; no scoring gate" | — | — | Prompt-eval is a CI standard | **Agree: not delivered.** Earlier audit: `runEvaluation()` marks cases passed with status `simulated`. |
+| Audit | `ai_audit_logs`; every write attributable | — | "permanent, tamper-proof record" | Append-only audit (EBP 9.4); pilot B-83 | Code: `hpbrain_audit_logs` (permission denials, decision approvals, tenant purge) and `hpbrain_ai_audit_logs`. **Tamper-proof is not implemented**: ordinary inserts, no hash chain or append-only privilege found. |
+| Learning & memory | — | — | — | Invariant 5; ADR-005; pilot A-78 | Code: `OutcomeRecorded` → `ProcessLoopEvents::handleOutcomeRecorded` → `hpbrain_learnings` (uuid5, idempotent) → `LearningWritten` → `MemoryUpdated`; recalled by verbs via `MemoryGrounding`. Verified by `GoldenIntelligenceFlowTest` and `LoopConsumerTest`. Feedback is prompt grounding, not model or threshold learning (§28.3). |
+| "ESO" meaning | — | — | not used | **Four expansions** (Skill / Solution Objects, Standard Operation, Structured Objective); four incompatible nine-field schemas | **Unresolved in the ZIP.** Code: an ESO is a row in `hpbrain_eso_definitions` with runs in `hpbrain_eso_executions`; **no reading of ESO as "Enterprise Services Orchestration"** exists anywhere in code. Canonical expansion: open decision (§29.4). |
+| Shared platform services (S3's eight) | — | — | RBAC, Workflow, Notification, Scheduler, Document, Integration, Audit, Event Bus | no equivalent list | Per-service mapping in §25.3. S3's two "planned" services (Document, Integration) are also absent here. |
+| Capability model | — | — | — | Six states + Observed; evidence-gated | Code: `CapabilityState` implements exactly this; `CapabilityStateTest`. |
+| Pilot acceptance | — | — | — | 23-item checklist A–D | §28.4: functional block largely met; non-functional block largely not met. |
+| Invariant set | — | — | — | **Two different "eight invariants" lists** (Invariants.md vs Engineering Blueprint App. A) | **Unresolved in the ZIP.** This document scores against Invariants.md and records the other as an open item. |
+| Repo topology / stack | — | — | — | ERC 10 repos; EBP ~6; ADR-001 / FBR 7; Laravel+Neo4j+Postgres+Redis vs earlier Next.js+Supabase | **Superseded by reality:** one Laravel repo plus a separate `web/` React repo, MySQL, no Neo4j, no Redis. Divergence from target-state, not a defect (§27). |
+
+### 24.1 Common principles (agreed across sources)
+
+1. Share infrastructure and governance once; keep each domain's business data owned and isolated (S1, S2, S3, ZIP).
+2. Durability through a transactional outbox with idempotent replay, plus a safety net for the "healthy-looking but wrong" case (S2's reconcile; the ZIP's replay tool and DLQ).
+3. Honest uncertainty: say "not built", "coming-soon" or `UNDETERMINED` rather than fabricate (S1 integrity rule; S2 tone; ZIP P3). This repository implements the principle for verbs.
+4. Human-in-the-loop for consequential action; governance-critical routing is deterministic, not model-decided.
+5. Auditability of who did what, when.
+
+### 24.2 Duplicates, conflicts, naming and gaps
+
+- **Duplicate:** the "centralized vs module" argument appears in S1 and S2 almost identically; S3 restates it in analogy form.
+- **Naming:** "Company Brain" vs "Enterprise Brain"; four "ESO" expansions; "Event Bus" as a viewing screen (S3) vs the outbox pipeline (ZIP, code).
+- **Outdated assumptions:** S1's "~40 modules" and 13-capability registry belong to another codebase; S2's graph counts are an explicit 2026-09-04 snapshot; the ZIP repo-topology documents (2026-07-08) pre-date the single-Laravel-repo reality.
+- **Described in sources, not implemented here:** Neo4j graph; `X-Tenant-Id` contract; `max_verb`; `DecisionGate`; SIMULATE; autonomous EXECUTE; RAG; AI evaluation; Document store; Integration gateway; PITR, SLO and CI-gate evidence.
+- **Implemented here, absent from all four sources:** operational-records ingestion (CSV/XLSX, Fiber Valley), 17 signal rules, the fingerprint-cached `IntelligenceEngine`, School Intelligence, department/person intelligence, `TenantPurgeService`, the ERP-mapping `EntityResolver` platform, the V1 Academy reference tenant.
+
+---
+
+## 25. Capability Status Register
+
+Status uses the final-audit vocabulary defined in the header. **"Verified" means a test exercising that path passed in the 2026-09-29 run (§26) — not merely that a class exists.** Evidence cites repo-relative paths and test classes.
+
+### 25.1 Core loop and intelligence
+
+| # | Capability | Status | Evidence | Limit of the evidence |
+|---|---|---|---|---|
+| 1 | Organization / department / person read from the ERP (no duplication) | **Implemented and verified** | `app/Domain/Universal/EntityResolver.php`; `hpbrain_entity_mappings`; `EntityMappingTest`, `OrganizationResolverParityTest`, `DepartmentResolverParityTest` (passed) | Tests use hand-built SQLite fixtures, not the live ERP schema |
+| 2 | Data ingestion (CSV/XLSX → `hpbrain_operational_records`, content-hash idempotent) | **Implemented, verification incomplete** | `IngestionService`, `WorkbookImporter`, `SchemaDetector`; `StreamingCsvIngestionTest`, `IngestionCommitPipelineTest` (passed) | **All 22 `FiberValleyImportTest` tests failed: `ext-zip` is not loaded in this PHP** — the XLSX path was not exercised (§26.3) |
+| 3 | Signal detection — row-held rules (5) | **Implemented and verified** | `RuleEvaluator`, `hpbrain_signal_rules`, `SignalRuleSeeder`; `SignalRuleParityTest`, `PredicateTest` | — |
+| 4 | Signal detection — code rules (12: academic gap, attendance, fee ×3, complaint ×4, work-order ×2, helpdesk) | **Implemented, verification incomplete** | `OperationalSignalRules.php`; `SchoolAcademicAttendanceSignalRulesTest` covers 2; `OperationalIntelligenceTest` covers aggregates | Ten rules lack a rule-level test among the files inspected |
+| 5 | Evidence with mandatory provenance | **Implemented and verified** | `EvidenceController`, `EvidenceService`; `EvidenceProvenanceTest` | Freshness-decay math built but not called from the controller (earlier finding) |
+| 6 | Cases and case↔signal linking | **Implemented and verified** | `CaseService`, `CaseSignalLinker`, `OpenCasesForSignals`; `OpenCasesForSignalsTest`, `CaseSignalLinkerTest` | `brain:open-cases` is **not scheduled** |
+| 7 | Hypotheses | **Partially implemented** | `ProposeHypotheses` (3 approved rules, values copied from rule metadata, no model call) | Manual command only |
+| 8 | Findings | **Partially implemented** | No findings table; "findings" = `IntelligenceOutputContract` value objects composed by `IntelligenceSummaryComposer` | A presentation type, not a persisted workflow entity |
+| 9 | Organizational-intelligence engine + fingerprint cache | **Implemented and verified** | `IntelligenceEngine::forOrganization`, key `brain:intel:v3:{tenant}:{dataVersion}`, single-flight lock; `OrganizationIntelligenceTest` | One trend assertion fails (§26.3); performance untested |
+| 10 | Recommendations (AI-assisted, ESO-bound) | **Implemented and verified** | `RecommendVerb`, `EsoBindingRule`; `RecommendationValidationTest` | Fake/null provider only; **no live provider call was made** |
+| 11 | Decisions with separation of duties | **Implemented and verified** | `DecisionController::approve`; `DecisionApprovalTest` (14) | A second, ungated approval path exists (§27.2 #3) |
+| 12 | Measurement plan before execution (ZIP Invariant 4) | **Implemented and verified** | `hpbrain_measurement_plans`; `MeasurementPlanTest`, `GoldenIntelligenceFlowTest` | — |
+| 13 | ESO execution (human executor only) | **Implemented and verified** | `EsoExecutionController::store`, `EsoPreflight`; `ExecutionOutcomeLearningFlowTest` | `EsoExecutionTest` has only 2 methods; the system records execution and performs no external action |
+| 14 | Outcomes | **Implemented and verified** | `OutcomeController` (approved decision + ≥1 tenant-owned evidence id); `OutcomeValidationTest` | — |
+| 15 | Learning + memory write (idempotent) | **Implemented and verified** | `ProcessLoopEvents::handleOutcomeRecorded`; `LoopConsumerTest` (10), `GoldenIntelligenceFlowTest` (3) | Needs the scheduler to run in the target environment (item 30) |
+| 16 | Memory recall into later reasoning | **Implemented and verified** | `MemoryGrounding::retrieveFor`; `MemoryGroundingTest` | Recall only; no threshold/model adaptation |
+| 17 | Capability model (six-state, evidence-gated) | **Implemented and verified** | `CapabilityState` (incl. `Observed`); `CapabilityStateTest` | — |
+| 18 | Seven-verb architecture | **Partially implemented** | 5 of 7 verbs exist; SIMULATE and EXECUTE have no class | EXECUTE dark by design |
+| 19 | `UNDETERMINED` honesty | **Implemented and verified** | `VerbResult`, `SufficiencyCheck`; golden-flow checkpoints | — |
+
+### 25.2 AI, graph, platform
+
+| # | Capability | Status | Evidence / limit |
+|---|---|---|---|
+| 20 | AI Assistant chat (COACH path) | **Implemented and verified** | `ConversationController::sendMessage` → `ContextEngine` → `ContextGrounding` → `CoachVerb`; `CoachVerbTest`, `ContextAiAssistantTest`, `ContextGroundingTest`. Real-provider behaviour unproven. The `AIAssistant.tsx` screen has no test. |
+| 21 | AI provider abstraction (Anthropic, Gemini, DeepSeek, Null) | **Implemented and verified** | `AiGateway`; `AiProviderTest`, `AiGatewayQuotaTest`. `completeWithRag` and `completeWithFallback` are stubs. |
+| 22 | RAG / retrieval | **Partially implemented** | Services and unit tests exist; wired into no user flow; no embeddings or vector store |
+| 23 | AI safety service (injection / redaction) | **Partially implemented** | `SafetyService` tested in isolation, called by no verb or controller; the structural defence in `ContextGrounding` is what runs |
+| 24 | AI & Intelligence console (`ai-intelligence/*`) | **Implemented, verification incomplete** | 12 controllers; `AiIntelligenceConsoleTest`, `AiStackModuleTest`; policies stored, no call-time enforcement found; `AskPipeline` chat bypasses the verb pipeline |
+| 25 | AI evaluation | **Partially implemented** | `EvaluationRunner` exists; earlier audit: runs are `simulated` |
+| 26 | Knowledge graph (relational projection) | **Partially implemented** | `GraphProjection`, `GraphBuilder`, `GraphVocabulary`; 3 tests; no multi-hop traversal; lineage served by the `signalChain` endpoint |
+| 27 | Neo4j graph | **Not found** (deferred by ADR-008) | `ObservabilityController` reports `not_configured` |
+| 28 | Event backbone (outbox → consumer → DLQ) | **Implemented and verified** | `EventPublisher`, `ProcessLoopEvents`; `LoopConsumerTest` passed; `OutboxProducerTest` 2 tests fail on a fixture gap (§26.3). **Hazard:** the unscheduled `events:process` consumer marks unrecognised types (including `OutcomeRecorded`) completed and would skip learning if run by hand. |
+| 29 | Scheduled jobs (`brain:process-events`, `brain:detect`, `brain:snapshot`, `intelligence:warm`, `operations:warm`) | **Implemented, verification incomplete** | `routes/console.php`; requires a host cron or Task Scheduler running `schedule:run` |
+| 30 | Host scheduler entry in the target environment | **Blocked / unknown** | Not discoverable from the repo |
+
+### 25.3 Security, tenancy and S3's eight shared services
+
+| Item | Status | Evidence / limit |
+|---|---|---|
+| JWT auth (15 min access, 7 day refresh, rotation, revocation list) | **Implemented and verified** | `AuthController`, `Jwt`, `hpbrain_refresh_tokens`; `SecurityMatrixTest` passed; `ApiAuthorizationTest` passed except one stale test (§26.3) |
+| Legacy password acceptance (plaintext/unsalted compare, upgrade on login) | **Implemented — known weakness** | `AuthController::login`; `docs/PASSWORD-MIGRATION.md` calls it temporary |
+| RBAC (viewer / analyst / manager / admin / tenant_admin; fail-closed) | **Implemented and verified** | `Role`, `Permission`, `RequirePermission`; `ApiAuthorizationTest`, `SecurityMatrixTest` |
+| Tenant isolation (JWT claim + `EnsureTenantScope` + `scoped()`) | **Implemented and verified at the HTTP layer** | `TenantIsolationMatrixTest`, `TenantIsolationTest`, `AiTenantIsolationTest`, `ContextTenantIsolationTest` passed. Below HTTP it is a convention (no Eloquent, no global scope). |
+| S3 Workflow (approval routing) | **Partially implemented** | Decision approval and the case state machine; no generic workflow engine |
+| S3 Notification | **Implemented, verification incomplete** | `hpbrain_notifications`, `NotificationBell`; no SMS/WhatsApp channel integration found |
+| S3 Scheduler | **Implemented, verification incomplete** | Laravel scheduler plus `TaskController` registry (one task returns `not_implemented`) |
+| S3 Document service | **Not found** | `KnowledgeLibraryService` curates knowledge assets only; no versioned file store |
+| S3 Integration gateway | **Not found** as a shared layer | Ingestion and AI-provider HTTP clients are separate ad hoc integrations |
+| S3 Audit | **Implemented, verification incomplete** | Denials, decisions, purges audited; login success/failure not audited; not tamper-evident |
+| S3 Event Bus | **Implemented and verified** | See #28 |
+| Rate limiting | **Partially implemented** | Only the public auth routes; none on authenticated, AI or upload routes |
+| CORS for `/api/*` | **Implemented, verification incomplete** | `config/cors.php` `paths` = `api/*`, `health`; runtime headers not exercised |
+| Security headers, MFA/SSO, HttpOnly tokens | **Documented only** | `docs/SECURITY-HARDENING-CHECKLIST.md` |
+| CI/CD | **Not found** | no `.github`, no pipeline |
+| Backups / PITR | **Blocked / unknown** | not in repo; ZIP pilot item C-87 requires a tested restore |
+
+
+---
+
+## 26. Test & Verification Evidence (2026-09-29)
+
+All commands were run from the repository on branch `harshit`, HEAD `a6a3e13`, on the auditor's Windows machine with PHP 8.2.12. `phpunit.xml` pins `APP_ENV=testing`, `DB_CONNECTION=sqlite`, `DB_DATABASE=:memory:`, array cache/session, sync queue and `AI_PROVIDER=""`, so **no test touched the shared MariaDB and no live AI provider was called**.
+
+### 26.1 Commands and results
+
+| Command (working dir) | Result |
+|---|---|
+| `php artisan test` (repo root) | **1,158 passed, 26 failed, 7,492 assertions, 415.11 s** (exit 2) |
+| `npx tsc -b --noEmit` (`web/`) | **exit 0 — no type errors** |
+| `npx vitest run` (`web/`), first run, concurrent with the PHP suite | 37 files / **317 tests passed**; **7 files failed to start** (`vitest-pool-runner: Timeout waiting for worker`) — resource contention, not assertions |
+| `npx vitest run <those 7 files>`, re-run alone | 5 files passed; 2 files failed: `shell.test.tsx` (4 of 76) and `OrganizationDeleteLifecycle.test.tsx` (1 of 6) — **147 tests: 142 passed, 5 failed** |
+| **Frontend combined** | **All 44 test files ran: 464 tests, 459 passed, 5 failed** (a rerun of the seven files was needed because of the timeouts; the first-run figures of the other 37 files were not repeated) |
+| `php artisan route:list --json` | **492 routes** |
+| Counts by file inspection | 99 controller files, 126 migrations, 58 repositories, 181 `app/Domain` files, 98 Feature + 7 Unit + 2 standalone test files |
+
+**Not run:** `tests/standalone/run.php` and `security.php`; any browser or end-to-end UI test; any load, performance or penetration test; any test against a live AI provider or the production database; `php artisan migrate:status` against the shared database (deliberately avoided).
+
+### 26.2 Comparison with earlier baselines
+
+| Source | Tests passed | Failures |
+|---|---|---|
+| `docs/STATUS.md` (2026-09-04) | 1,009 tests | 25 |
+| §21.5 of this document (earlier 2026-09-29 pass) | 1,151 | 26 |
+| **This audit (2026-09-29)** | **1,158** | **26** |
+
+The failure count is stable at 26. The earlier list of 26 was not preserved, so their identity with today's 26 is not proven.
+
+### 26.3 Every failure, explained
+
+| Test(s) | Count | Cause established from the failure output | Assessment |
+|---|---|---|---|
+| `FiberValleyImportTest` (all) | 22 | `SpreadsheetException: ext-zip is required to read .xlsx files` (`app/Support/Spreadsheet/XlsxReader.php:72`) | **Environment gap** — the local PHP has no `zip` extension. The Fiber Valley XLSX import path is **unverified on this machine**. Fix: enable `extension=zip`. |
+| `OutboxProducerTest` — "every producer site writes exactly one event", "the correlation thread switches from signal to decision" | 2 | HTTP 500: `no such table: hpbrain_eso_definitions` (the test's hand-built SQLite schema lacks the table) | **Test-fixture drift.** Not evidence that production is broken, but the test cannot currently prove "exactly one event per producer". |
+| `ApiAuthorizationTest` — "an admin may address an organization that exists" | 1 | 403 where the test expects non-403 | **Stale test vs. code.** The test asserts an admin cross-tenant exception; `EnsureTenantScope` deliberately has none ("including for admin users"). The code is the safer behaviour. |
+| `OrganizationIntelligenceTest` — "trend endpoints come from the fitted line not the first and last month" | 1 | `assertGreaterThan`: 0.785 not greater than 0.95 (`OrganizationIntelligenceTest.php:490`) | **Unexplained** disagreement between code and expectation in trend fitting; needs an owner. |
+| `web/tests/shell.test.tsx` role matrix | 4 | Expected view counts (admin 37, tenant_admin 28, manager 16, analyst 19) vs actual (45, 36, 18, 18) | **Stale test** — navigation grew; the test title still says "unchanged by the redesign". |
+| `web/tests/OrganizationDeleteLifecycle.test.tsx` — "returns the browser to the login screen" | 1 | Failed after 5.6 s in a run alongside heavy load; cause not isolated | **Undetermined** — may be a timeout; re-run on an idle machine before judging. |
+
+Net: of 26 backend failures, **22 are an environment gap, 2 are fixture drift, 1 is a stale test, 1 is unexplained**. None occurred in the decision-approval, tenant-isolation-matrix, golden-flow, learning-consumer or memory-grounding tests, all of which passed. Confidence in the core loop is therefore higher than a bare "26 failed" suggests — but the two `OutboxProducerTest` failures and the trend assertion are real gaps to close.
+
+### 26.4 Live / runtime verification
+
+**None was performed in the v2.0 pass.** The V1 Academy live-tenant checks in §21.5 (login, tenant isolation, own-tenant reads, `brain:detect`) belong to the earlier pass and are historical evidence. **No browser or visual verification has ever been recorded for this project** (§21.8); none was done here.
+
+---
+
+## 27. Corrections and Newly Found Discrepancies
+
+### 27.1 Corrections applied to earlier text (marked `[v2.0 corrected]` in place)
+
+| Earlier claim | Finding | Evidence |
+|---|---|---|
+| Graph Explorer "runs on MySQL recursive CTEs behind a `GraphQueryPort`" (§3.3, §6, §9) | **No `WITH RECURSIVE` and no `GraphQueryPort` interface exist.** The graph is a read-time projection; multi-hop traversal is Not found. | grep over `app/ config/ routes/ database/migrations`: `WITH RECURSIVE` → 0 files; `GraphQueryPort` → 1 file (a comment in `GraphController.php`) |
+| 94 controllers, 488 routes, 103 backend test files, ~50 frontend test files | 99 controller files, 492 routes, 98 Feature + 7 Unit backend tests, 44 frontend test files | direct counts, §26.1 |
+| "Build & test execution: not executed" | Executed; see §26 | — |
+
+### 27.2 Discrepancies found by this audit
+
+1. **`dev-bypass` comment is stale; the code is clean.** `phpunit.xml`'s comment says `AuthenticateJwt` honours a `Bearer dev-bypass` token under local/development. `AuthenticateJwt.php` documents "No dev-bypass tokens" and has no such branch (grep finds only comments in `AuthenticateJwt.php`, `AuthController.php:58`, `Controller.php:25`). The comments should be corrected.
+2. **Admin cross-tenant exception: documented and tested, absent from code.** `docs/TENANT_SECURITY.md`, `backend_capability_inventory.md` and `ApiAuthorizationTest` assume it; `EnsureTenantScope` forbids it for every role. Decide which is intended (the code is the safer reading) and align the other three.
+3. **Two approval paths.** `decisions/{id}/approve` is fully gated (permission, separation of duties, event, audit). `ai-intelligence/recommendations/{id}/approve|reject|defer` only updates a status: no decision row, no event, no gate on ESO execution. The whole `ai-intelligence` prefix needs `settings.manage`, so exposure is admin-only, but the two paths can disagree on what "approved" means.
+4. **`events:process` hazard.** The second consumer (`EventConsumer`) is not scheduled and marks every unrecognised event type completed, including `OutcomeRecorded`; running it by hand can silently skip learning. Its class docblock claims `SELECT … FOR UPDATE SKIP LOCKED`, but the code contains no locking clause (only that comment matches), so the docblock is inaccurate.
+5. **Learning-reusability inconsistency.** The consumer marks a learning reusable on `result=success` with no confidence floor; `LearningService::isReusable` (used by the HTTP path) requires confidence ≥ 0.50.
+6. **Unscheduled steps in the loop.** `brain:open-cases`, `brain:reason-signals`, `brain:propose-hypotheses`, `brain:compute-eso-efficacy` and `brain:dedupe-signals` are not in `routes/console.php`. Signals are detected hourly, but cases, reasoning and hypotheses appear only when a person runs the command.
+7. **Dead or unreachable backend code:** `SignalReasoner` (dead), `AiGateway::completeWithRag` / `completeWithFallback` (stubs), `TemplateInheritanceEngine` and `ConfigurationEngine` (referenced only by tests), `SafetyService` and `AiQuotaEnforcer` (not on the verb path), a second prompt registry (`PromptRegistry`, dormant).
+8. **Frontend:** `web/src/components/ai/AiWorkspace.tsx` confirmed dead (zero importers); also dead: `workspace/AIWorkspace.tsx`, `ConversationWorkspace`, `ai-admin/*`, `dashboard/*`, `templates/*`, `navigation/DynamicNavigation`, `import/ImportCenter`, `person/PersonTwin`, and 14 unused API modules. `MemoryScreen` issues a raw `fetch('/api/v1/events…')` that bypasses `API_BASE` and the refresh client (probable bug). `web/Dockerfile` expects a repository-root `package.json` that does not exist. No tests exist for SignalDashboard, EvidenceWorkspace, IngestionWorkspace, Memory, Policy, Settings, PlatformServices, the AI Assistant screen, the AI console, or the client's token-refresh logic.
+9. **Tooling and doc drift:** docs state PHP 8.3; the audit machine runs 8.2.12 without `ext-zip`. `README.md` says "38 migrations" (actual 126) and links three non-existent files; `START-HERE.md`, `PORT_STATUS.md` and `MIGRATION_CHECKLIST.md` (all 2026-07-28) describe a pre-`composer install` state and are stale. `docs/STATUS.md` (2026-09-04) is stale.
+10. **Operational:** `storage/logs/laravel.log` was about 1.07 GB with `LOG_LEVEL=debug` and no rotation; `setup.ps1` runs `migrate`/`seed` against whatever `.env` points to (the shared remote database) — a hazard; stray root files (`diagnose_students*.php`, `bash.exe.stackdump`, `*.log`, `routes-audit.txt`) and `.ingestion-bundle/` (already merged into `app/`) remain.
+11. **Test hygiene side-effect:** the backend suite writes upload artifacts into the *tracked* directory `storage/app/ingestion/4/`. This audit's run left 3 new untracked files there; they were not removed (§30.4).
+12. **CORS (resolved):** one exploration agent suggested `api/*` might be missing from CORS paths; direct inspection shows `config/cors.php` lists `api/*`. No gap.
+
+### 27.3 Weaknesses carried forward (re-confirmed by code reading)
+
+A Viewer can reach paid-AI routes gated only on `read` (`ai/workspace/sessions/*/messages`, `ai/evidence/summarize`; reasoning-engine explain/assess do not call a provider); the `member` role (any unmatched ERP profile title) is denied everywhere; roles are inferred by substring match on ERP profile titles ("Headmaster" → `manager`); access tokens are not revocable (only refresh tokens); email login searches all tenants and takes the first match; tokens live in `sessionStorage`; no rate limiting on authenticated routes; legacy plaintext password comparison is still accepted; `Jwt::secret()` permits an empty secret outside production.
+
+---
+
+## 28. Lifecycle, Principles and Pilot-Checklist Scorecard
+
+### 28.1 The intelligence lifecycle — designed vs. demonstrably implemented
+
+```mermaid
+flowchart LR
+    A["ERP / CSV / XLSX<br/>operational data"] -->|"IngestionService"| B[("hpbrain_operational_records")]
+    B -->|"brain:detect hourly<br/>row rules + 12 code rules"| C["Signal"]
+    C -->|"POST /evidence<br/>provenance required"| D["Evidence"]
+    D -->|"brain:open-cases<br/>MANUAL"| E["Case / Hypothesis"]
+    E -->|"Explain, Assess, Evaluate, Recommend<br/>UNDETERMINED if thin"| F["Recommendation"]
+    F -->|"POST /decisions"| G{"Decision<br/>human approval<br/>no self-approval"}
+    G -->|"measurement plan required"| H["ESO execution<br/>human executor only"]
+    H -->|"POST /outcomes"| I["Outcome"]
+    I -->|"OutcomeRecorded event<br/>brain:process-events every minute"| J["Learning"]
+    J -->|"MemoryUpdated marker"| K["Organizational memory<br/>read view over learnings"]
+    K -.->|"MemoryGrounding.retrieveFor<br/>prompt grounding only"| E
+```
+
+The path is verified end-to-end by `GoldenIntelligenceFlowTest` (3 tests) and `ExecutionOutcomeLearningFlowTest` (2 tests), both in the passing set. Manual (unscheduled) steps: case opening, reasoning, hypothesis proposal. `MemoryUpdated` has no handler (marker only). The diagram was written to match the code paths above; Mermaid syntax was not rendered by a Mermaid engine in this audit.
+
+### 28.2 ZIP "eight invariants" (Invariants.md) against the code
+
+| # | Invariant | Status | Evidence |
+|---|---|---|---|
+| 1 | Every recommendation has evidence | **Implemented and verified** | `hpbrain_recommendation_evidence`; `RecommendationValidationTest`; `GroundedClaims` drops uncited claims |
+| 2 | Every decision exposes its reasoning | **Implemented, verification incomplete** | `hpbrain_reasoning_steps`, `Deliberated` event; the ungated second approval path (§27.2 #3) weakens the guarantee |
+| 3 | Every action is executable (bound to an ESO) | **Implemented and verified** | `EsoBindingRule` (422 on HTTP) |
+| 4 | Every execution has a measurable outcome; plan first | **Implemented and verified** | measurement-plan gate; `MeasurementPlanTest` |
+| 5 | Every outcome updates memory | **Implemented and verified** (given the scheduler runs) | `LoopConsumerTest`, golden flow |
+| 6 | Every capability has a measurable state | **Implemented and verified** | `CapabilityState` (incl. `Observed`) |
+| 7 | Every AI recommendation is traceable | **Partially implemented** | one `hpbrain_ai_executions` row per gateway call (model, cost, status, including failures); console chats audit to `hpbrain_ai_audit_logs` without evidence citation |
+| 8 | The loop must always close | **Implemented, verification incomplete** | proven in tests; in production depends on cron and the manual steps above |
+
+### 28.3 Learning is recall, not adaptation
+
+`MemoryGrounding` puts reusable learnings into verb prompts and records reuse; it does **not** change signal rules, thresholds or the deterministic `IntelligenceEngine`. The ZIP's "improved priors" is met only in the weak sense of prompt grounding. Avoid claiming a "learning system" beyond memory recall in V1 material.
+
+### 28.4 ZIP pilot-acceptance checklist (23 items) — honest scorecard
+
+| Block | Item | Status here |
+|---|---|---|
+| A Functional | 71 login + tenant scope | Implemented and verified (`SecurityMatrixTest`; `ApiAuthorizationTest` minus one stale test) |
+| | 72 "Company Brain graph loads" | Partially implemented (relational projection, not Neo4j) |
+| | 73 capability profile shows state + provenance; UNKNOWN honest | Implemented, verification incomplete (backend tested; no UI verification) |
+| | 74 evidence needs provenance; state advances only on evidence | Implemented and verified |
+| | 75 AI reasoning explainable (evidence refs or UNDETERMINED with gaps) | Implemented and verified (fake provider) |
+| | 76 human approval governed and audited | Implemented and verified |
+| | 77 ESO triggers; executor bound (human) | Implemented and verified |
+| | 78 outcome → Learning idempotently; later signal grounds on it | Implemented and verified |
+| | 79 audit trail reconstructs a case from the event log | Implemented, verification incomplete (`signalChain` endpoint exists; no reconstruction test seen) |
+| B Honesty | 80 ≥1 real UNDETERMINED treated as correct | Implemented and verified (golden-flow checkpoints) |
+| | 81 no write without provenance | Implemented and verified for evidence; not established for every write |
+| | 82 no state regression/inflation | Implemented and verified (`CapabilityStateTest`) |
+| | 83 unauthorized attempts denied and audited | Implemented and verified (`RequirePermission`) |
+| | 84 EXECUTE confirmed dark | Implemented and verified (`VerbPipeline` throws) |
+| C Non-functional | 85 no cross-tenant read/write | Implemented and verified at the HTTP layer; repository convention below it |
+| | 86 SLOs green, sustained | **Not found** (no SLO definitions or measurements) |
+| | 87 PITR of stores tested | **Blocked / unknown** |
+| | 88 golden case passes on staging and pilot | **Blocked / unknown** (passes in test only) |
+| | 89 flag rollback rehearsed | **Not found** (flags stored; backend enforcement not found) |
+| | 90 twelve CI standards | **Not found** (no CI) |
+| D Readiness | 91 pilot tenant + real adapter emitting signals | Partially implemented (V1 Academy synthetic; Fiber Valley real data, XLSX path unverified here) |
+| | 92 on-call/support defined | **Not found** |
+| | 93 sign-off by Founder / CPO / Eng Director / Sponsor | **Blocked / unknown** |
+
+Tally: **12 met and test-verified** (item 85 at the HTTP layer only), **4 partial or verification-incomplete** (72, 73, 79, 91), **7 not met or unknown** (86–90, 92, 93). Pilot sign-off ("every must-pass item green") is **not** achievable today.
+
+---
+
+## 29. Final Verdict, Acceptance Criteria and Prioritized Next Steps
+
+### 29.1 Verdict
+
+> **Follow-up (2026-09-29):** the findings behind this verdict were investigated and largely fixed — see [§31](#31-pilot-readiness-implementation-report-follow-up-2026-09-29). The verdict below is the *original* audit's and is kept as written; §31.10 gives the updated one.
+
+**READY WITH KNOWN LIMITATIONS — for an engineer-operated, controlled pilot; NOT READY for unattended production.**
+
+Why: the differentiating core (signal → evidence → case → recommendation → human-approved decision → measured execution → outcome → learning → memory recall) is implemented and passes its end-to-end tests (`GoldenIntelligenceFlowTest`, `ExecutionOutcomeLearningFlowTest`, `DecisionApprovalTest`, `LoopConsumerTest`, the tenant-isolation suites) in this audit's run, and the system is honest about what it does not know. But: (a) 26 backend and 5 frontend tests fail — mostly environmental or stale, but two producer-event tests and one trend assertion are real gaps; (b) no CI exists to keep the suites green; (c) the host scheduler entry that drives detection and learning is unverifiable from the repo; (d) several loop steps are manual; (e) there has never been a recorded browser verification; (f) non-functional pilot criteria (SLOs, restore, rollback, on-call, sign-off) are unmet; (g) the shared-database and legacy-password risks stand. Three of the four reference documents describe a different (sibling) platform, so they add little acceptance evidence for this repository.
+
+### 29.2 Version 1 definition (final)
+
+V1 = the governed reasoning loop above, on the existing ERP-reader foundation, for the school and telecom shapes with real data, secured by JWT / RBAC / tenant isolation, **explicitly excluding**: Neo4j graph, SIMULATE, autonomous EXECUTE, RAG retrieval, AI evaluation, a Document store, an Integration gateway, and an industry-neutral UI. (Unchanged from §4, now cross-checked against the four sources.)
+
+### 29.3 Version 1 acceptance criteria (measurable)
+
+| # | Criterion | Current |
+|---|---|---|
+| AC1 | Backend suite green with `ext-zip` enabled, 0 failures | 26 failing (22 environmental) |
+| AC2 | `OutboxProducerTest` schema builder includes `hpbrain_eso_definitions`; both tests green | failing |
+| AC3 | `ApiAuthorizationTest` and tenant docs aligned with the no-admin-bypass decision | stale |
+| AC4 | `shell.test.tsx` role-matrix counts updated; `vitest run` green for all 44 files in one run | 5 failing |
+| AC5 | CI workflow runs backend + `tsc` + vitest on every PR | none |
+| AC6 | Host scheduler running `schedule:run` confirmed; one real event observed `pending → processed` in the target environment | unknown |
+| AC7 | Decide on cases/reasoning automation: schedule `brain:open-cases` / `reason-signals`, or document them as operator steps | unscheduled |
+| AC8 | Viewer cannot trigger paid-AI routes | open |
+| AC9 | One browser walk-through of the V1 Core screens against V1 Academy, results recorded | never done |
+| AC10 | `docs/STATUS.md` regenerated via `php artisan brain:status`; stale root docs corrected or archived | stale |
+
+### 29.4 Unresolved decisions and dependencies
+
+1. Canonical meaning and schema of **ESO** (four definitions in the ZIP; four nine-field schemas; `eso.yaml` cannot be frozen).
+2. Which of the **two "eight invariants"** lists is authoritative.
+3. Neo4j: adopt (ZIP ADR-003, S2) or keep deferred (repo ADR-008, with its stated trigger).
+4. Tenant-context contract: JWT claim (implemented) vs `X-Tenant-Id` header (ZIP contracts).
+5. Admin cross-tenant access: none (code) vs exception (docs and test).
+6. Approval semantics: unify `ai-intelligence/recommendations` approval with the decision gate.
+7. Whether the ZIP's OpenAPI contracts (`eb-contracts`) should be reconciled with the implemented routes — **not compared route-by-route in this audit (Not verified)**.
+8. Dependencies: host cron / Task Scheduler; an AI provider key (or an intentional no-AI deployment); `ext-zip`; production `.env` hygiene.
+
+### 29.5 Prioritized next steps
+
+**P0 (before any pilot beyond engineers):** AC1–AC4, AC6, AC8, AC9; correct the stale `dev-bypass` comments; rotate or limit `laravel.log`; stop `setup.ps1` from migrating the shared database by default.
+**P1:** AC5 (CI), AC7, AC10; unify the approval paths; resolve the trend assertion; make `events:process` refuse or ignore loop event types; enforce AI policies at call time or label them "stored, not enforced"; add tests for the ten untested code rules and for the SignalDashboard, Evidence, Ingestion and AI Assistant screens; wire or delete dead code (§27.2 #7–8).
+**P2:** rate limits on authenticated routes; security headers; HttpOnly tokens; retire legacy password acceptance; settle the ESO and invariants canon; only then consider Neo4j, SIMULATE, RAG.
+
+---
+
+## 30. Audit Methodology, Evidence Index, Structure Crosswalk and Change Summary
+
+### 30.1 Methodology
+
+1. **Safety:** Git status checked first (clean, branch `harshit`); no reset, clean or stash; no commit or push; the separate `web/` repository not modified; the ZIP extracted **as data** into an isolated scratch directory and never executed; source `.docx` and `.zip` untouched.
+2. **Sources:** three `.docx` read as text (paragraph extraction from `word/document.xml`); the ZIP listed in full and read by importance; four read-only exploration agents produced code reports (backend/tenancy, intelligence lifecycle, frontend/tests/docs, ZIP inventory). **Agent findings were treated as leads.** Claims used here were re-checked by direct grep/read where they contradicted earlier text or each other (CORS, `dev-bypass`, `GraphQueryPort`, `WITH RECURSIVE`, `max_verb`, `DecisionGate`, migration and test counts).
+3. **Tests:** run as recorded in §26.
+4. Where agent-reported counts disagreed with direct counts (one agent reported 132 migrations and 107 feature tests; direct counts are 126 and 98), the direct counts are used.
+5. **Limits:** no browser, no live provider, no production database, no route-by-route comparison with the ZIP's OpenAPI contracts, PDF and HTML prototypes read for structure only.
+
+### 30.2 Crosswalk — requested final structure → this document
+
+| Requested section | Where |
+|---|---|
+| 1 Purpose, scope, V1 definition | header, §4, §29.2 |
+| 2 Executive summary | §1, §29.1 |
+| 3 Vision and principles | §2, §24.1 |
+| 4–6 Architecture, diagram, modules | §6, §9 (diagram, corrected), §23–§25 |
+| 7 Lifecycle | §8, §28.1 |
+| 8 Organization / tenant / entity model | §5, §8.3, §25.1 #1, §25.3 |
+| 9 Ingestion | §8.2, §25.1 #2 |
+| 10 Knowledge graph | §3.3, §9, §25.2 #26–27 |
+| 11 Context, grounding, memory | §8.4, §25.1 #15–16 and #20, §28.3 |
+| 12 Signals, evidence, findings, cases | §22.6–22.7, §25.1 #3–9 |
+| 13 Recommendations → outcomes | §8.1, §25.1 #10–14 |
+| 14 Learning loop | §28.1–28.3 |
+| 15 API / integration | §11, §13 |
+| 16 Database | §10 |
+| 17 Frontend | §7, §27.2 #8 |
+| 18 Security / tenancy | §12, §25.3, §27.3 |
+| 19 Testing and verification | §26 (and §16, §21.5 historical) |
+| 20 Implemented vs incomplete | §25 |
+| 21 Limitations, risks, debt | §17, §27 |
+| 22 Unresolved decisions | §29.4 |
+| 23 Acceptance criteria | §16, §29.3 |
+| 24 Next steps | §15, §29.5 |
+| 25 Reference reconciliation | §23–§24 |
+| 26 Methodology and evidence | §30 |
+| 27 Version, date, change summary | §30.3 |
+
+### 30.3 Document version and change summary
+
+- **Version:** 2.0 (Final Version 1 Audit). **Audit date:** 2026-09-29. **Prior versions:** v1.0–v1.3 (2026-09-28/29).
+- **Preserved:** all of §1–§22, including the V1 Academy and School Intelligence appendices.
+- **Corrected in place** (`[v2.0 corrected]`): graph implementation claim (§3.3, §6 tree, §9 table); code and test counts (§1); build-and-test status (§14, §16).
+- **Added:** header status vocabulary and v2.0 reader's note; §23–§30; table-of-contents entries.
+- **Not changed:** no application code, schema, configuration, seed data or database rows were modified in this pass.
+
+### 30.4 Repository state after the audit
+
+The audit modified `docs/V1_PRODUCT_BLUEPRINT.md` only, plus a new `.docx` outside the repository. Running the backend suite created three untracked files in `storage/app/ingestion/4/` (test upload artifacts); removing them was blocked by the session's safety policy, so they remain for the owner to delete or ignore. No commit or push was made.
+
+### 30.5 Evidence index (key items)
+
+`routes/api.php`, `routes/console.php`, `bootstrap/app.php`, `config/cors.php`, `app/Http/Middleware/{AuthenticateJwt,EnsureTenantScope,RequirePermission}.php`, `app/Support/Jwt.php`, `app/Domain/Authorization/{Role,Permission}.php`, `app/Domain/Universal/EntityResolver.php`, `app/Domain/Verbs/*`, `app/Domain/Events/*`, `app/Domain/Signals/*`, `app/Domain/Intelligence/IntelligenceEngine.php`, `app/Domain/Graph/*`, `app/Domain/Capability/CapabilityState.php`, `app/Console/Commands/{ProcessLoopEvents,DetectSignals,OpenCasesForSignals}.php`, `tests/Feature/{GoldenIntelligenceFlowTest,ExecutionOutcomeLearningFlowTest,DecisionApprovalTest,LoopConsumerTest,OutboxProducerTest,TenantIsolationMatrixTest,ApiAuthorizationTest,FiberValleyImportTest}.php`, `web/tests/shell.test.tsx`, `phpunit.xml`, `adr/ADR-008-defer-neo4j.md`; reference set: the four `V1` sources named in §23.1.
+
+*The v2.0 sections (§23–§30) were produced on 2026-09-29 by direct inspection and a local test run. Where something could not be established it is labelled Blocked / unknown or Not verified rather than asserted.*
+
+
+---
+
+## 31. Pilot-Readiness Implementation Report (follow-up, 2026-09-29)
+
+**This section records work done *after* the v2.0 audit (§23–§30), which is preserved unchanged above.** The audit found gaps; this pass investigated each, fixed what could be fixed inside this repository, and re-verified. §26 remains the record of the *original* test run; the numbers below are the *follow-up* run. Nothing here was committed or pushed.
+
+### 31.1 What was investigated, what was found, what changed
+
+| # | Finding from the audit | Root cause established | Change | Regression tests |
+|---|---|---|---|---|
+| 1 | "A second, ungated approval path in the `ai-intelligence` console" | **Confirmed.** `POST /ai-intelligence/recommendations/{id}/approve` set a recommendation to `accepted` on its own: no decision row, no `DecisionReached` event, no approver distinct from the proposer. It also silently removed the recommendation from the pending queue the decision workflow reads. It could not start an execution (that needs an approved *decision*), so this was a governance-integrity hole, not an execution bypass. | `RecommendationRepository::decide()` now requires an **approved canonical decision** for the recommendation before `approve` (409 `decision_required`), and refuses `reject`/`defer` once one is approved (409 `decision_already_approved`). The three routes also carry `permission:decision.approve` explicitly. Refusals happen before any write (no partial mutation). | `RecommendationApprovalGateTest` (11 cases: no decision, proposed-only, proposer self-approval cannot be laundered, valid approval after a *different* approver, reject/defer conflicts, viewer/analyst/manager refused, cross-tenant 404, no partial mutation) — **5 of them fail against the original code**. `AiIntelligenceConsoleTest` updated to the governed contract. |
+| 2 | "Viewer-triggered paid AI" | **Two real routes, one passive.** (a) `POST /ai/evidence/summarize` called the provider with bare `read`. (b) `GET /organization-intelligence/{t}/{state,decisions,recommendations}` called `ExecutiveIntelligenceInterpreter` — a **paid call on a page read by any role**, and `?fresh=1` bypassed the cache so it could repeat on every request. `explain`/`assess` were checked and make **no** provider call. Also `ai/workspace/*/messages` (send/regenerate/explain) let a Viewer write with bare `read`. | Reads are now **cache-only**: they serve a cached interpretation or say `interpretation_not_generated`, for every role, and ignore `fresh` for the paid part. New explicit `POST /organization-intelligence/{t}/interpretation` behind `permission:create`, cached per data version and **single-flight** (lock) so a retry or double-click does not buy a second answer. `ai/evidence/summarize` needs `create` and is idempotent for identical evidence. Workspace writes need `create`. Provider error text is no longer echoed to the client. The UI gets an explicit "Generate AI interpretation" button (hidden from roles that cannot spend); the Evidence "Summarise" button is disabled for them. | `PaidAiAuthorizationTest` (13 cases, provider faked, asserting on whether **any HTTP request left the application**; **10 fail against the original code**). `ExecutiveInterpretationPanel.test.tsx` (11). |
+| 3 | 22 `FiberValleyImportTest` failures | **Environment only, and proven.** `ext-zip` is commented out in `C:\xampp\php\php.ini` (`;extension=zip`), though `php_zip.dll` is present. With `php -d extension=zip vendor/phpunit/phpunit/phpunit`, all 24 pass. (`artisan test` drops `-d` flags in its child process, so the flag only works when calling PHPUnit directly.) `composer.json` does not declare the extension. | **No code or `php.ini` change.** Enabling the extension is a machine-level change and was not made; exact steps are in `docs/OPERATIONS-RUNBOOK.md` §4. CI installs it explicitly. | — |
+| 4 | 2 `OutboxProducerTest` failures | **Fixture drift, not a code bug.** `EsoExecutionController` correctly rejects a nonexistent ESO definition (422 `eso_not_found`) and runs `EsoPreflight`; the test posted a random UUID and its hand-built schema lacked `hpbrain_eso_definitions`. `GoldenIntelligenceFlowTest` had already been fixed this way. | Test now creates the table (same DDL as the shared helper) and inserts a real in-service definition. No assertion changed. | `OutboxProducerTest` 13/13. |
+| 5 | 1 stale test (`ApiAuthorizationTest`) | The test asserted an **admin cross-tenant exception** that `EnsureTenantScope` deliberately removed ("including for admin users"); a sibling test in the same file asserts the opposite. | Test now pins the secure policy (admin and tenant_admin get 403 `tenant_mismatch` even for an organization that exists). `docs/TENANT_SECURITY.md` corrected. **No authorization was loosened.** | `ApiAuthorizationTest` 41/41. |
+| 6 | 1 unexplained trend assertion | **Date-dependent test data, not a calculation bug.** The fixture subtracted N months from today; on the 29th–31st PHP overflows `29 Feb` into March, so one month vanished and another doubled and the "perfect ramp" was not linear (R² 0.785). It fails only on those days of the month. Production trend code is correct. | Fixture anchored on the first of the month (`first day of -N months`). | `OrganizationIntelligenceTest` 27/27. |
+| 7 | 4 stale role-matrix counts (`shell.test.tsx`) | The counts predate added screens (Platform Services, AI console, notifications, workflow). Nav lists are **advisory** — `navigate()` applies no role guard and the API enforces permissions — so this is menu content, not access. | Replaced brittle literals with **policy assertions** (no non-admin sees a `settings.manage` view; viewer/member see no write/approval/execution/admin view; only manager and above see Executions; member is exactly home/command-centre/settings) plus explicit pins of the current sizes (36/18/18/12/3; admin derived). **No permission was changed.** | `shell.test.tsx` (role-matrix block rewritten). |
+| 8 | 1 "unisolated" frontend test | **Not a shared-state leak.** State is reset in `beforeEach`/`afterEach`. Each case drives the whole `<App/>` through lazy chunks and waits on `findBy` queries that allow 5 s under a 5 s test timeout; alone it takes ~1.6 s, under load 5.6 s. | Explicit 30 s budget on the suite; no assertion loosened. | `OrganizationDeleteLifecycle.test.tsx` 6/6. |
+| 9 | No CI | Confirmed absent. | `.github/workflows/backend.yml` (PHP 8.2, `zip` installed, `composer install` from the lock, PHP syntax check, full PHPUnit against in-memory SQLite, no secrets, `AI_PROVIDER` empty) and `web/.github/workflows/frontend.yml` (Node 22, `npm ci`, `tsc -b --noEmit`, `npm test`). ESLint is deliberately not a gate (1 error, 26 warnings). | See §31.5. |
+| 10 | Case opening, reasoning, hypotheses manual | Investigated each command (idempotency, tenant scope, cost). `brain:open-cases` and `brain:propose-hypotheses` are DB-only, idempotent, tenant-scoped, bounded and free of model calls; `brain:propose-hypotheses` had **no test**. `brain:reason-signals` **spends on every run**. | `brain:open-cases` (`:15`) and `brain:propose-hypotheses` (`:20`) added to `routes/console.php`. `brain:reason-signals`, `brain:compute-eso-efficacy`, `brain:dedupe-signals` and `events:process` deliberately left unscheduled, and pinned so by a test. Runbook written. | `ProposeHypothesesTest` (7: idempotent, dry-run, declines without evidence, resolved signals, tenant scope, `--limit`, no provider call), `SchedulerDefinitionTest` (4: scheduled set, never-scheduled set, single-flight, ordering). |
+| 11 | *New, found by the browser walkthrough:* home screen 500 for an organization with no imported records | **Real defect.** `OperationalIntelligence::empty()` returned a `totals`/`trend` shape missing keys the overview controller reads unconditionally (`largestDataset`, then `trend.momentum`), so the Command Center's first request 500'd for every tenant before its first import. | `empty()` now mirrors the populated shape key-for-key. | `OperationsOverviewEmptyTenantTest` (fails against the original). |
+| 12 | *New:* Evidence "Summarise" could never work | The UI posted `{content, entityId}` and read a `{summary}` shape; the API requires `signalId` and answers with a `VerbResult`. | UI now sends `signalId` and reads `DECIDED`/`UNDETERMINED`. | Type-checked; not browser-tested (needs a provider). |
+| 13 | *New:* non-admin home loads always 403 on `GET /ingestion/sources/{t}` | The Command Center asked for `settings.manage` data as every role. | Only asks when the role holds it. | `CommandCenter.test.tsx` (+4). |
+
+### 31.2 Test results (actual)
+
+| Suite | Command | Baseline (before changes) | Final |
+|---|---|---|---|
+| Backend, `zip` loaded | `php -d extension=zip vendor/phpunit/phpunit/phpunit` | not run before changes (see next row) | **1,220 tests, 7,844 assertions, 0 failures** (2 m 44 s) |
+| Backend, default PHP | `php vendor/phpunit/phpunit/phpunit` | **26 failed, 1,158 passed, 7,492 assertions** (`artisan test`, 4 m 29 s — reproduced the audit exactly) | **22 errors, all `FiberValleyImportTest` (missing `ext-zip`)**; 1,220 tests, 7,776 assertions |
+| Frontend type check | `npx tsc -b --noEmit` | clean | **clean (exit 0)** |
+| Frontend tests | `npx vitest run` | 459 / 464 in the audit (5 failing); reproduced 4 in `shell.test.tsx`; the fifth passed alone (6/6) | **45 files, 490 tests, all passing** (21 s, machine otherwise idle) |
+
+Every run used a throwaway `LARAVEL_STORAGE_PATH`, so no run wrote into the repository's `storage/`. Tests added: **36 backend** (1,184 → 1,220 tests: 11 + 13 + 7 + 4 + 1) and **26 frontend** (464 → 490, net, including the rewritten role-matrix cases). **Each security regression test was also run against the original code and shown to fail** (5 of 11, 10 of 13, and the empty-tenant test), so they do detect the defects they claim to. No test was skipped, weakened or deleted; 3 were rewritten because they asserted retired behaviour (§31.1 rows 4, 5, 7).
+
+**Code failures vs. environment:** the only remaining failures in the default configuration are environmental (22, one missing PHP extension). There are no code failures.
+
+### 31.3 Security verification
+
+* **Approval paths:** `RecommendationApprovalGateTest` drives real routes as analyst, manager, tenant_admin, viewer and a second tenant. The proposer cannot approve (409) and cannot use the console to launder it; another person's approval is required; a refused request changes nothing.
+* **Viewer paid AI:** proven at the network boundary (`Http::assertNothingSent()` across all roles for every read, `fresh=1`, viewer POSTs) and by direct API calls in a real browser session (§31.7). Explicit generation is single-flight and cached; retries do not multiply spend.
+* **Tenant isolation:** cross-tenant reads/writes return 403 `tenant_mismatch` (route) or 404 (resource), verified for the interpretation, the summarise route, and the console approval; a second tenant's approved decision cannot satisfy this tenant's console approval. No isolation rule was relaxed.
+* **Provider errors** are no longer echoed to clients.
+* **Not verified:** the interpretation and summary paths were exercised with a **faked** provider only; no real provider call was made anywhere in this work. Rate limiting on authenticated routes, security headers, HttpOnly tokens, and the legacy-password bridge are unchanged (§27.3).
+
+### 31.4 Scheduler status
+
+* **Configured in the repository:** `brain:process-events --once` (every minute), `brain:detect` (`:10`), `brain:open-cases` (`:15`), `brain:propose-hypotheses` (`:20`), `intelligence:warm` (`:25`), `operations:warm` (`:40`), `brain:snapshot` (`02:00`); `php artisan schedule:list` confirms these seven. Test-pinned.
+* **Verified:** each step run by hand in the isolated environment, and the consumer closed the loop (`OutcomeRecorded → LearningWritten → MemoryUpdated`, three passes).
+* **Not verifiable from here:** that any host runs `schedule:run`. A read-only check of this machine found **no scheduled task** referencing it. Production is unknown — see `docs/OPERATIONS-RUNBOOK.md` §2 for the exact commands. The paid step (`brain:reason-signals`) is, by design, **not** automated; an operator must run it.
+
+### 31.5 CI status
+
+Two workflows were added (files above) and validated locally: both parse as YAML; the backend job's PHP-syntax step was executed locally (689 files parse); the test commands each job runs were executed locally with the results above. **No remote workflow run has happened** — nothing was pushed, so the CI status is **pending, not passing**. Caveats a first run may expose: the suite was only ever run on Windows/PHP 8.2.12 (case-sensitive paths and line endings on Linux are untested), and the frontend lives in a separate repository, so its workflow only takes effect once committed there.
+
+### 31.6 Environment blockers and manual steps
+
+| Blocker | Why it is outside this pass | Exact next step |
+|---|---|---|
+| `ext-zip` disabled in `C:\xampp\php\php.ini` | Machine-level PHP change | Change `;extension=zip` to `extension=zip`, restart the shell; or run `php -d extension=zip vendor/phpunit/phpunit/phpunit` |
+| Host scheduler entry unknown | Production/OS access | Runbook §2 |
+| Remote CI never run | Requires a commit/push | Commit, push, open a PR, watch both workflows |
+| Real provider behaviour | Would spend money | With a provider key in a **non-production** environment, click "Generate AI interpretation" once as an analyst and confirm one `hpbrain_ai_executions` row |
+| 3 test artifacts in `storage/app/ingestion/4/` | Deletion was not authorised | Left untouched; listed in runbook §6 |
+| A few stray cache files in `storage/framework/cache/data/` | Early walkthrough runs used the repository's storage until the router fix (§31.7); the directory is git-ignored | Harmless (keyed on data fingerprints); clear with `php artisan cache:clear` when convenient |
+
+### 31.7 Browser walkthrough (actual)
+
+Run 2026-09-29 with Chrome (via `playwright-core`) against an **isolated environment**: a throwaway SQLite database seeded with disposable users and one signal → evidence → case → recommendation chain, an API served from a local PHP server with the database host deliberately pointed at a closed port, `AI_PROVIDER` empty (no paid call possible), and the SPA served by Vite. No shared data, credentials or provider was touched. Method and traps: `docs/OPERATIONS-RUNBOOK.md` §5.
+
+| # | Step | Result |
+|---|---|---|
+| 1 | Sign in as analyst | Passed — organization page rendered with the seeded counts |
+| 2 | Signals / Evidence screens | Passed — 1 signal, 1 evidence record shown |
+| 3 | Open the case in Deliberation | Passed — evidence, recommendation, and "Send to governance" shown |
+| 4 | Analyst proposes a decision | Passed — decision created `proposed` |
+| 5 | Analyst clicks **Approve** | **Refused by the server:** `403 forbidden, required decision.approve`; audited as `decision.approve.denied`. *The button is still shown to the analyst* — a UX gap, not a security one |
+| 6 | Manager (a different person) approves | Passed — `approved`, `approved_by` ≠ proposer, `decision.approve` audited, `DecisionReached` emitted |
+| 7 | Start an execution with **no measurement plan** (direct API, manager token) | **Refused: `422 measurement_plan_required`** |
+| 8 | Same, through the UI with an empty plan | No request sent (client-side validation) |
+| 9 | Manager submits a valid plan → execution | Passed — plan 201 then execution 201; execution `running` |
+| 10 | Complete the execution; record an outcome citing evidence | Passed — `PATCH 200`, `POST /outcomes 201` |
+| 11 | Consumer passes (scheduler stand-in) | Passed — `OutcomeRecorded → LearningWritten → MemoryUpdated`, 1 learning; analyst's **Memory** screen showed it |
+| 12 | Viewer: menu and direct API | No Intelligence Loop menu. Approve, reject, propose, start execution, generate interpretation, summarise evidence, workspace send, console approve → all **403** with the right required permission; cross-tenant read → **403 `tenant_mismatch`**; reading own decisions → 200 |
+| 13 | Console and network review | No page errors. Only failures seen: the always-403 `ingestion/sources` (now fixed) and the home-screen **500** on an empty organization (a real defect, now fixed and re-verified live: 200, "no dataset ingested") |
+
+**Not observed in the browser:** the new "Generate AI interpretation" button — with no provider configured the interpretation reports `ai_provider_not_configured`, so there is nothing to generate; the button's behaviour is covered by `ExecutiveInterpretationPanel.test.tsx` only. The data is synthetic and single-tenant; this is not a substitute for a walkthrough on a realistic tenant.
+
+### 31.8 Updated status of the audit's acceptance criteria (§29.3)
+
+| # | Criterion | Status after this pass |
+|---|---|---|
+| AC1 | Backend suite green with `ext-zip` | **Met** (1,220 / 0 failures) — the extension is still off by default on this machine |
+| AC2 | `OutboxProducerTest` green | **Met** |
+| AC3 | Admin-bypass docs/test aligned | **Met** |
+| AC4 | Frontend suite green in one run | **Met** (490 / 490) |
+| AC5 | CI runs backend + tsc + vitest | **Written, not yet run remotely** |
+| AC6 | Host scheduler confirmed | **Open — needs host access** |
+| AC7 | Cases/hypotheses automation decided | **Met** — scheduled; reasoning stays manual by design |
+| AC8 | Viewer cannot trigger paid AI | **Met** (backend, tested at the network boundary) |
+| AC9 | One recorded browser walkthrough | **Met at local, synthetic scale** (§31.7) |
+| AC10 | `docs/STATUS.md` regenerated, stale docs corrected | **Open** |
+
+Pilot-checklist movement (§28.4): item 89 (flag rollback) and 90 (CI standards) remain unmet; item 79 (audit reconstructs a case) is helped by the walkthrough's audit rows but still has no reconstruction test; items 86–88, 92, 93 are unchanged. Items 71–85 that were already met are re-supported by the follow-up run.
+
+### 31.9 Remaining risks and open decisions
+
+* **Unverified in production:** the host scheduler, real provider behaviour, remote CI, Linux behaviour, a realistic multi-tenant walkthrough.
+* **Navigation content (decision needed):** a merge (`3e9ee9a`, web repo) left analysts and viewers without the Global Search menu entry and analysts without the (hidden) Cases entry that an earlier commit gave them. This is a menu question — routing applies no role guard and the API enforces access — so it was pinned, not changed. Decide whether to restore them.
+* **UX gaps:** Approve/Reject are drawn for roles that lack `decision.approve` (the server refuses); the decision queue shows the proposer's numeric id, not a name; ESLint has 1 error and 26 warnings.
+* **Carried forward unchanged (§27.3):** legacy plaintext-password acceptance, no rate limiting on authenticated routes, role inference by substring on ERP profile titles, access tokens not revocable, tokens in `sessionStorage`, no security headers, shared production database, `laravel.log` growth, `setup.ps1` migrating whatever `.env` names.
+* **Not addressed:** the learning consumer marks a learning reusable without the confidence floor the HTTP path applies (§27.2 #5); the unscheduled legacy `events:process` still exists and would skip learning if run by hand (now documented and test-pinned as never scheduled); ten code signal rules still lack a rule-level test.
+
+### 31.10 Verdict after the follow-up
+
+**READY WITH KNOWN LIMITATIONS — unchanged in kind, materially narrower in scope.** The two security findings are fixed and proven against the original code; the test suites are green (backend with the one missing extension enabled; frontend fully); a real defect (empty-organization home 500) and a broken workflow (Evidence summarise) were found and fixed; the cases-and-hypotheses loop steps are scheduled and the paid step is deliberately not; CI is written; a browser walkthrough of the human-gated path succeeded at local synthetic scale. It is still **not** "READY": CI has never run remotely, the host scheduler is unverified, no real provider call has been made, and the walkthrough was not on realistic data. Suitable for an engineer-operated controlled pilot after the four manual steps in §31.6; not for unattended production.
+
+### 31.11 Files changed in this pass
+
+Application: `app/Domain/AiIntelligence/Recommendations/RecommendationRepository.php`, `app/Http/Controllers/Api/AiIntelligence/AiIntelligenceRecommendationController.php`, `app/Domain/Intelligence/ExecutiveIntelligenceInterpreter.php`, `app/Http/Controllers/Api/OrganizationIntelligenceController.php`, `app/Http/Controllers/Api/AiController.php`, `app/Domain/Operations/OperationalIntelligence.php`, `routes/api.php`, `routes/console.php`. Tests added: `RecommendationApprovalGateTest`, `PaidAiAuthorizationTest`, `ProposeHypothesesTest`, `SchedulerDefinitionTest`, `OperationsOverviewEmptyTenantTest`; changed: `AiIntelligenceConsoleTest`, `ApiAuthorizationTest`, `OrganizationIntelligenceTest`, `OutboxProducerTest`. CI: `.github/workflows/backend.yml`. Docs: `docs/OPERATIONS-RUNBOOK.md` (new), `docs/TENANT_SECURITY.md`, this file. Frontend repository (`web/`, separate git): `src/api/ai.ts`, `src/api/organizationIntelligence.ts`, `src/components/workspace/{CommandCenter,EvidenceWorkspace,intelligenceUi}.tsx`, tests `CommandCenter`, `OrganizationDeleteLifecycle`, `shell`, new `ExecutiveInterpretationPanel`, and `web/.github/workflows/frontend.yml`. No commit or push. Untouched: the three ingestion artifacts, `.env`, `composer.json`, `php.ini`, all other projects, all tenant/business data.

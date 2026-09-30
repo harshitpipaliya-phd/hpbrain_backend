@@ -123,7 +123,7 @@ final class AiIntelligenceRecommendationController extends AiIntelligenceControl
             if (! $outcome['ok']) {
                 // 409: the request was well-formed; the recommendation's state is
                 // what refuses it (already decided, possibly by someone else).
-                return $this->failure($outcome['message'], 409);
+                return $this->failure($outcome['message'], 409, ['decision' => [$outcome['code'] ?? 'recommendation_not_decidable']]);
             }
 
             $past = ['approve' => 'approved', 'reject' => 'rejected', 'defer' => 'deferred'][$decision];

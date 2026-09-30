@@ -1,0 +1,60 @@
+# Backend CI — PHP syntax check and the full PHPUnit suite.
+#
+# SAFETY: phpunit.xml pins the suite to an in-memory SQLite database, and this
+# workflow pins it again below. No secret, no production credential and no remote
+# database is used or needed. The AI provider is empty, so no model call can be made.
+#
+# The frontend lives in a separate repository (web/, see .gitignore) and has its own
+# workflow at web/.github/workflows/frontend.yml.
+name: backend
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phpunit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ":memory:"
+      AI_PROVIDER: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          # zip: required by the XLSX reader (Fiber Valley imports). It is not declared
+          # in composer.json, so CI installs it explicitly; a host that lacks it fails the
+          # 22 FiberValleyImportTest cases with "ext-zip is required to read .xlsx files".
+          extensions: mbstring, xml, curl, zip, pdo_sqlite, sqlite3, intl
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies (reproducible, from composer.lock)
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare a disposable application key and writable directories
+        run: |
+          echo "APP_KEY=base64:$(php -r 'echo base64_encode(random_bytes(32));')" >> "$GITHUB_ENV"
+          mkdir -p bootstrap/cache storage/logs storage/app storage/framework/cache/data storage/framework/sessions storage/framework/views storage/framework/testing
+
+      - name: PHP syntax check
+        run: |
+          set -e
+          find app routes config database tests bootstrap -name '*.php' -print0 \
+            | xargs -0 -n1 -P4 php -l > /tmp/lint.log || { grep -v '^No syntax errors' /tmp/lint.log; exit 1; }
+          echo "All PHP files parse."
+
+      - name: PHPUnit
+        run: vendor/bin/phpunit --colors=never
