@@ -895,7 +895,90 @@ final class SeedV1AcademySchool extends Command
         }
         fclose($fp);
 
-        // 5. Manifest metadata
+        // 5. Transport CSV
+        $transportFile = $dir . '/v1a_transport.csv';
+        $fp = fopen($transportFile, 'w');
+        fputcsv($fp, ['student_ref', 'student_name', 'standard', 'division', 'transport_mode', 'route_id']);
+        foreach ($students as $stu) {
+            if ($stu['transport_mode'] === 'school_bus') {
+                fputcsv($fp, [
+                    $stu['ref'],
+                    $stu['name'],
+                    $stu['standard'],
+                    $stu['division'],
+                    $stu['transport_mode'],
+                    $stu['route_id']
+                ]);
+            }
+        }
+        fclose($fp);
+
+        // 6. Hostel CSV
+        $hostelFile = $dir . '/v1a_hostel.csv';
+        $fp = fopen($hostelFile, 'w');
+        fputcsv($fp, ['student_ref', 'student_name', 'standard', 'division', 'hostel_name', 'room_no']);
+        foreach ($students as $stu) {
+            if ($stu['transport_mode'] === 'hostel') {
+                fputcsv($fp, [
+                    $stu['ref'],
+                    $stu['name'],
+                    $stu['standard'],
+                    $stu['division'],
+                    $stu['hostel_name'],
+                    $stu['room_no']
+                ]);
+            }
+        }
+        fclose($fp);
+
+        // 8. Sports CSV
+        $sportsFile = $dir . '/v1a_sports.csv';
+        $fp = fopen($sportsFile, 'w');
+        fputcsv($fp, ['student_ref', 'student_name', 'standard', 'division', 'sport', 'event_name', 'participation', 'skill_assessment']);
+        $sports = ['Basketball', 'Football', 'Cricket', 'Athletics', 'Table Tennis'];
+        $i = 0;
+        foreach ($students as $stu) {
+            $sport = $sports[$i % count($sports)];
+            $participates = ($i % 5 !== 0); // 80% participation
+            fputcsv($fp, [
+                $stu['ref'],
+                $stu['name'],
+                $stu['standard'],
+                $stu['division'],
+                $sport,
+                'Annual Sports Meet 2025',
+                $participates ? 'Participated' : 'Did Not Participate',
+                $participates ? (['Beginner', 'Intermediate', 'Advanced'][$i % 3]) : 'N/A'
+            ]);
+            $i++;
+        }
+        fclose($fp);
+
+        // 9. GK CSV
+        $gkFile = $dir . '/v1a_gk.csv';
+        $fp = fopen($gkFile, 'w');
+        fputcsv($fp, ['student_ref', 'student_name', 'standard', 'division', 'quiz_topic', 'score', 'max_score']);
+        $topics = ['Indian History', 'Geography', 'Science & Environment', 'Current Affairs'];
+        $i = 0;
+        foreach ($students as $stu) {
+            foreach ($topics as $topic) {
+                // Generate a deterministic score between 40 and 100
+                $score = 40 + (($i * strlen($topic)) % 61);
+                fputcsv($fp, [
+                    $stu['ref'],
+                    $stu['name'],
+                    $stu['standard'],
+                    $stu['division'],
+                    $topic,
+                    $score,
+                    100
+                ]);
+            }
+            $i++;
+        }
+        fclose($fp);
+
+        // 10. Manifest metadata
         file_put_contents($dir . '/manifest.json', json_encode([
             'school_name' => self::SCHOOL_NAME,
             'academic_year' => self::ACADEMIC_YEAR,
@@ -912,6 +995,10 @@ final class SeedV1AcademySchool extends Command
             'fees' => $feeFile,
             'attendance' => $attFile,
             'staff_presence' => $staffPresenceFile,
+            'transport' => $transportFile,
+            'hostel' => $hostelFile,
+            'sports' => $sportsFile,
+            'gk' => $gkFile,
         ];
     }
 
@@ -921,35 +1008,31 @@ final class SeedV1AcademySchool extends Command
     private function generateStudentsList(): array
     {
         $standards = [
-            ['std' => 'CBSE-3', 'roman' => 'III', 'count' => 15, 'dept' => 'Primary Section (Grades 1-5)', 'teacher' => 'Clara Higgins'],
-            ['std' => 'CBSE-4', 'roman' => 'IV', 'count' => 15, 'dept' => 'Primary Section (Grades 1-5)', 'teacher' => 'Clara Higgins'],
-            ['std' => 'CBSE-5', 'roman' => 'V', 'count' => 15, 'dept' => 'Primary Section (Grades 1-5)', 'teacher' => 'Clara Higgins'],
-            ['std' => 'CBSE-6', 'roman' => 'VI', 'count' => 15, 'dept' => 'Middle School (Grades 6-8)', 'teacher' => 'Arthur Pendelton'],
-            ['std' => 'CBSE-7', 'roman' => 'VII', 'count' => 15, 'dept' => 'Middle School (Grades 6-8)', 'teacher' => 'Arthur Pendelton'],
-            ['std' => 'CBSE-8', 'roman' => 'VIII', 'count' => 15, 'dept' => 'Middle School (Grades 6-8)', 'teacher' => 'Arthur Pendelton'],
-            ['std' => 'CBSE-9', 'roman' => 'IX', 'count' => 15, 'dept' => 'Secondary Section (Grades 9-10)', 'teacher' => 'Rajesh Kulkarni'],
-            ['std' => 'CBSE-10', 'roman' => 'X', 'count' => 15, 'dept' => 'Secondary Section (Grades 9-10)', 'teacher' => 'Rajesh Kulkarni'],
-            ['std' => 'CBSE-11', 'roman' => 'XI', 'count' => 10, 'dept' => 'Higher Secondary Section (Grades 11-12)', 'teacher' => 'Anita Sharma'],
-            ['std' => 'CBSE-12', 'roman' => 'XII', 'count' => 10, 'dept' => 'Higher Secondary Section (Grades 11-12)', 'teacher' => 'Anita Sharma'],
+            ['std' => 'Nursery', 'roman' => 'Nursery', 'count' => 60, 'dept' => 'Primary Section (Grades 1-5)', 'teacher' => 'Clara Higgins'],
+            ['std' => 'KG', 'roman' => 'KG', 'count' => 60, 'dept' => 'Primary Section (Grades 1-5)', 'teacher' => 'Clara Higgins'],
+            ['std' => 'CBSE-1', 'roman' => 'I', 'count' => 60, 'dept' => 'Primary Section (Grades 1-5)', 'teacher' => 'Clara Higgins'],
+            ['std' => 'CBSE-2', 'roman' => 'II', 'count' => 60, 'dept' => 'Primary Section (Grades 1-5)', 'teacher' => 'Clara Higgins'],
+            ['std' => 'CBSE-3', 'roman' => 'III', 'count' => 60, 'dept' => 'Primary Section (Grades 1-5)', 'teacher' => 'Clara Higgins'],
+            ['std' => 'CBSE-4', 'roman' => 'IV', 'count' => 60, 'dept' => 'Primary Section (Grades 1-5)', 'teacher' => 'Clara Higgins'],
+            ['std' => 'CBSE-5', 'roman' => 'V', 'count' => 60, 'dept' => 'Primary Section (Grades 1-5)', 'teacher' => 'Clara Higgins'],
+            ['std' => 'CBSE-6', 'roman' => 'VI', 'count' => 60, 'dept' => 'Middle School (Grades 6-8)', 'teacher' => 'Arthur Pendelton'],
+            ['std' => 'CBSE-7', 'roman' => 'VII', 'count' => 60, 'dept' => 'Middle School (Grades 6-8)', 'teacher' => 'Arthur Pendelton'],
+            ['std' => 'CBSE-8', 'roman' => 'VIII', 'count' => 60, 'dept' => 'Middle School (Grades 6-8)', 'teacher' => 'Arthur Pendelton'],
+            ['std' => 'CBSE-9', 'roman' => 'IX', 'count' => 60, 'dept' => 'Secondary Section (Grades 9-10)', 'teacher' => 'Rajesh Kulkarni'],
+            ['std' => 'CBSE-10', 'roman' => 'X', 'count' => 60, 'dept' => 'Secondary Section (Grades 9-10)', 'teacher' => 'Rajesh Kulkarni'],
+            ['std' => 'CBSE-11', 'roman' => 'XI', 'count' => 60, 'dept' => 'Higher Secondary Section (Grades 11-12)', 'teacher' => 'Anita Sharma'],
+            ['std' => 'CBSE-12', 'roman' => 'XII', 'count' => 60, 'dept' => 'Higher Secondary Section (Grades 11-12)', 'teacher' => 'Anita Sharma'],
         ];
 
-        $firstNames = ['Aarav', 'Vivaan', 'Aditya', 'Vihaan', 'Arjun', 'Sai', 'Reyansh', 'Ayaan', 'Krishna', 'Ishaan', 'Shaurya', 'Atharv', 'Advik', 'Pranav', 'Advaith', 'Ananya', 'Diya', 'Gauri', 'Aadhya', 'Pari', 'Anvi', 'Saanvi', 'Myra', 'Sara', 'Ira', 'Avani', 'Riya', 'Kavya', 'Meera', 'Roshni'];
-        $lastNames = ['Sharma', 'Verma', 'Patel', 'Reddy', 'Nair', 'Iyer', 'Gupta', 'Singh', 'Deshmukh', 'Kulkarni', 'Joshi', 'Bhat', 'Rao', 'Choudhury', 'Mehta', 'Shah', 'Mukherjee', 'Banerjee', 'Ghosh', 'Chatterjee'];
+        $firstNames = ['Aarav', 'Vivaan', 'Aditya', 'Vihaan', 'Arjun', 'Sai', 'Reyansh', 'Ayaan', 'Krishna', 'Ishaan', 'Shaurya', 'Atharv', 'Advik', 'Pranav', 'Advaith', 'Ananya', 'Diya', 'Gauri', 'Aadhya', 'Pari', 'Anvi', 'Saanvi', 'Myra', 'Sara', 'Ira', 'Avani', 'Riya', 'Kavya', 'Meera', 'Roshni', 'Neha', 'Pooja', 'Rahul', 'Rohan', 'Amit', 'Sunil', 'Karan', 'Vikram', 'Suresh', 'Ramesh', 'Ravi', 'Ritu', 'Geeta', 'Seema', 'Sita', 'Anita', 'Sunita', 'Asha', 'Usha', 'Lata'];
+        $lastNames = ['Sharma', 'Verma', 'Patel', 'Reddy', 'Nair', 'Iyer', 'Gupta', 'Singh', 'Deshmukh', 'Kulkarni', 'Joshi', 'Bhat', 'Rao', 'Choudhury', 'Mehta', 'Shah', 'Mukherjee', 'Banerjee', 'Ghosh', 'Chatterjee', 'Nath', 'Sen', 'Das', 'Bose', 'Mitra', 'Dutta', 'Chopra', 'Malhotra', 'Kapoor', 'Khanna', 'Bhatia', 'Ahuja', 'Chauhan', 'Rajput', 'Yadav', 'Mishra', 'Tiwari', 'Pandey', 'Dubey', 'Ojha'];
 
         $list = [];
         $seq = 1;
 
         foreach ($standards as $s) {
             for ($i = 0; $i < $s['count']; $i++) {
-                $ref = sprintf('V1A-2025-%03d', $seq);
-                // Deterministic, collision-free (first,last) pairing: a coprime-step
-                // walk over the full firstNames x lastNames combination space (600
-                // pairs for 30x20), decoded by mixed-radix. The previous formula
-                // ((seq*3)%30, (seq*7)%20) has a combined cycle length of only 20 —
-                // lcm(30/gcd(3,30), 20/gcd(7,20)) = lcm(10,20) = 20 — so all 140
-                // students collapsed into 20 repeated names, 7 each. 37 is coprime
-                // with 600 (=2^3*3*5^2), so this walk visits 600 distinct pairs
-                // before repeating, far more than the 140 students that need one.
+                $ref = sprintf('V1A-2025-%04d', $seq);
                 $nameSpace = count($firstNames) * count($lastNames);
                 $pairIndex = (($seq - 1) * 37) % $nameSpace;
                 $fn = $firstNames[$pairIndex % count($firstNames)];
@@ -978,12 +1061,28 @@ final class SeedV1AcademySchool extends Command
                 $ability = 0.55 + (($seq % 40) / 100);
                 $attBase = 0.82 + (($seq % 17) / 100);
 
+                // Transport vs Hostel logic (Hostel: 20%, School Bus: 60%, Own Transport: 20%)
+                $transportMode = 'own_transport';
+                $routeId = null;
+                $hostelName = null;
+                $roomNo = null;
+
+                if ($seq % 5 === 0) {
+                    $transportMode = 'hostel';
+                    $hostelName = ($seq % 2 === 0) ? 'Boys Hostel A' : 'Girls Hostel B';
+                    $roomNo = 'Room-' . (100 + ($seq % 50));
+                } elseif ($seq % 5 !== 4) { // 60%
+                    $transportMode = 'school_bus';
+                    $routeId = 'Route-' . (($seq % 10) + 1);
+                }
+
                 $list[] = [
                     'ref' => $ref,
                     'name' => $name,
                     'standard' => $s['std'],
                     'roman' => $s['roman'],
-                    'division' => ($i % 2 === 0) ? 'A' : 'B',
+                    // Ensure exactly 30 per section
+                    'division' => ($i < 30) ? 'A' : 'B',
                     'department' => $s['dept'],
                     'class_teacher' => $s['teacher'],
                     'scholarship_pct' => $schPct,
@@ -991,6 +1090,10 @@ final class SeedV1AcademySchool extends Command
                     'fee_behavior' => $behavior,
                     'ability' => $ability,
                     'attendance_base' => $attBase,
+                    'transport_mode' => $transportMode,
+                    'route_id' => $routeId,
+                    'hostel_name' => $hostelName,
+                    'room_no' => $roomNo,
                 ];
 
                 $seq++;
@@ -1372,7 +1475,199 @@ final class SeedV1AcademySchool extends Command
         }
         fclose($handle);
 
-        $counts['students'] = 140;
+        // 6. Ingest Transport (dataset: 'v1a-transport')
+        $this->line('  -> Ingesting transport assignment records...');
+        $handle = fopen($files['transport'], 'r');
+        $headers = fgetcsv($handle);
+        $transportBuffer = [];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $data = array_combine($headers, $row);
+            $naturalKey = 'TRN-' . $data['student_ref'];
+            $recordId = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':v1a-transport:' . $naturalKey);
+
+            $transportBuffer[] = [
+                'id' => $recordId,
+                'tenant_id' => $tenantId,
+                'org_id' => null,
+                'dataset' => 'v1a-transport',
+                'natural_key' => $naturalKey,
+                'source_file' => basename($files['transport']),
+                'source_row' => count($transportBuffer) + 1,
+                'occurred_at' => $now,
+                'closed_at' => null,
+                'status' => 'Active',
+                'category' => 'Transport Allocation',
+                'sub_category' => $data['transport_mode'],
+                'owner_name' => 'Transport Department',
+                'department_label' => 'Transport',
+                'area' => 'Transport',
+                'subject_ref' => $data['student_ref'],
+                'metric_value' => 1,
+                'metric_unit' => 'allocation',
+                'quantity' => 1,
+                'payload' => json_encode(['route_id' => $data['route_id'], 'standard' => $data['standard']], JSON_UNESCAPED_UNICODE),
+                'row_hash' => hash('sha256', $naturalKey),
+                'import_job_id' => $academicJobId, // Using academic job id for simplicity in seeder
+                'created_date' => $now,
+                'updated_date' => $now,
+            ];
+
+            if (count($transportBuffer) >= 500) {
+                DB::table('hpbrain_operational_records')->upsert($transportBuffer, ['tenant_id', 'dataset', 'natural_key']);
+                $transportBuffer = [];
+            }
+        }
+        if ($transportBuffer !== []) {
+            DB::table('hpbrain_operational_records')->upsert($transportBuffer, ['tenant_id', 'dataset', 'natural_key']);
+        }
+        fclose($handle);
+
+        // 7. Ingest Hostel (dataset: 'v1a-hostel')
+        $this->line('  -> Ingesting hostel allocation records...');
+        $handle = fopen($files['hostel'], 'r');
+        $headers = fgetcsv($handle);
+        $hostelBuffer = [];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $data = array_combine($headers, $row);
+            $naturalKey = 'HST-' . $data['student_ref'];
+            $recordId = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':v1a-hostel:' . $naturalKey);
+
+            $hostelBuffer[] = [
+                'id' => $recordId,
+                'tenant_id' => $tenantId,
+                'org_id' => null,
+                'dataset' => 'v1a-hostel',
+                'natural_key' => $naturalKey,
+                'source_file' => basename($files['hostel']),
+                'source_row' => count($hostelBuffer) + 1,
+                'occurred_at' => $now,
+                'closed_at' => null,
+                'status' => 'Active',
+                'category' => 'Hostel Allocation',
+                'sub_category' => $data['hostel_name'],
+                'owner_name' => 'Hostel Department',
+                'department_label' => 'Hostel',
+                'area' => 'Residential',
+                'subject_ref' => $data['student_ref'],
+                'metric_value' => 1,
+                'metric_unit' => 'allocation',
+                'quantity' => 1,
+                'payload' => json_encode(['room_no' => $data['room_no'], 'standard' => $data['standard']], JSON_UNESCAPED_UNICODE),
+                'row_hash' => hash('sha256', $naturalKey),
+                'import_job_id' => $academicJobId,
+                'created_date' => $now,
+                'updated_date' => $now,
+            ];
+
+            if (count($hostelBuffer) >= 500) {
+                DB::table('hpbrain_operational_records')->upsert($hostelBuffer, ['tenant_id', 'dataset', 'natural_key']);
+                $hostelBuffer = [];
+            }
+        }
+        if ($hostelBuffer !== []) {
+            DB::table('hpbrain_operational_records')->upsert($hostelBuffer, ['tenant_id', 'dataset', 'natural_key']);
+        }
+        fclose($handle);
+
+        // 8. Ingest Sports (dataset: 'v1a-sports')
+        $this->line('  -> Ingesting sports participation records...');
+        $handle = fopen($files['sports'], 'r');
+        $headers = fgetcsv($handle);
+        $sportsBuffer = [];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $data = array_combine($headers, $row);
+            $naturalKey = 'SPR-' . $data['student_ref'];
+            $recordId = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':v1a-sports:' . $naturalKey);
+
+            $sportsBuffer[] = [
+                'id' => $recordId,
+                'tenant_id' => $tenantId,
+                'org_id' => null,
+                'dataset' => 'v1a-sports',
+                'natural_key' => $naturalKey,
+                'source_file' => basename($files['sports']),
+                'source_row' => count($sportsBuffer) + 1,
+                'occurred_at' => $now,
+                'closed_at' => null,
+                'status' => $data['participation'],
+                'category' => 'Sports',
+                'sub_category' => $data['sport'],
+                'owner_name' => 'Sports Department',
+                'department_label' => 'Extracurricular',
+                'area' => 'Campus',
+                'subject_ref' => $data['student_ref'],
+                'metric_value' => $data['participation'] === 'Participated' ? 1 : 0,
+                'metric_unit' => 'participation',
+                'quantity' => 1,
+                'payload' => json_encode(['skill_assessment' => $data['skill_assessment'], 'standard' => $data['standard']], JSON_UNESCAPED_UNICODE),
+                'row_hash' => hash('sha256', $naturalKey),
+                'import_job_id' => $academicJobId,
+                'created_date' => $now,
+                'updated_date' => $now,
+            ];
+
+            if (count($sportsBuffer) >= 500) {
+                DB::table('hpbrain_operational_records')->upsert($sportsBuffer, ['tenant_id', 'dataset', 'natural_key']);
+                $sportsBuffer = [];
+            }
+        }
+        if ($sportsBuffer !== []) {
+            DB::table('hpbrain_operational_records')->upsert($sportsBuffer, ['tenant_id', 'dataset', 'natural_key']);
+        }
+        fclose($handle);
+
+        // 9. Ingest GK (dataset: 'v1a-gk')
+        $this->line('  -> Ingesting general knowledge records...');
+        $handle = fopen($files['gk'], 'r');
+        $headers = fgetcsv($handle);
+        $gkBuffer = [];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $data = array_combine($headers, $row);
+            $naturalKey = 'GK-' . $data['quiz_topic'] . '-' . $data['student_ref'];
+            $recordId = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':v1a-gk:' . $naturalKey);
+
+            $gkBuffer[] = [
+                'id' => $recordId,
+                'tenant_id' => $tenantId,
+                'org_id' => null,
+                'dataset' => 'v1a-gk',
+                'natural_key' => $naturalKey,
+                'source_file' => basename($files['gk']),
+                'source_row' => count($gkBuffer) + 1,
+                'occurred_at' => $now,
+                'closed_at' => null,
+                'status' => 'Completed',
+                'category' => 'General Knowledge',
+                'sub_category' => $data['quiz_topic'],
+                'owner_name' => 'Academics',
+                'department_label' => 'Extracurricular',
+                'area' => 'Online',
+                'subject_ref' => $data['student_ref'],
+                'metric_value' => $data['score'],
+                'metric_unit' => 'marks',
+                'quantity' => $data['max_score'],
+                'payload' => json_encode(['standard' => $data['standard'], 'quiz_topic' => $data['quiz_topic']], JSON_UNESCAPED_UNICODE),
+                'row_hash' => hash('sha256', $naturalKey),
+                'import_job_id' => $academicJobId,
+                'created_date' => $now,
+                'updated_date' => $now,
+            ];
+
+            if (count($gkBuffer) >= 500) {
+                DB::table('hpbrain_operational_records')->upsert($gkBuffer, ['tenant_id', 'dataset', 'natural_key']);
+                $gkBuffer = [];
+            }
+        }
+        if ($gkBuffer !== []) {
+            DB::table('hpbrain_operational_records')->upsert($gkBuffer, ['tenant_id', 'dataset', 'natural_key']);
+        }
+        fclose($handle);
+
+        $counts['students'] = 840;
 
         return $counts;
     }
@@ -1519,7 +1814,7 @@ final class SeedV1AcademySchool extends Command
             'department_id' => $secDeptId,
             'status' => 'investigating',
             'metadata' => json_encode([
-                'title' => 'Grade 9 Mathematics Performance Gap in Mid-Term Examinations',
+                'title' => 'Grade 9 Mathematics marks are too low in the mid-term exams',
                 'cohort' => 'CBSE-9',
                 'subject' => 'Mathematics',
                 'cohort_avg_pct' => 54.2,
@@ -1540,7 +1835,7 @@ final class SeedV1AcademySchool extends Command
             'source' => 'v1a-academic-results',
             'evidence_type' => 'assessment_records',
             'content' => json_encode([
-                'summary' => 'Aggregated analysis of exam answer scripts across Unit Test 1 and Mid-Term Exam shows 15 students in Grade 9 averaging 54.2% in Mathematics versus a school-wide subject benchmark of 71.8%. Specific conceptual gaps identified in algebraic factorization and coordinate geometry.',
+                'summary' => 'Our check of exam papers from Unit Test 1 and the Mid-Term Exam shows 15 students in Grade 9 getting an average of 54.2% in Maths, while the rest of the school averages 71.8%. They are struggling the most with basic algebra and coordinate geometry.',
                 'records_examined' => 120,
                 'target_grade' => 'CBSE-9',
                 'subject' => 'Mathematics',
@@ -1563,8 +1858,8 @@ final class SeedV1AcademySchool extends Command
         DB::table('hpbrain_cases')->updateOrInsert(['id' => $caseId1], [
             'tenant_id' => $tenantId,
             'signal_id' => $sigId1,
-            'title' => 'CBSE-9 Mathematics Academic Remediation & Diagnostic Case',
-            'description' => "Mid-term examination results indicate that Grade 9 Mathematics is performing 17.6 points below school benchmark. Left unaddressed, foundational algebraic deficits will severely impede standard 10 board preparation.\n\nSupporting Records: exam records across 15 students.",
+            'title' => 'Grade 9 Mathematics low scores and basic gaps',
+            'description' => "Grade 9 students have scored low in their Mathematics mid-term exams, falling short of the school's target by 17.6 marks on average. This is worrying because without clear basics in algebra, they will struggle heavily next year during their standard 10 board exams.\n\nSupporting Records: Exam records of 15 students.",
             'status' => 'resolved',
             'created_by' => self::AUTHOR,
             'created_date' => '2025-10-06 10:00:00',
@@ -1580,7 +1875,7 @@ final class SeedV1AcademySchool extends Command
         DB::table('hpbrain_hypotheses')->updateOrInsert(['id' => $hypId1], [
             'tenant_id' => $tenantId,
             'case_id' => $caseId1,
-            'statement' => 'Cognitive gap in linear equation solving and geometric proofs from middle school transition is depressing secondary problem-solving speed.',
+            'statement' => 'Students missed key basics in linear equations and geometry when they moved up from middle school, slowing down their ability to solve secondary-level problems.',
             'root_cause_family' => 'pedagogical_alignment',
             'confidence' => 0.89,
             'status' => 'confirmed',
@@ -1596,7 +1891,7 @@ final class SeedV1AcademySchool extends Command
             'case_id' => $caseId1,
             'signal_id' => $sigId1,
             'step_order' => 1,
-            'description' => 'Targeted modular remediation focusing on algebraic foundations before proceeding with advanced quadratic syllabus will restore competency trajectory.',
+            'description' => 'Running focused extra classes for basic algebra before teaching the tough quadratic chapters will help them catch up.',
             'confidence_score' => 0.91,
             'created_by' => self::AUTHOR,
             'created_date' => '2025-10-09 14:00:00',
@@ -1607,12 +1902,12 @@ final class SeedV1AcademySchool extends Command
             'tenant_id' => $tenantId,
             'org_id' => null,
             'eso_code' => 'ESO_ACAD_REMEDIAL',
-            'name' => 'Structured Remedial Mathematics Academic Intervention Protocol',
+            'name' => 'Extra Mathematics coaching for students falling behind',
             'version' => '1.0',
             'status' => 'active',
             'owner' => $secDeptId,
             'provenance' => 'Academic Council Standards',
-            'trigger_description' => 'Accelerate at-risk student conceptual mastery through twice-weekly small group problem solving.',
+            'trigger_description' => 'Help students catch up by practicing in small groups twice a week.',
             'objective' => 'Remedial Math Academic Intervention',
             'created_by' => self::AUTHOR,
             'created_date' => '2025-10-12 09:00:00',
@@ -1624,12 +1919,12 @@ final class SeedV1AcademySchool extends Command
             'tenant_id' => $tenantId,
             'reasoning_step_id' => $stepId1,
             'category' => 'improve',
-            'title' => 'Authorize 12-Week Grade 9 Mathematics Remedial Protocol',
-            'description' => 'Mandate twice-weekly after-school tutorial clinics led by Dr. Rajesh Kulkarni, utilizing formative practice modules and individualized learning diagnostics.',
+            'title' => 'Start a 12-week extra coaching plan for Grade 9 Mathematics',
+            'description' => 'Hold extra tutorial classes twice a week after school. Let Dr. Rajesh Kulkarni lead these, focusing on practice papers and personal attention to clear basic doubts.',
             'priority' => 'high',
             'urgency' => 'urgent',
             'confidence' => 0.92,
-            'impact' => 'Restores average pass rate to >70% prior to final examination cycle.',
+            'impact' => 'Restores average pass rate to over 70% before the final exams.',
             'cost' => 'Zero external cost (reallocated internal tutorial periods)',
             'risk' => 'low',
             'dependencies' => json_encode([]),
@@ -1646,14 +1941,14 @@ final class SeedV1AcademySchool extends Command
             'recommendation_id' => $recId1,
             'decided_by' => $principalId,
             'executor_type' => 'human',
-            'rationale' => 'Small-group remedial blocks twice weekly combined with teacher coaching in differentiated pedagogy.',
-            'alternatives_considered' => json_encode(['External coaching referral (rejected)', 'Status quo with extra homework (rejected)']),
+            'rationale' => 'Agreed. Small-group teaching twice a week is the best way to help them without putting too much pressure.',
+            'alternatives_considered' => json_encode(['Sending them to external tuitions (rejected)', 'Just giving more homework (rejected)']),
             'status' => 'approved',
             'confidence' => 0.94,
-            'explanation' => 'Execution commenced on 2025-10-15.',
+            'explanation' => 'Coaching starts on 15th October 2025.',
             'approved_by' => $principalId,
             'approved_date' => '2025-10-12 11:30:00',
-            'approval_note' => 'Approved unanimously by Academic Council.',
+            'approval_note' => 'Approved by all teachers in the Academic Council.',
             'created_date' => '2025-10-12 11:30:00',
         ]);
 
@@ -1901,5 +2196,176 @@ final class SeedV1AcademySchool extends Command
                 'updated_date' => $now,
             ]
         );
+        // =====================================================================
+        // WORKFLOW 4: Sports + Participation -> Coaching -> Engagement
+        // =====================================================================
+        $sigId4 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':sig4');
+        DB::table('hpbrain_signals')->updateOrInsert(['id' => $sigId4], [
+            'tenant_id' => $tenantId,
+            'dedupe_key' => $tenantId . ':sig:sports-drop-cbse10:2025-2026',
+            'org_id' => null,
+            'source' => 'sports-analyzer',
+            'classification' => 'risk',
+            'rule_key' => 'participation.decline',
+            'priority' => 'medium',
+            'severity' => 'medium',
+            'confidence' => 0.88,
+            'related_entity_type' => 'Department',
+            'related_entity_id' => $secDeptId,
+            'department_id' => $secDeptId,
+            'status' => 'investigating',
+            'metadata' => json_encode([
+                'title' => 'Grade 10 Sports participation dropping before board exams',
+                'cohort' => 'CBSE-10',
+                'affected_students' => 20,
+            ]),
+            'created_by' => self::AUTHOR,
+            'created_date' => '2025-11-10 09:00:00',
+            'updated_date' => $now,
+        ]);
+
+        $evId4 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':ev4');
+        DB::table('hpbrain_evidence')->updateOrInsert(['id' => $evId4], [
+            'tenant_id' => $tenantId,
+            'signal_id' => $sigId4,
+            'source' => 'v1a-sports',
+            'evidence_type' => 'participation_records',
+            'content' => json_encode([
+                'summary' => 'Our review of sports attendance shows a 40% drop in Grade 10 students joining after-school sports like Basketball and Football in Term 2.',
+            ], JSON_UNESCAPED_UNICODE),
+            'provenance' => json_encode(['dataset' => 'v1a-sports']),
+            'confidence' => 0.90,
+            'hash' => hash('sha256', $tenantId . '-sports-drop'),
+            'version' => '1.0',
+            'status' => 'active',
+            'created_by' => self::AUTHOR,
+            'created_date' => '2025-11-10 09:10:00',
+            'observed_date' => '2025-11-10 00:00:00',
+        ]);
+
+        $caseId4 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':case4');
+        DB::table('hpbrain_cases')->updateOrInsert(['id' => $caseId4], [
+            'tenant_id' => $tenantId,
+            'signal_id' => $sigId4,
+            'title' => 'Grade 10 Sports Engagement Program',
+            'description' => 'Students are skipping physical activities due to exam stress. Need to introduce short, high-energy 30-minute sports breaks instead of 2-hour matches.',
+            'status' => 'open',
+            'created_by' => self::AUTHOR,
+            'created_date' => '2025-11-12 10:00:00',
+            'updated_date' => $now,
+        ]);
+
+        DB::table('hpbrain_case_evidence')->updateOrInsert([
+            'tenant_id' => $tenantId,
+            'case_id' => $caseId4,
+            'evidence_id' => $evId4,
+        ]);
+
+        $recId4 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':rec4');
+        DB::table('hpbrain_recommendations')->updateOrInsert(['id' => $recId4], [
+            'tenant_id' => $tenantId,
+            'reasoning_step_id' => null,
+            'category' => 'improve',
+            'title' => 'Start a 30-minute "Exam Buster" fitness break program for Grade 10 students',
+            'description' => 'Grade 10 students are avoiding long sports sessions because they need more time for board exam preparation. Implement short breaks. Physical fitness reduces exam stress and improves concentration. If they stop playing entirely, their overall health and study stamina will drop.',
+            'priority' => 'medium',
+            'urgency' => 'steady',
+            'confidence' => 0.85,
+            'impact' => 'Improves student physical health without taking away study time',
+            'cost' => 'Zero external cost',
+            'risk' => 'low',
+            'dependencies' => json_encode([]),
+            'status' => 'pending',
+            'eso_id' => null,
+            'created_by' => self::AUTHOR,
+            'created_date' => '2025-11-13 14:00:00',
+            'updated_date' => $now,
+        ]);
+
+        // =====================================================================
+        // WORKFLOW 5: GK + Learning -> Knowledge Gap -> Remedial action
+        // =====================================================================
+        $sigId5 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':sig5');
+        DB::table('hpbrain_signals')->updateOrInsert(['id' => $sigId5], [
+            'tenant_id' => $tenantId,
+            'dedupe_key' => $tenantId . ':sig:gk-gap-science:2025-2026',
+            'org_id' => null,
+            'source' => 'gk-analyzer',
+            'classification' => 'risk',
+            'rule_key' => 'academic.cohort_spread',
+            'priority' => 'low',
+            'severity' => 'low',
+            'confidence' => 0.95,
+            'related_entity_type' => 'Department',
+            'related_entity_id' => $secDeptId,
+            'department_id' => $secDeptId,
+            'status' => 'investigating',
+            'metadata' => json_encode([
+                'title' => 'General Knowledge scores in Science and Tech are below average',
+                'cohort' => 'Whole School',
+                'subject' => 'GK - Science and Tech',
+            ]),
+            'created_by' => self::AUTHOR,
+            'created_date' => '2026-02-01 10:00:00',
+            'updated_date' => $now,
+        ]);
+
+        $evId5 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':ev5');
+        DB::table('hpbrain_evidence')->updateOrInsert(['id' => $evId5], [
+            'tenant_id' => $tenantId,
+            'signal_id' => $sigId5,
+            'source' => 'v1a-gk',
+            'evidence_type' => 'assessment_records',
+            'content' => json_encode([
+                'summary' => 'Quiz results from Term 2 show that while students score well in Geography and Indian History (70%+), their Science and Tech quiz scores average only 45%.',
+            ], JSON_UNESCAPED_UNICODE),
+            'provenance' => json_encode(['dataset' => 'v1a-gk']),
+            'confidence' => 0.95,
+            'hash' => hash('sha256', $tenantId . '-gk-science-gap'),
+            'version' => '1.0',
+            'status' => 'active',
+            'created_by' => self::AUTHOR,
+            'created_date' => '2026-02-01 10:15:00',
+            'observed_date' => '2026-02-01 00:00:00',
+        ]);
+
+        $caseId5 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':case5');
+        DB::table('hpbrain_cases')->updateOrInsert(['id' => $caseId5], [
+            'tenant_id' => $tenantId,
+            'signal_id' => $sigId5,
+            'title' => 'Science and Technology GK Improvement',
+            'description' => 'Students lack awareness of current scientific events and basic technology concepts in GK quizzes.',
+            'status' => 'open',
+            'created_by' => self::AUTHOR,
+            'created_date' => '2026-02-03 09:00:00',
+            'updated_date' => $now,
+        ]);
+
+        DB::table('hpbrain_case_evidence')->updateOrInsert([
+            'tenant_id' => $tenantId,
+            'case_id' => $caseId5,
+            'evidence_id' => $evId5,
+        ]);
+
+        $recId5 = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':rec5');
+        DB::table('hpbrain_recommendations')->updateOrInsert(['id' => $recId5], [
+            'tenant_id' => $tenantId,
+            'reasoning_step_id' => null,
+            'category' => 'improve',
+            'title' => 'Include a "Science Fact of the Day" in the morning assembly',
+            'description' => 'Students are scoring significantly lower in Science & Tech GK compared to other topics. Scientific awareness is crucial for modern education and competitive exams. Small, daily exposure improves retention better than cramming.',
+            'priority' => 'low',
+            'urgency' => 'steady',
+            'confidence' => 0.90,
+            'impact' => 'Improves student awareness of current technology trends',
+            'cost' => 'Zero external cost',
+            'risk' => 'low',
+            'dependencies' => json_encode([]),
+            'status' => 'pending',
+            'eso_id' => null,
+            'created_by' => self::AUTHOR,
+            'created_date' => '2026-02-04 11:00:00',
+            'updated_date' => $now,
+        ]);
     }
 }

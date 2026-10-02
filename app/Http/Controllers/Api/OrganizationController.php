@@ -300,6 +300,7 @@ final class OrganizationController extends Controller
             'id' => (string) $d['id'],
             'name' => (string) $d['name'],
             'parentId' => $d['parentId'],
+            'headId' => $d['headId'] === null ? null : (string) $d['headId'],
             'status' => (string) $d['status'],
             'source' => (string) $d['source'],
         ])->values();
@@ -309,8 +310,18 @@ final class OrganizationController extends Controller
             'peopleByDepartment' => (object) $this->structure->getPeopleCountByDepartment($t),
             'memberType' => $structure['memberType'],
             'source' => $structure['source'],
+            /*
+              DEPARTMENT ID -> HEAD PERSON ID. This mapped each unit's NAME into
+              the slot reserved for its head, so every consumer that resolved a
+              leader from this payload — CommandCenter's department list, the
+              organization details screen — was handed a department labelled as
+              a person. OrganizationStructureService already resolves the head
+              per unit from the tenant's mapped 'head' field, so this is a
+              straight read of that, and a unit with no recorded head maps to
+              null rather than to itself.
+            */
             'heads' => (object) collect($structure['departments'])
-                ->mapWithKeys(fn (array $d) => [(string) $d['id'] => (string) $d['name']])
+                ->mapWithKeys(fn (array $d) => [(string) $d['id'] => $d['headId'] === null ? null : (string) $d['headId']])
                 ->all(),
         ]);
     }
@@ -370,21 +381,36 @@ final class OrganizationController extends Controller
           quality report scored an organization against a different number of
           departments than every screen showed it. It is the shared count now.
 
-          `deptsWithoutHead` is raised ONLY for departments that come from a
-          connected source system. A derived teaching section has no head column
-          to fill in and no ERP screen an administrator could go and fix it on,
-          so reporting it as a data-quality issue would ask somebody to correct
-          something that does not exist.
+          TWO SEPARATE QUESTIONS, WHICH THIS HAD MERGED INTO ONE. `parent_id` and
+          the head are different columns and one is not evidence about the
+          other. The predicate below is `parent_id IS NULL OR parent_id = 0` —
+          units with no parent, which is to say top-level units — and its result
+          was published as `departmentsWithHead`. On V1 Academy, whose eight
+          departments all carry a head in `head_user_id` and none of which has a
+          parent, that reported 0 departments headed out of 8 and scored the
+          organization at 60 for a gap it does not have.
+
+          So they are now counted from the column that actually holds each fact,
+          and BOTH are reported only for a tenant whose departments come from a
+          connected source system. A derived teaching section has neither a
+          parent column nor a head column to be complete about, and no ERP screen
+          an administrator could go and fix either on, so reporting a gap in
+          either asks somebody to correct something that does not exist.
         */
         $totalDepts = $this->structure->departmentCount($t);
 
-        $deptsWithoutHead = $this->structure->isSourceSystemBacked($t)
-            ? $activeUnits()
-                ->where(function ($q) use ($unitParent) {
-                    $q->whereNull($unitParent)->orWhere($unitParent, 0);
-                })
-                ->count()
+        $unitsWithoutParent = $this->structure->isSourceSystemBacked($t)
+            ? count(array_filter(
+                $this->structure->forTenant($t)['departments'],
+                fn (array $d) => ($d['parentId'] ?? null) === null,
+            ))
             : 0;
+
+        $deptsWithoutHead = $unit->has('head') && $this->structure->isSourceSystemBacked($t)
+            ? $activeUnits()
+                ->where(fn ($q) => $q->whereNull($unit->field('head'))->orWhere($unit->field('head'), 0))
+                ->count()
+            : null;
 
         $totalPeople = $activePeople()->count();
 
@@ -404,8 +430,11 @@ final class OrganizationController extends Controller
         if ($peopleWithoutEmail > 0) {
             $issues[] = ['field' => $personEmail, 'count' => $peopleWithoutEmail, 'severity' => 'high'];
         }
-        if ($deptsWithoutHead > 0) {
-            $issues[] = ['field' => $unitParent, 'count' => $deptsWithoutHead, 'severity' => 'low'];
+        if ($unitsWithoutParent > 0) {
+            $issues[] = ['field' => $unitParent, 'count' => $unitsWithoutParent, 'severity' => 'low'];
+        }
+        if ($deptsWithoutHead !== null && $deptsWithoutHead > 0) {
+            $issues[] = ['field' => $unit->field('head'), 'count' => $deptsWithoutHead, 'severity' => 'low'];
         }
 
         $score = $totalPeople + $totalDepts > 0
@@ -421,7 +450,11 @@ final class OrganizationController extends Controller
                 'peopleWithDepartment' => $totalPeople - $peopleWithoutDept,
                 'peopleWithProfile' => $totalPeople - $peopleWithoutProfile,
                 'peopleWithEmail' => $totalPeople - $peopleWithoutEmail,
-                'departmentsWithHead' => $totalDepts - $deptsWithoutHead,
+                'departmentsUnderParent' => $totalDepts - $unitsWithoutParent,
+                // Null, not a number, where the source system records no head at
+                // all. Zero there would be indistinguishable from an
+                // organization with unled departments.
+                'departmentsWithHead' => $deptsWithoutHead === null ? null : $totalDepts - $deptsWithoutHead,
             ],
         ]);
     }

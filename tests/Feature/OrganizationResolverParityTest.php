@@ -83,7 +83,7 @@ final class OrganizationResolverParityTest extends TestCase
         // unit came from, so a client never has to know one ERP's sentinel
         // values. This asserts that vocabulary rather than the column contents.
         $this->assertSame(
-            ['id' => '1', 'name' => 'Nursing', 'parentId' => null, 'status' => 'active', 'source' => 'hr'],
+            ['id' => '1', 'name' => 'Nursing', 'parentId' => null, 'headId' => null, 'status' => 'active', 'source' => 'hr'],
             $body['departments'][0],
         );
 
@@ -100,7 +100,17 @@ final class OrganizationResolverParityTest extends TestCase
         $this->assertSame(2, $body['peopleByDepartment']['2']);
         $this->assertArrayNotHasKey('0', $body['peopleByDepartment']);
 
-        $this->assertSame('Radiology', $body['heads']['3']);
+        /*
+            A DEPARTMENT'S HEAD IS THE PERSON WHO LEADS IT.
+
+            This map carried each unit's own name in the slot reserved for its
+            head, so every client resolving a leader from it — CommandCenter's
+            department list, the organization details screen — was handed a
+            department labelled as a person. Radiology's head is the person in
+            `head_user_id`, and the client resolves that id against the roster.
+        */
+        $this->assertSame('102', $body['heads']['3']);
+        $this->assertNull($body['heads']['1'], 'Nursing records no head, so it reports null rather than itself.');
     }
 
     /** @test */
@@ -115,12 +125,18 @@ final class OrganizationResolverParityTest extends TestCase
         $this->assertSame(5, $body['totalPeople']);
         $this->assertSame(3, $body['totalDepartments']);
 
-        // One department has parent_id = 0, so it counts as "without head" under
-        // the existing rule. 3 people-issues + 1 department-issue = 4 over a
-        // denominator of 5 + 3: (1 - 4/8) * 100 = 50.0
-        // assertEquals, not assertSame: PHP rounds to float 50.0 and JSON
-        // serialises that as `50`, which decodes back as an int.
-        $this->assertEquals(50.0, $body['score']);
+        /*
+            Two department issues, and they are about different columns.
+
+            Nursing has `parent_id = 0` (a top-level unit) and no `head_user_id`,
+            so it is once in each: 3 people-issues + 2 department-issues = 5 over
+            a denominator of 5 + 3, i.e. (1 - 5/8) * 100 = 37.5. Under the old
+            single predicate this organization was charged twice for the same
+            missing head, which is what put it at 50.
+        */
+        // assertEquals, not assertSame: PHP rounds to float 37.5 and JSON
+        // serialises that as `37.5`, but the rounding rule is the assertion.
+        $this->assertEquals(37.5, $body['score']);
 
         // ERP column names, unchanged — this is what the SPA renders and what an
         // administrator would go and fix.
@@ -129,11 +145,16 @@ final class OrganizationResolverParityTest extends TestCase
         $this->assertContains('user_profile_id', $fields);
         $this->assertContains('email', $fields);
         $this->assertContains('parent_id', $fields);
+        // The head gap is named after the column that is actually empty.
+        $this->assertContains('head_user_id', $fields);
 
         $this->assertSame(4, $body['completeness']['peopleWithDepartment']);
         $this->assertSame(4, $body['completeness']['peopleWithProfile']);
         $this->assertSame(4, $body['completeness']['peopleWithEmail']);
+        // Surgery and Radiology record a head; Nursing does not.
         $this->assertSame(2, $body['completeness']['departmentsWithHead']);
+        // Only Nursing is a top-level unit.
+        $this->assertSame(2, $body['completeness']['departmentsUnderParent']);
     }
 
     /** @test */
