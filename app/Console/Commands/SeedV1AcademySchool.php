@@ -2614,5 +2614,327 @@ final class SeedV1AcademySchool extends Command
             'created_date' => '2026-02-04 11:00:00',
             'updated_date' => $now,
         ]);
+
+        $this->completeInvestigationChains($tenantId, $principalId, $secDeptId, $finDeptId);
+    }
+
+    /**
+     * Every investigation carries the whole chain, not just the first one:
+     * signal -> evidence -> hypothesis -> reasoning -> recommendation ->
+     * decision, and for the two resolved cases the ESO, execution, measurement
+     * plan and learning behind the outcome. Open cases stop at a decision that
+     * is genuinely waiting, which is what fills the Decision Queue.
+     */
+    private function completeInvestigationChains(string $tenantId, string $principalId, string $secDeptId, string $finDeptId): void
+    {
+        $ns = Uuid::fromString(self::ID_NAMESPACE);
+        $id = static fn (string $key): string => (string) Uuid::uuid5($ns, $tenantId . ':' . $key);
+        $now = '2026-04-15 12:00:00';
+
+        $specs = [
+            2 => [
+                'resolved' => true,
+                'evidence' => [
+                    'source' => 'school_fee', 'type' => 'fee_ledger', 'confidence' => 0.93,
+                    'created' => '2025-12-28 10:20:00', 'observed' => '2025-12-28 00:00:00',
+                    'summary' => 'The Term 3 fee ledger shows 9 student accounts holding Rs 2,70,000 unpaid, 75 days past the due date. All nine paid Terms 1 and 2 on time, so this is a change in behaviour, not a history of default.',
+                    'provenance' => ['dataset' => 'school_fee', 'rows_analyzed' => 3360, 'filter' => 'term=3 AND status=overdue'],
+                ],
+                'hypothesis' => [
+                    'statement' => 'A single lump-sum Term 3 due date fell right after the festival and Term 2 exam-fee cycle, leaving these families short of cash. Non-payment is a liquidity timing problem, not disengagement from the school.',
+                    'family' => 'process_design', 'confidence' => 0.87, 'status' => 'confirmed',
+                    'by' => 'Finance Officer', 'created' => '2025-12-30 10:00:00',
+                ],
+                'steps' => [
+                    ['Accounts that paid the first two terms on time and went quiet only on Term 3 point to cash timing, so a firm legal stance would damage a relationship that is otherwise healthy.', 0.88, '2025-12-31 11:00:00'],
+                    ['Bi-weekly micro-payments keep every family inside the school fee cycle and recover cash sooner than a settlement date nobody can meet.', 0.90, '2026-01-02 15:00:00'],
+                ],
+                'recommendation' => [
+                    'category' => 'improve', 'title' => 'Offer bi-weekly instalment plans to the nine overdue Term 3 families',
+                    'description' => 'Replace the single overdue balance with a bi-weekly micro-payment schedule agreed in a counselling call with each family, with an SMS reminder two days before every instalment.',
+                    'priority' => 'high', 'urgency' => 'urgent', 'confidence' => 0.90,
+                    'impact' => 'Recovers at least 85% of the Rs 2,70,000 overdue balance without losing a single enrolment.',
+                    'cost' => 'Zero external cost (finance office time only)', 'risk' => 'low',
+                    'status' => 'accepted', 'created' => '2026-01-03 10:00:00',
+                ],
+                'decision' => ['status' => 'approved'],
+                'eso' => [
+                    'code' => 'ESO_FIN_INSTALMENT', 'name' => 'Structured instalment plan for overdue fee accounts',
+                    'trigger' => 'Fee accounts more than 45 days overdue with a clean payment history.',
+                    'objective' => 'Recover overdue fees via agreed instalments',
+                    'owner' => $finDeptId,
+                    'input' => ['families' => 9, 'overdue_amount' => 270000, 'schedule' => 'bi-weekly'],
+                    'output' => ['plans_agreed' => 9, 'recovered_amount' => 243000, 'recovery_pct' => 90.0],
+                    'started' => '2026-01-06 09:00:00', 'completed' => '2026-02-27 17:00:00',
+                ],
+                'plan' => ['metric' => 'term3_overdue_amount', 'baseline' => 270000.00, 'target' => 40500.00, 'unit' => 'INR', 'days' => 60, 'created' => '2026-01-05 09:00:00'],
+                'learning' => [
+                    'pattern' => 'Instalment plans beat escalation for clean-history overdue accounts',
+                    'description' => 'Families with a clean payment record respond to a counselled bi-weekly plan: 90% of the overdue balance was recovered in 52 days with no dropouts, where escalation risks both the cash and the enrolment.',
+                    'domain' => 'Finance & Fee Collection', 'confidence' => 0.91, 'created' => '2026-03-02 11:00:00',
+                ],
+            ],
+            3 => [
+                'resolved' => true,
+                'evidence' => [
+                    'source' => 'kasba-assessments', 'type' => 'capability_assessment', 'confidence' => 0.90,
+                    'created' => '2025-07-28 14:20:00', 'observed' => '2025-07-28 00:00:00',
+                    'summary' => 'Baseline KASBA evaluation of the STEM faculty scored Subject Knowledge at 4.3 but Differentiated Instruction at only 2.4 against a benchmark of 4.0. The gap is in applying techniques, not in knowing the subject.',
+                    'provenance' => ['dataset' => 'hpbrain_capability_assignments', 'capability' => 'ED_ASSESSMENT_DESIGN', 'assessed_teachers' => 8],
+                ],
+                'hypothesis' => [
+                    'statement' => 'Teachers know their subjects deeply but have had no structured, observed practice in planning one lesson for mixed-ability learners, so strong knowledge is not turning into differentiated teaching.',
+                    'family' => 'capability_gap', 'confidence' => 0.86, 'status' => 'confirmed',
+                    'by' => 'Head of Science & Mathematics', 'created' => '2025-07-30 10:00:00',
+                ],
+                'steps' => [
+                    ['The knowledge score is high while the skill score is low, so another subject workshop would repeat what teachers already know; the gap needs practice with feedback.', 0.87, '2025-07-31 11:00:00'],
+                    ['Paired peer mentoring with classroom observation turns knowledge into skill faster than passive workshops, and costs only timetable time.', 0.90, '2025-08-02 15:00:00'],
+                ],
+                'recommendation' => [
+                    'category' => 'develop', 'title' => 'Run a term-long peer-mentoring cycle on differentiated instruction for STEM faculty',
+                    'description' => 'Pair each STEM teacher with a mentor for fortnightly lesson-planning sessions and two observed lessons, then reassess the capability with the same KASBA rubric.',
+                    'priority' => 'medium', 'urgency' => 'steady', 'confidence' => 0.88,
+                    'impact' => 'Lifts Differentiated Instruction from 2.4 to the 4.0 benchmark within one term.',
+                    'cost' => 'Zero external cost (reallocated planning periods)', 'risk' => 'low',
+                    'status' => 'accepted', 'created' => '2025-08-03 10:00:00',
+                ],
+                'decision' => ['status' => 'approved'],
+                'eso' => [
+                    'code' => 'ESO_FACULTY_MENTORING', 'name' => 'Peer mentoring cycle for a faculty capability gap',
+                    'trigger' => 'A KASBA assessment scoring a teaching capability well below benchmark.',
+                    'objective' => 'Close a faculty capability gap by mentoring',
+                    'owner' => $secDeptId,
+                    'input' => ['faculty' => 8, 'capability' => 'Differentiated Instruction', 'cycle' => 'one term'],
+                    'output' => ['mentoring_sessions' => 32, 'observed_lessons' => 16, 'teachers_completed' => 8],
+                    'started' => '2025-08-11 09:00:00', 'completed' => '2025-10-31 17:00:00',
+                ],
+                'plan' => ['metric' => 'kasba_differentiated_instruction', 'baseline' => 2.40, 'target' => 4.00, 'unit' => 'KASBA level', 'days' => 210, 'created' => '2025-08-05 09:00:00'],
+                'learning' => [
+                    'pattern' => 'Observed peer mentoring converts knowledge into classroom skill',
+                    'description' => 'Where subject knowledge is already strong, a mentoring cycle with observed lessons moved the skill score from 2.4 to 4.2, which a passive workshop would not have done.',
+                    'domain' => 'People & Capability', 'confidence' => 0.92, 'created' => '2026-04-01 11:00:00',
+                ],
+            ],
+            4 => [
+                'resolved' => false,
+                'hypothesis' => [
+                    'statement' => 'Grade 10 students are dropping long after-school matches to protect board-exam revision time, not because they have lost interest in sport.',
+                    'family' => 'workload_pressure', 'confidence' => 0.82, 'status' => 'proposed',
+                    'by' => 'Sports Coach', 'created' => '2025-11-14 10:00:00',
+                ],
+                'steps' => [
+                    ['The drop is concentrated in Term 2, the term that carries the pre-board mock exams, and Grade 9 participation did not fall, so the cause is exam pressure on Grade 10 specifically.', 0.84, '2025-11-15 11:00:00'],
+                    ['A 30-minute break fits between study blocks, so it removes the trade-off between fitness and revision instead of asking students to choose.', 0.85, '2025-11-17 15:00:00'],
+                ],
+                'recommendation_status' => 'pending',
+                'decision' => [
+                    'status' => 'pending', 'date' => '2025-11-18 10:00:00',
+                    'rationale' => 'Awaiting Principal review: short fitness breaks are low-cost, but need timetable space agreed with the Grade 10 class teachers.',
+                    'alternatives' => ['Keep 2-hour matches only (not recommended: participation already falling)', 'Cancel Term 2 sports for Grade 10 (not recommended: removes stress relief)'],
+                ],
+            ],
+            5 => [
+                'resolved' => false,
+                'hypothesis' => [
+                    'statement' => 'The curriculum treats Science and Technology GK as part of textbook science, so current events and applied technology are never taught, while Geography and History are reinforced through regular quizzes.',
+                    'family' => 'curriculum_coverage', 'confidence' => 0.80, 'status' => 'proposed',
+                    'by' => 'Academic Coordinator', 'created' => '2026-02-05 10:00:00',
+                ],
+                'steps' => [
+                    ['Scores of 70%+ in Geography and History against 45% in Science and Tech show the students can retain GK when it is reinforced, so the gap is exposure rather than ability.', 0.83, '2026-02-06 11:00:00'],
+                    ['A daily two-minute science fact gives repeated exposure without adding a period, which suits a low-severity gap better than a new class.', 0.86, '2026-02-09 15:00:00'],
+                ],
+                'recommendation_status' => 'pending',
+                'decision' => [
+                    'status' => 'pending', 'date' => '2026-02-10 10:00:00',
+                    'rationale' => 'Awaiting Principal review: a morning-assembly slot is free, and the proposal needs a teacher roster to prepare the daily fact.',
+                    'alternatives' => ['Add a weekly GK period (not recommended: no free timetable slot)', 'Do nothing and review next term (not recommended: gap already visible in Term 2)'],
+                ],
+            ],
+        ];
+
+        foreach ($specs as $n => $spec) {
+            $caseId = $id('case' . $n);
+            $sigId = $id('sig' . $n);
+            $evidenceId = $id('ev' . $n);
+            $hypId = $id('hyp' . $n);
+            $recId = $id('rec' . $n);
+            $decId = $id('dec' . $n);
+
+            // Evidence (cases 4 and 5 already own one).
+            if (isset($spec['evidence'])) {
+                $e = $spec['evidence'];
+                DB::table('hpbrain_evidence')->updateOrInsert(['id' => $evidenceId], [
+                    'tenant_id' => $tenantId,
+                    'signal_id' => $sigId,
+                    'source' => $e['source'],
+                    'evidence_type' => $e['type'],
+                    'content' => json_encode(['summary' => $e['summary']], JSON_UNESCAPED_UNICODE),
+                    'provenance' => json_encode($e['provenance']),
+                    'confidence' => $e['confidence'],
+                    'hash' => hash('sha256', $tenantId . '-case' . $n . '-evidence'),
+                    'version' => '1.0',
+                    'status' => 'active',
+                    'created_by' => self::AUTHOR,
+                    'created_date' => $e['created'],
+                    'observed_date' => $e['observed'],
+                ]);
+                DB::table('hpbrain_case_evidence')->updateOrInsert(
+                    ['tenant_id' => $tenantId, 'case_id' => $caseId, 'evidence_id' => $evidenceId],
+                    ['linked_date' => $e['created']]
+                );
+            }
+
+            $h = $spec['hypothesis'];
+            DB::table('hpbrain_hypotheses')->updateOrInsert(['id' => $hypId], [
+                'tenant_id' => $tenantId,
+                'case_id' => $caseId,
+                'statement' => $h['statement'],
+                'root_cause_family' => $h['family'],
+                'confidence' => $h['confidence'],
+                'status' => $h['status'],
+                'supporting_evidence_ids' => json_encode([$evidenceId]),
+                'proposed_by' => $h['by'],
+                'created_date' => $h['created'],
+            ]);
+            if ($spec['resolved']) {
+                DB::table('hpbrain_cases')->where('id', $caseId)->update(['resolved_hypothesis_id' => $hypId]);
+            }
+
+            // Reasoning steps; the recommendation hangs off the last one.
+            $lastStepId = null;
+            foreach ($spec['steps'] as $i => [$description, $confidence, $created]) {
+                $lastStepId = $id('step' . $n . '-' . ($i + 1));
+                DB::table('hpbrain_reasoning_steps')->updateOrInsert(['id' => $lastStepId], [
+                    'tenant_id' => $tenantId,
+                    'case_id' => $caseId,
+                    'signal_id' => $sigId,
+                    'step_order' => $i + 1,
+                    'description' => $description,
+                    'confidence_score' => $confidence,
+                    'created_by' => self::AUTHOR,
+                    'created_date' => $created,
+                ]);
+            }
+
+            // Cases 2 and 3 get their ESO and recommendation here; 4 and 5 already have a recommendation.
+            $esoDefId = null;
+            if (isset($spec['eso'])) {
+                $o = $spec['eso'];
+                $esoDefId = $id('esodef' . $n);
+                DB::table('hpbrain_eso_definitions')->updateOrInsert(['id' => $esoDefId], [
+                    'tenant_id' => $tenantId,
+                    'org_id' => null,
+                    'eso_code' => $o['code'],
+                    'name' => $o['name'],
+                    'version' => '1.0',
+                    'status' => 'active',
+                    'owner' => $o['owner'],
+                    'provenance' => 'School Leadership Standards',
+                    'trigger_description' => $o['trigger'],
+                    'objective' => $o['objective'],
+                    'created_by' => self::AUTHOR,
+                    'created_date' => $spec['recommendation']['created'],
+                    'updated_date' => $now,
+                ]);
+            }
+
+            if (isset($spec['recommendation'])) {
+                $r = $spec['recommendation'];
+                DB::table('hpbrain_recommendations')->updateOrInsert(['id' => $recId], [
+                    'tenant_id' => $tenantId,
+                    'reasoning_step_id' => $lastStepId,
+                    'category' => $r['category'],
+                    'title' => $r['title'],
+                    'description' => $r['description'],
+                    'priority' => $r['priority'],
+                    'urgency' => $r['urgency'],
+                    'confidence' => $r['confidence'],
+                    'impact' => $r['impact'],
+                    'cost' => $r['cost'],
+                    'risk' => $r['risk'],
+                    'dependencies' => json_encode([]),
+                    'status' => $r['status'],
+                    'eso_id' => $esoDefId,
+                    'created_by' => self::AUTHOR,
+                    'created_date' => $r['created'],
+                    'updated_date' => $now,
+                ]);
+            } else {
+                DB::table('hpbrain_recommendations')->where('id', $recId)->update([
+                    'reasoning_step_id' => $lastStepId,
+                    'status' => $spec['recommendation_status'],
+                    'updated_date' => $now,
+                ]);
+            }
+
+            // Decision, linked to the recommendation. Approved ones already exist for cases 2 and 3.
+            $d = $spec['decision'];
+            $approved = $d['status'] === 'approved';
+            if ($approved) {
+                DB::table('hpbrain_decisions')->where('id', $decId)->update(['recommendation_id' => $recId]);
+            } else {
+                DB::table('hpbrain_decisions')->updateOrInsert(['id' => $decId], [
+                    'tenant_id' => $tenantId,
+                    'recommendation_id' => $recId,
+                    'decided_by' => $principalId,
+                    'executor_type' => 'human',
+                    'rationale' => $d['rationale'],
+                    'alternatives_considered' => json_encode($d['alternatives']),
+                    'status' => 'pending',
+                    'confidence' => 0.80,
+                    'explanation' => 'Waiting for Principal approval.',
+                    'created_date' => $d['date'],
+                ]);
+
+                continue;
+            }
+
+            // Resolved cases: measurement plan, execution and learning behind the existing outcome.
+            $pl = $spec['plan'];
+            DB::table('hpbrain_measurement_plans')->updateOrInsert(['id' => $id('plan' . $n)], [
+                'tenant_id' => $tenantId,
+                'decision_id' => $decId,
+                'baseline_metric' => $pl['metric'],
+                'baseline_value' => $pl['baseline'],
+                'target_value' => $pl['target'],
+                'metric_unit' => $pl['unit'],
+                'measurement_window_days' => $pl['days'],
+                'owner_id' => $principalId,
+                'created_by' => self::AUTHOR,
+                'created_date' => $pl['created'],
+            ]);
+
+            $o = $spec['eso'];
+            DB::table('hpbrain_eso_executions')->updateOrInsert(['id' => $id('esoexec' . $n)], [
+                'tenant_id' => $tenantId,
+                'eso_id' => $esoDefId,
+                'eso_definition_id' => $esoDefId,
+                'decision_id' => $decId,
+                'status' => 'completed',
+                'executed_by' => $principalId,
+                'executor_type' => 'human',
+                'input' => json_encode($o['input']),
+                'output' => json_encode($o['output']),
+                'started_date' => $o['started'],
+                'completed_date' => $o['completed'],
+                'created_date' => $o['started'],
+            ]);
+
+            $l = $spec['learning'];
+            DB::table('hpbrain_learnings')->updateOrInsert(['id' => $id('learn' . $n)], [
+                'tenant_id' => $tenantId,
+                'outcome_id' => $id('out' . $n),
+                'mental_model_id' => null,
+                'pattern' => $l['pattern'],
+                'description' => $l['description'],
+                'domain' => $l['domain'],
+                'confidence' => $l['confidence'],
+                'reusable' => 1,
+                'created_by' => self::AUTHOR,
+                'created_date' => $l['created'],
+            ]);
+        }
     }
 }
