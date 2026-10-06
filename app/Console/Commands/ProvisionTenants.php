@@ -182,6 +182,10 @@ final class ProvisionTenants extends Command
             $capRows[] = [
                 'id'              => Uuid::uuid4()->toString(),
                 'tenant_id'       => $tenantId,
+                // The Capabilities screen asks for ?orgId=<organization id> and
+                // the endpoint filters on it. An ERP-backed tenant's organization
+                // id is its tenant id; a NULL here hides the whole register.
+                'org_id'          => $tenantId,
                 'capability_code' => $cap['code'],
                 'name'            => $cap['name'],
                 'description'     => $cap['description'],
@@ -241,6 +245,14 @@ final class ProvisionTenants extends Command
                 'updated_date'  => $now,
             ];
         }
+
+        // Rows provisioned before org_id was written are invisible to the
+        // Capabilities screen. Claim only the unowned ones; never touch a row
+        // that already names an organization.
+        DB::table('hpbrain_capabilities')
+            ->where('tenant_id', $tenantId)
+            ->where(fn ($q) => $q->whereNull('org_id')->orWhere('org_id', ''))
+            ->update(['org_id' => $tenantId]);
 
         DB::transaction(function () use ($capRows, $termRows) {
             foreach (array_chunk($capRows, 50) as $chunk) {

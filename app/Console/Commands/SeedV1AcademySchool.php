@@ -29,6 +29,7 @@ final class SeedV1AcademySchool extends Command
 {
     protected $signature = 'school:seed-v1-academy
         {--replace : Purge and recreate V1 Academy if it already exists}
+        {--skip-warm : Skip derived intelligence cache warmers after seeding}
         {--email=v1@gmail.com : Admin login email}
         {--password=adminv123 : Admin login password}';
 
@@ -61,6 +62,7 @@ final class SeedV1AcademySchool extends Command
         $email = (string) $this->option('email');
         $password = (string) $this->option('password');
         $replace = (bool) $this->option('replace');
+        $skipWarm = (bool) $this->option('skip-warm');
 
         // 1. Locate or create tenant
         $tenantId = $this->findExistingTenant($email);
@@ -137,6 +139,7 @@ final class SeedV1AcademySchool extends Command
 
         // 7. Teacher capability assignments and KASBA assessments
         $this->info('Recording teacher capability assignments and longitudinal KASBA evaluations...');
+        $this->ensureV1AcademyCapabilities($tenantId);
         $this->seedTeacherCapabilities($tenantId, $staffData);
 
         // 8. Generate real evidence-backed intelligence loop
@@ -144,17 +147,21 @@ final class SeedV1AcademySchool extends Command
         $this->seedIntelligenceLoop($tenantId, $staffData, $counts);
 
         // 9. Precompute and warm intelligence caches
-        $this->info('Warming derived intelligence caches...');
-        try {
-            $this->call('intelligence:warm', ['--tenant' => [$tenantId], '--fresh' => true]);
-        } catch (\Throwable $e) {
-            $this->warn('  intelligence:warm notice: ' . $e->getMessage());
-        }
+        if ($skipWarm) {
+            $this->warn('Skipping derived intelligence cache warmers (--skip-warm).');
+        } else {
+            $this->info('Warming derived intelligence caches...');
+            try {
+                $this->call('intelligence:warm', ['--tenant' => [$tenantId], '--fresh' => true]);
+            } catch (\Throwable $e) {
+                $this->warn('  intelligence:warm notice: ' . $e->getMessage());
+            }
 
-        try {
-            $this->call('operations:warm', ['--tenant' => [$tenantId], '--fresh' => true]);
-        } catch (\Throwable $e) {
-            $this->warn('  operations:warm notice: ' . $e->getMessage());
+            try {
+                $this->call('operations:warm', ['--tenant' => [$tenantId], '--fresh' => true]);
+            } catch (\Throwable $e) {
+                $this->warn('  operations:warm notice: ' . $e->getMessage());
+            }
         }
 
         $this->newLine();
@@ -319,6 +326,15 @@ final class SeedV1AcademySchool extends Command
             'Academic Coordinator',
             'Finance Officer',
             'Administrative Officer',
+            'Examination Controller',
+            'Student Counsellor',
+            'IT Coordinator',
+            'Librarian',
+            'Sports Coach',
+            'Transport Coordinator',
+            'Lab Assistant',
+            'Accounts Assistant',
+            'Admissions Counsellor',
         ];
 
         $jobTitleIds = [];
@@ -491,6 +507,138 @@ final class SeedV1AcademySchool extends Command
                 'profile' => 'HR',
                 'dept' => 'Administration & Operations',
                 'gender' => 'Female',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Kavya',
+                'last_name' => 'Nair',
+                'email' => 'kavya.nair@v1academy.edu',
+                'employee_no' => 'EMP-013',
+                'job' => 'Class Teacher',
+                'profile' => 'Teacher',
+                'dept' => 'Primary Section (Grades 1-5)',
+                'gender' => 'Female',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Amit',
+                'last_name' => 'Deshpande',
+                'email' => 'amit.deshpande@v1academy.edu',
+                'employee_no' => 'EMP-014',
+                'job' => 'Class Teacher',
+                'profile' => 'Teacher',
+                'dept' => 'Middle School (Grades 6-8)',
+                'gender' => 'Male',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Pooja',
+                'last_name' => 'Raman',
+                'email' => 'pooja.raman@v1academy.edu',
+                'employee_no' => 'EMP-015',
+                'job' => 'Subject Teacher',
+                'profile' => 'Teacher',
+                'dept' => 'Languages & Humanities Department',
+                'gender' => 'Female',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Nikhil',
+                'last_name' => 'Bhat',
+                'email' => 'nikhil.bhat@v1academy.edu',
+                'employee_no' => 'EMP-016',
+                'job' => 'Subject Teacher',
+                'profile' => 'Teacher',
+                'dept' => 'Science & Mathematics Department',
+                'gender' => 'Male',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Farah',
+                'last_name' => 'Qureshi',
+                'email' => 'farah.qureshi@v1academy.edu',
+                'employee_no' => 'EMP-017',
+                'job' => 'Examination Controller',
+                'profile' => 'Teacher',
+                'dept' => 'Administration & Operations',
+                'gender' => 'Female',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Suresh',
+                'last_name' => 'Naidu',
+                'email' => 'suresh.naidu@v1academy.edu',
+                'employee_no' => 'EMP-018',
+                'job' => 'IT Coordinator',
+                'profile' => 'Employee',
+                'dept' => 'Administration & Operations',
+                'gender' => 'Male',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Priyanka',
+                'last_name' => 'Joshi',
+                'email' => 'priyanka.joshi@v1academy.edu',
+                'employee_no' => 'EMP-019',
+                'job' => 'Student Counsellor',
+                'profile' => 'Employee',
+                'dept' => 'Administration & Operations',
+                'gender' => 'Female',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Irfan',
+                'last_name' => 'Shaikh',
+                'email' => 'irfan.shaikh@v1academy.edu',
+                'employee_no' => 'EMP-020',
+                'job' => 'Transport Coordinator',
+                'profile' => 'Employee',
+                'dept' => 'Administration & Operations',
+                'gender' => 'Male',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Neha',
+                'last_name' => 'Agarwal',
+                'email' => 'neha.agarwal@v1academy.edu',
+                'employee_no' => 'EMP-021',
+                'job' => 'Accounts Assistant',
+                'profile' => 'Finance',
+                'dept' => 'Finance & Accounts',
+                'gender' => 'Female',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Mohan',
+                'last_name' => 'Reddy',
+                'email' => 'mohan.reddy@v1academy.edu',
+                'employee_no' => 'EMP-022',
+                'job' => 'Sports Coach',
+                'profile' => 'Teacher',
+                'dept' => 'Secondary Section (Grades 9-10)',
+                'gender' => 'Male',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Sunita',
+                'last_name' => 'Mishra',
+                'email' => 'sunita.mishra@v1academy.edu',
+                'employee_no' => 'EMP-023',
+                'job' => 'Librarian',
+                'profile' => 'Employee',
+                'dept' => 'Languages & Humanities Department',
+                'gender' => 'Female',
+                'is_admin' => 0,
+            ],
+            [
+                'first_name' => 'Rahul',
+                'last_name' => 'Shetty',
+                'email' => 'rahul.shetty@v1academy.edu',
+                'employee_no' => 'EMP-024',
+                'job' => 'Lab Assistant',
+                'profile' => 'Employee',
+                'dept' => 'Higher Secondary Section (Grades 11-12)',
+                'gender' => 'Male',
                 'is_admin' => 0,
             ],
         ];
@@ -1673,6 +1821,97 @@ final class SeedV1AcademySchool extends Command
     }
 
 
+    private function ensureV1AcademyCapabilities(string $tenantId): void
+    {
+        $now = now()->format('Y-m-d H:i:s');
+        // ERP-backed tenants have no hpbrain_organizations row: the organization
+        // id IS the tenant id, and the Capabilities screen filters on it.
+        $orgId = (string) (DB::table('hpbrain_organizations')
+            ->where('tenant_id', $tenantId)
+            ->value('id') ?? $tenantId);
+
+        // The K-12 pack provisions its capabilities with a NULL org_id, which
+        // that filter excludes; claim them for this organization.
+        DB::table('hpbrain_capabilities')
+            ->where('tenant_id', $tenantId)
+            ->where(fn ($q) => $q->whereNull('org_id')->orWhere('org_id', ''))
+            ->update(['org_id' => $orgId]);
+
+        $capabilities = [
+            'ED_EXAMINATION_MANAGEMENT' => ['Examination Management', 'Exam scheduling, invigilation, evaluation coordination, and result controls.', 'operations'],
+            'ED_SCHOOL_ADMINISTRATION' => ['School Administration', 'Admissions, transport, safety, compliance, records, and daily operations.', 'operations'],
+        ];
+
+        foreach ($capabilities as $code => [$name, $description, $category]) {
+            $existingId = DB::table('hpbrain_capabilities')
+                ->where('tenant_id', $tenantId)
+                ->where('capability_code', $code)
+                ->value('id');
+
+            $payload = [
+                'org_id' => $orgId,
+                'name' => $name,
+                'description' => $description,
+                'category' => $category,
+                'capability_type' => 'competency',
+                'difficulty' => 'intermediate',
+                'criticality' => in_array($code, ['ED_TEACHING_INSTRUCTION', 'ED_ASSESSMENT_DESIGN', 'ED_EXAMINATION_MANAGEMENT'], true) ? 'high' : 'medium',
+                'version' => 1,
+                'status' => 'active',
+                'created_by' => self::AUTHOR,
+                'created_date' => $now,
+                'updated_date' => $now,
+                'knowledge' => json_encode(['rubric' => 'Knows the school process and relevant CBSE/K-12 practices.']),
+                'ability' => json_encode(['rubric' => 'Can execute the process consistently in daily school operations.']),
+                'skill' => json_encode(['rubric' => 'Applies techniques effectively with students, parents, or staff.']),
+                'behaviour' => json_encode(['rubric' => 'Demonstrates reliability, care, and professional judgment.']),
+                'attitude' => json_encode(['rubric' => 'Shows growth mindset, collaboration, and student-first orientation.']),
+            ];
+
+            if ($existingId === null) {
+                $payload['id'] = (string) Uuid::uuid5(Uuid::fromString(self::ID_NAMESPACE), $tenantId . ':capability:' . $code);
+                $payload['tenant_id'] = $tenantId;
+                $payload['capability_code'] = $code;
+
+                DB::table('hpbrain_capabilities')->insert($payload);
+            } else {
+                DB::table('hpbrain_capabilities')
+                    ->where('id', $existingId)
+                    ->where('tenant_id', $tenantId)
+                    ->update($payload);
+            }
+        }
+
+        $retiredSupplemental = [
+            'ED_TEACHING_INSTRUCTION',
+            'ED_CURRICULUM_PLANNING',
+            'ED_STUDENT_MENTORING',
+            'ED_ACADEMIC_PLANNING',
+            'ED_TECHNOLOGY',
+        ];
+
+        $retiredIds = DB::table('hpbrain_capabilities')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('capability_code', $retiredSupplemental)
+            ->pluck('id')
+            ->all();
+
+        if ($retiredIds !== []) {
+            DB::table('hpbrain_capabilities')
+                ->where('tenant_id', $tenantId)
+                ->whereIn('id', $retiredIds)
+                ->update([
+                    'status' => 'inactive',
+                    'updated_date' => $now,
+                ]);
+
+            DB::table('hpbrain_capability_assignments')
+                ->where('tenant_id', $tenantId)
+                ->whereIn('capability_id', $retiredIds)
+                ->update(['status' => 'inactive']);
+        }
+    }
+
     /**
      * @param array<string, mixed> $staffData
      */
@@ -1681,23 +1920,31 @@ final class SeedV1AcademySchool extends Command
         $now = now()->format('Y-m-d H:i:s');
         $capabilities = DB::table('hpbrain_capabilities')
             ->where('tenant_id', $tenantId)
+            ->where('status', 'active')
             ->get();
 
         if ($capabilities->isEmpty()) {
             return;
         }
 
-        $teachers = [
-            'Rajesh Kulkarni' => $staffData['users']['Rajesh Kulkarni'] ?? null,
-            'Anita Sharma' => $staffData['users']['Anita Sharma'] ?? null,
-            'Clara Higgins' => $staffData['users']['Clara Higgins'] ?? null,
-            'Arthur Pendelton' => $staffData['users']['Arthur Pendelton'] ?? null,
-            'David Chen' => $staffData['users']['David Chen'] ?? null,
-            'Sarah Jenkins' => $staffData['users']['Sarah Jenkins'] ?? null,
-        ];
+        $teacherProfileIds = DB::table('tbluserprofilemaster')
+            ->where('sub_institute_id', $tenantId)
+            ->whereIn('name', ['Teacher', 'Principal', 'Admin', 'Finance', 'Employee'])
+            ->pluck('id')
+            ->all();
 
-        foreach ($teachers as $name => $userId) {
-            if ($userId === null) {
+        $teachers = DB::table('tbluser')
+            ->where('sub_institute_id', $tenantId)
+            ->where('status', 1)
+            ->whereNull('deleted_at')
+            ->when($teacherProfileIds !== [], fn ($query) => $query->whereIn('user_profile_id', $teacherProfileIds))
+            ->get(['id', 'first_name', 'last_name']);
+
+        foreach ($teachers as $teacher) {
+            $userId = (int) $teacher->id;
+            $name = trim((string) $teacher->first_name . ' ' . (string) $teacher->last_name);
+
+            if ($userId === 0 || $name === '') {
                 continue;
             }
 
