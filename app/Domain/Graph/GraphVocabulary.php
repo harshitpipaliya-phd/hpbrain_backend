@@ -145,7 +145,12 @@ final class GraphVocabulary
         'led_to' => [
             'led to',
             'intelligence',
-            'hpbrain_recommendations.reasoning_step_id resolves to a reasoning step carrying this signal or case.',
+            // Not reasoning_step_id - RecommendVerb::persist() always writes
+            // that null, so an inner join on it found zero rows for every
+            // recommendation the live AI pipeline produces. The real path:
+            // hpbrain_recommendations.dependencies (cited evidence ids) ->
+            // hpbrain_evidence.signal_id -> hpbrain_case_signals -> this case.
+            'hpbrain_recommendations.dependencies -> hpbrain_evidence.signal_id -> hpbrain_case_signals.',
         ],
         'decided_by' => [
             'decided by',

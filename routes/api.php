@@ -324,6 +324,7 @@ Route::prefix('v1')->group(function () {
         Route::get('analytics/{tenantId}', [AnalyticsController::class, 'index']);
         Route::get('analytics/{tenantId}/signals', [AnalyticsController::class, 'signals']);
         Route::get('analytics/{tenantId}/executive-summary', [AnalyticsController::class, 'executiveSummary']);
+        Route::get('analytics/{tenantId}/executive-summary/narrative', [AnalyticsController::class, 'executiveNarrative'])->middleware('permission:create');
         Route::get('analytics/{tenantId}/decision-intelligence', [AnalyticsController::class, 'decisionIntelligence']);
         Route::get('analytics/{tenantId}/trend', [AnalyticsController::class, 'trend']);
         // The Export CSV button on the Decision Intelligence screen has always
@@ -617,6 +618,26 @@ Route::prefix('v1')->group(function () {
         Route::get('graph/{tenantId}/search', [GraphController::class, 'search']);
         Route::get('graph/{tenantId}/entity/{label}/{id}/related', [GraphController::class, 'related']);
         Route::get('graph/{tenantId}/entity/{label}/{id}', [GraphController::class, 'entity']);
+
+        // Graph RAG: one entity's facts/connections, narrated. Calls AiGateway
+        // and is billed, so `create`, not the group's `read` — same rule
+        // ai/evidence/summarize states above for the same reason.
+        Route::get('graph/{tenantId}/explain/{label}/{id}', [\App\Http\Controllers\Api\GraphExplanationController::class, 'explain'])
+            ->middleware('permission:create');
+
+        // Phase 7.5 — cross-product GraphRAG: one person's record across
+        // K-12, G2G and EB. profile() is pure aggregation (no AiGateway
+        // call, so `read`); narrative() calls AiGateway and is billed, same
+        // `create` rule as graph/explain above.
+        Route::get('person/{tenantId}/{g2gUserId}/profile', [\App\Http\Controllers\Api\PersonProfileController::class, 'profile']);
+        Route::get('person/{tenantId}/{g2gUserId}/narrative', [\App\Http\Controllers\Api\PersonProfileController::class, 'narrative'])
+            ->middleware('permission:create');
+
+        // Phase 6's first real RAG caller: retrieval (RetrievalService) then
+        // grounding (AiGateway::completeWithRag()), both fixed earlier this
+        // session with no caller until now. Billed, so `create`.
+        Route::post('knowledge/{tenantId}/ask', [\App\Http\Controllers\Api\KnowledgeAskController::class, 'ask'])
+            ->middleware('permission:create');
 
         Route::get('workspace/{tenantId}', [WorkspaceController::class, 'summary']);
         Route::get('workspace/{tenantId}/home-metrics', [WorkspaceController::class, 'homeMetrics']);

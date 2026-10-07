@@ -54,7 +54,7 @@ use Throwable;
  * student branch at all, because a zero would invite the reader to wonder what
  * went wrong with an import that never existed.
  */
-final class GraphProjection
+final class GraphProjection implements GraphQueryPort
 {
     /** Nodes one overview may contain, before the client has expanded anything. */
     private const OVERVIEW_BUDGET = 220;
@@ -1006,7 +1006,7 @@ final class GraphProjection
            through hpbrain_reasoning_steps, and the step's own description is
            carried onto the edge — that sentence is the explanation of WHY the
            recommendation follows from the signal, and it already exists. */
-        foreach ($this->recommendationsFromReasoning($tenant, 'signal_id', $id, $limit) as $row) {
+        foreach ($this->recommendationsLinkedTo($tenant, 'signal_id', $id, $limit) as $row) {
             $key = $this->recommendationNode($builder, (array) $row);
             $builder->edge($selfKey, $key, 'led_to', $row->reasoning === null ? null : (string) $row->reasoning);
 
@@ -1055,7 +1055,7 @@ final class GraphProjection
             }
         }
 
-        foreach ($this->recommendationsFromReasoning($tenant, 'case_id', $id, $limit) as $row) {
+        foreach ($this->recommendationsLinkedTo($tenant, 'case_id', $id, $limit) as $row) {
             $key = $this->recommendationNode($builder, (array) $row);
             $builder->edge($selfKey, $key, 'led_to', $row->reasoning === null ? null : (string) $row->reasoning);
 
@@ -1564,12 +1564,12 @@ final class GraphProjection
             case 'Signal':
                 $add('Evidence', 'supported_by', (int) DB::table('hpbrain_evidence')->where('tenant_id', $tenant)->where('signal_id', $id)->count());
                 $add('Case', 'opened_case', (int) DB::table('hpbrain_cases')->where('tenant_id', $tenant)->where('signal_id', $id)->count());
-                $add('Recommendation', 'led_to', count($this->recommendationsFromReasoning($tenant, 'signal_id', $id, 200)));
+                $add('Recommendation', 'led_to', count($this->recommendationsLinkedTo($tenant, 'signal_id', $id, 200)));
                 break;
 
             case 'Case':
                 $add('Hypothesis', 'has_hypothesis', (int) DB::table('hpbrain_hypotheses')->where('tenant_id', $tenant)->where('case_id', $id)->count());
-                $add('Recommendation', 'led_to', count($this->recommendationsFromReasoning($tenant, 'case_id', $id, 200)));
+                $add('Recommendation', 'led_to', count($this->recommendationsLinkedTo($tenant, 'case_id', $id, 200)));
                 break;
 
             case 'Recommendation':
@@ -2469,21 +2469,76 @@ final class GraphProjection
     }
 
     /**
-     * Recommendations reachable from a signal or a case through the reasoning
-     * step that produced them, carrying that step's own description.
+     * Recommendations reachable from a signal or a case through the evidence
+     * they actually cite — NOT through hpbrain_recommendations.reasoning_step_id,
+     * which looks like the answer and is not.
+     *
+     * RecommendVerb::persist() always writes reasoning_step_id as a hardcoded
+     * null ("a model-authored recommendation has no human reasoning step
+     * behind it"), so the previous version of this method — an INNER JOIN on
+     * that column — returned zero rows for every recommendation the live AI
+     * pipeline actually produces (measured: 16 of 40 recommendation rows on
+     * the real installation). hpbrain_recommendation_evidence looks like a
+     * second answer and is also not: only the retired SignalReasoner ever
+     * wrote it.
+     *
+     * The path that actually works, same one
+     * Domain\Cases\RecommendationCaseContext::resolveCase() already uses:
+     *
+     *     hpbrain_recommendations.dependencies (the evidence ids GroundedClaims
+     *     let through) -> hpbrain_evidence.signal_id -> hpbrain_case_signals
+     *     -> the case
+     *
+     * so `$column`/`$id` first resolve to a set of signal ids (directly, for
+     * 'signal_id'; via hpbrain_case_signals, for 'case_id'), then to the
+     * evidence those signals produced, then to any recommendation whose
+     * `dependencies` JSON array cites one of those evidence ids.
+     *
+     * `reasoning` is always null here, and kept in the return shape only so
+     * callers (expandSignal/expandCase) that already null-check it before
+     * using it as an edge caption need no change. There is no equivalent
+     * explanatory sentence for a model-authored recommendation the way there
+     * was for a human reasoning step's own description.
      *
      * @return array<int, object>
      */
-    private function recommendationsFromReasoning(string $tenant, string $column, string $id, int $limit): array
+    private function recommendationsLinkedTo(string $tenant, string $column, string $id, int $limit): array
     {
+        if ($column === 'signal_id') {
+            $signalIds = [$id];
+        } elseif ($column === 'case_id') {
+            $signalIds = DB::table('hpbrain_case_signals')
+                ->where('tenant_id', $tenant)
+                ->where('case_id', $id)
+                ->pluck('signal_id')
+                ->all();
+        } else {
+            $signalIds = [];
+        }
+
+        if ($signalIds === []) {
+            return [];
+        }
+
+        $evidenceIds = DB::table('hpbrain_evidence')
+            ->where('tenant_id', $tenant)
+            ->whereIn('signal_id', $signalIds)
+            ->pluck('id')
+            ->all();
+
+        if ($evidenceIds === []) {
+            return [];
+        }
+
         return DB::table('hpbrain_recommendations as r')
-            ->join('hpbrain_reasoning_steps as s', function ($join) use ($tenant): void {
-                $join->on('s.id', '=', 'r.reasoning_step_id')->where('s.tenant_id', '=', $tenant);
-            })
             ->where('r.tenant_id', $tenant)
-            ->where('s.'.$column, $id)
+            ->where(function ($query) use ($evidenceIds): void {
+                foreach ($evidenceIds as $evidenceId) {
+                    $query->orWhereJsonContains('r.dependencies', $evidenceId);
+                }
+            })
             ->limit($limit)
-            ->get(['r.id', 'r.title', 'r.category', 'r.priority', 'r.status', 'r.confidence', 'r.description', 's.description as reasoning'])
+            ->get(['r.id', 'r.title', 'r.category', 'r.priority', 'r.status', 'r.confidence', 'r.description', DB::raw('NULL as reasoning')])
             ->all();
     }
 

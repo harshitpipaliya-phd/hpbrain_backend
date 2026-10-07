@@ -271,6 +271,103 @@ final class AnalyticsController extends Controller
     }
 
     /**
+     * GET /analytics/{tenantId}/executive-summary/narrative
+     *
+     * Document's 5.6, built on top of executiveSummary() (above) rather than
+     * recomputing anything — same reason every other narrative in this
+     * project reuses an existing retrieval step: the figures must never be
+     * able to disagree with the ones the dashboard itself shows. Grounded
+     * only in intelligenceScore, topRisks, pendingRecommendations and
+     * organizationalKnowledge; a component this controller's own "null, not
+     * zero" rule left unmeasured is passed through as unmeasured, never
+     * guessed at by the model.
+     */
+    public function executiveNarrative(Request $request, \App\Domain\Ai\AiGateway $ai): JsonResponse
+    {
+        $summaryResponse = $this->executiveSummary($request);
+        $summary = json_decode((string) $summaryResponse->getContent(), true) ?: [];
+
+        if (!$ai->isConfigured()) {
+            return response()->json($summary + ['narrative' => null, 'narrativeStatus' => 'ai_not_configured']);
+        }
+
+        try {
+            $response = $ai->complete(
+                new \App\Domain\Ai\AiRequest(
+                    systemPrompt: $this->executiveNarrativeSystemPrompt(),
+                    userPrompt: $this->executiveNarrativeUserPrompt($summary),
+                    responseSchema: ['narrative' => 'string, 3-5 sentences of plain language for a leadership briefing'],
+                    maxTokens: 700,
+                    temperature: 0.2,
+                ),
+                tenantId: $this->tenantId($request),
+                actorId: $this->actorId($request),
+                service: 'executive_summary_narrative',
+            );
+        } catch (\Throwable $e) {
+            return response()->json($summary + ['narrative' => null, 'narrativeStatus' => 'ai_call_failed']);
+        }
+
+        $json = $response->json();
+
+        if ($json === null || !isset($json['narrative'])) {
+            return response()->json($summary + ['narrative' => null, 'narrativeStatus' => 'ai_response_not_json']);
+        }
+
+        return response()->json($summary + ['narrative' => trim((string) $json['narrative']), 'narrativeStatus' => 'ok']);
+    }
+
+    private function executiveNarrativeSystemPrompt(): string
+    {
+        return 'You are briefing a leadership team on their organization\'s intelligence summary. Use only '
+            . 'the figures given - never invent a number, risk, or recommendation not present in the input. '
+            . 'When a figure is null, say it is not yet measured rather than treating it as zero or omitting '
+            . 'it silently. Lead with the single most important thing: the highest-scored open risk, or the '
+            . 'count of pending recommendations if no risk is more pressing. Keep the answer to 3-5 sentences.';
+    }
+
+    /** @param array<string,mixed> $summary */
+    private function executiveNarrativeUserPrompt(array $summary): string
+    {
+        $score = $summary['intelligenceScore'] ?? [];
+        $lines = [sprintf(
+            'Intelligence score: %s (%s).',
+            $score['score'] ?? 'not measured',
+            $score['basis'] ?? ''
+        )];
+
+        $lines[] = sprintf(
+            'Open cases: %d. Open decisions: %d. Pending recommendations: %d.',
+            $summary['openCases'] ?? 0,
+            $summary['openDecisionsCount'] ?? 0,
+            count($summary['pendingRecommendations'] ?? [])
+        );
+
+        $risks = $summary['topRisks'] ?? [];
+        if ($risks !== []) {
+            $lines[] = '';
+            $lines[] = 'Top open risks (highest score first):';
+            foreach (array_slice($risks, 0, 5) as $r) {
+                $lines[] = sprintf('- %s: score %.1f, impact %s', $r['category'], $r['score'], $r['impact']);
+            }
+        } else {
+            $lines[] = '';
+            $lines[] = 'No open risks are recorded.';
+        }
+
+        $knowledge = $summary['organizationalKnowledge'] ?? [];
+        if ($knowledge !== []) {
+            $lines[] = '';
+            $lines[] = 'Organizational knowledge by domain (highest confidence first):';
+            foreach (array_slice($knowledge, 0, 5) as $k) {
+                $lines[] = sprintf('- %s: confidence %.2f, %d pattern(s)', $k['domain'], $k['confidence'], $k['patternCount']);
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
      * A metric over time, from hpbrain_metric_snapshots.
      *
      * GET /analytics/{tenantId}/trend?metric=score.evidenceQuality&days=90

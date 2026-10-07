@@ -149,6 +149,22 @@ final class AiGateway
         return $response;
     }
 
+    /**
+     * complete(), with retrieved context appended to the prompt - fixed from
+     * a hardcoded passthrough that accepted $ragOptions and then discarded
+     * it, always calling complete() as if no context had been given at all
+     * (confirmed: every RAG row in the audit this fixes was blocked on
+     * exactly this). Still has no caller anywhere in the app - RagService,
+     * the only class that could call this, has none of its own either.
+     *
+     * $ragOptions['documents'] is the shape RetrievalResult::$documents and
+     * RetrievalService's search*() methods already return:
+     * array<int, array{id:string, type:string, content:string, score:float}>.
+     * Appended as a clearly-delimited block so the model can be told, in the
+     * system prompt, to use only what's inside it - the same grounded-only
+     * contract every other retrieval-then-generation feature in this project
+     * already follows.
+     */
     public function completeWithRag(
         string $tenantId,
         string $actorId,
@@ -156,7 +172,28 @@ final class AiGateway
         AiRequest $request,
         array $ragOptions = [],
     ): AiResponse {
-        return $this->complete($request, $tenantId, $actorId, $service, null, null, null);
+        $documents = $ragOptions['documents'] ?? [];
+
+        if ($documents === []) {
+            return $this->complete($request, $tenantId, $actorId, $service, null, null, null);
+        }
+
+        $context = implode("\n", array_map(
+            fn (array $d) => sprintf('- [%s %s] %s', $d['type'] ?? 'item', $d['id'] ?? '', $d['content'] ?? ''),
+            $documents
+        ));
+
+        $grounded = new AiRequest(
+            systemPrompt: $request->systemPrompt
+                . "\n\nUse only the RETRIEVED CONTEXT below to answer. If it does not contain the answer, say so plainly rather than guessing.",
+            userPrompt: $request->userPrompt . "\n\nRETRIEVED CONTEXT:\n" . $context,
+            responseSchema: $request->responseSchema,
+            maxTokens: $request->maxTokens,
+            temperature: $request->temperature,
+            model: $request->model,
+        );
+
+        return $this->complete($grounded, $tenantId, $actorId, $service, null, null, null);
     }
 
     public function completeWithFallback(

@@ -36,9 +36,17 @@ final class KasbaService
     /** @var array<int, string> */
     private array $dimensions;
 
+    /**
+     * Phase 7.2 — the default now matches hp_erp's canonical KASBA order
+     * exactly (App\Services\Graph\GraphVocabulary::KASBA_TYPES there,
+     * originally migration 2026_08_04_120000_align_s_skill_matrix_with_live_schema.php:30).
+     * No code-sharing path exists between these two separate Laravel apps,
+     * so this list is kept in sync BY HAND — if hp_erp's canonical set
+     * changes, this literal must change with it.
+     */
     public function __construct(?array $dimensions = null)
     {
-        $this->dimensions = $dimensions ?? ['knowledge', 'ability', 'skill', 'behaviour', 'attitude'];
+        $this->dimensions = $dimensions ?? ['skill', 'knowledge', 'ability', 'attitude', 'behaviour'];
     }
 
     /**

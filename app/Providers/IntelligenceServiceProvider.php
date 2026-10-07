@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\Graph\GraphProjection;
+use App\Domain\Graph\GraphQueryPort;
 use App\Domain\Intelligence\OrganizationDataProfiler;
 use App\Domain\School\DatasetRegistry;
 use App\Services\TenantScopedCache;
@@ -49,5 +51,15 @@ final class IntelligenceServiceProvider extends ServiceProvider
         $this->app->scoped(OrganizationDataProfiler::class);
         $this->app->scoped(DatasetRegistry::class);
         $this->app->scoped(TenantScopedCache::class);
+
+        // ADR-008's seam, made resolvable. GraphController still type-hints the
+        // concrete GraphProjection (nothing requires the interface today), so
+        // this binding does nothing yet - it exists so that introducing a
+        // Neo4j adapter later is "bind GraphQueryPort to the new class here
+        // and update GraphController's type-hints", not a call-site hunt.
+        // No lifetime decision to make: GraphProjection is already left to the
+        // container's default transient resolution, same as every other
+        // stateless analyzer in this provider's docblock above.
+        $this->app->bind(GraphQueryPort::class, GraphProjection::class);
     }
 }

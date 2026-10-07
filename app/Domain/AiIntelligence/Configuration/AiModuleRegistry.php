@@ -48,7 +48,12 @@ final class AiModuleRegistry
             'label' => 'Signal Intelligence',
             'description' => 'Classifying and reasoning over operational signals raised by the signal rules.',
             'wired' => false,
-            'consumer' => 'App\Domain\Reasoning\SignalReasoner',
+            // Was App\Domain\Reasoning\SignalReasoner, deleted - zero live call
+            // sites anywhere, including tests (ReasonOverSignals.php's own
+            // docblock confirms it was replaced). ExplainVerb is the verb that
+            // actually frames a signal today; RecommendVerb already has its own
+            // entry above for drafting recommendations specifically.
+            'consumer' => 'App\Domain\Verbs\ExplainVerb',
         ],
         [
             'key' => 'evidence_intelligence',
