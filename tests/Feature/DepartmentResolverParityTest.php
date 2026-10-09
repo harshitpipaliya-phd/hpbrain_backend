@@ -134,17 +134,56 @@ final class DepartmentResolverParityTest extends TestCase
             ->assertJson(['error' => 'department_not_found']);
     }
 
-    /** @test */
-    public function head_id_stays_null_because_the_source_has_no_such_column(): void
+/** @test */
+    public function head_id_is_read_from_the_mapped_head_column_not_hardcoded_to_null(): void
     {
-        // OrganizationUnit.head is unmapped in this ERP. The honest rendering is
-        // an explicit null, never a guess at parent_id.
+        /*
+          The response used to publish `headId => null` unconditionally, on the
+          stated ground that the universal field 'head' had no column behind it.
+          EntityMappingSeeder maps it — head -> hrms_departments.head_user_id —
+          and the fixture fills it, so every one of these departments was losing a
+          leader it had actually recorded, and the Departments screen's
+          "headed / missing head" filters classified the whole organization as
+          unled.
+
+          What is pinned here is the RULE rather than one fixture row: the head is
+          the value of the mapped column, and an empty column is null — never a
+          guess at parent_id, and never a person from another tenant.
+        */
         $body = $this->withHeaders($this->auth())
             ->getJson('/api/v1/departments/'.self::TENANT)->json();
 
-        foreach ($body as $row) {
-            $this->assertNull($row['headId']);
-        }
+        $byId = collect($body)->keyBy('id');
+
+        // Nursing is the one genuinely headless unit in the fixture.
+        $this->assertNull($byId['1']['headId']);
+        $this->assertSame('101', $byId['2']['headId']);
+        $this->assertSame('102', $byId['3']['headId']);
+    }
+
+    /** @test */
+    public function head_coverage_is_counted_from_the_head_column_not_the_parent_column(): void
+    {
+        /*
+          `completeness.departmentsWithHead` was computed from
+          `parent_id IS NULL OR parent_id = 0` — units with no PARENT — and
+          published as head coverage. Any organization whose units are all
+          top-level but all headed scored zero of N on a gap it does not have,
+          and the same predicate was raised as a data-quality issue.
+
+          The fixture is exactly that shape: Nursing has no head, the other two
+          have both a head and a parent. So parent coverage and head coverage are
+          two different numbers, and neither may borrow the other's column.
+        */
+        $completeness = $this->withHeaders($this->auth())
+            ->getJson('/api/v1/organizations/'.self::TENANT.'/'.self::TENANT.'/data-quality')
+            ->assertStatus(200)
+            ->json('completeness');
+
+        // Surgery and Radiology carry head_user_id; Nursing does not.
+        $this->assertSame(2, $completeness['departmentsWithHead']);
+        // Only Nursing sits at the top of the hierarchy.
+        $this->assertSame(2, $completeness['departmentsUnderParent']);
     }
 
     /** @test */

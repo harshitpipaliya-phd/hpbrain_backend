@@ -255,9 +255,22 @@ final class DepartmentController extends Controller
             'description'        => $row[$unit->field('description')] ?? null,
             'departmentType'     => 'department',
             'parentDepartmentId' => $parent,
-            // Stays null. The universal field 'head' has no column behind it in
-            // this ERP, and has() would report false — see EntityMappingSeeder.
-            'headId'             => null,
+            // The head, WHEN THE TENANT RECORDS ONE. This was hardcoded to null
+            // on the stated grounds that the universal field 'head' has no column
+            // behind it in this ERP — which is true of the tenants mapped when
+            // that was written and false of any tenant mapped since. V1 Academy
+            // maps head -> hrms_departments.head_user_id and fills it for all
+            // eight of its departments, so every one of them published headId:
+            // null: the Departments screen could never resolve a head name, and
+            // its "headed / missing head" filters classified the whole
+            // organization as unled.
+            //
+            // `has()` is the whole test. No tenant is named here and no default
+            // is invented for one that omits the field — an unmapped 'head' still
+            // reports null, which is the honest "not recorded".
+            'headId'             => $unit->has('head') && ! empty($row[$unit->field('head')])
+                ? (string) $row[$unit->field('head')]
+                : null,
             'orgId'              => (string) ($row[$unit->tenantKey] ?? ''),
             'status'             => $unit->has('deletedAt') && ($row[$unit->field('deletedAt')] ?? null)
                 ? 'archived'

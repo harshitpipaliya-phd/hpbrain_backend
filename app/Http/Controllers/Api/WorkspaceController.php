@@ -246,13 +246,13 @@ final class WorkspaceController extends Controller
              * manager", described as "no assigned leadership", and shown on the
              * organization overview as a leadership gap.
              *
-             * It has never measured leadership. This ERP has no department-head
-             * column at all — DepartmentController::map() returns `headId => null`
-             * unconditionally, with a comment saying the universal 'head' field
-             * has nothing behind it here — so no query in this codebase could
-             * report on managers even if one tried. The overview was therefore
-             * publishing a leadership finding derived from a hierarchy column,
-             * about a field the source system does not have.
+             * It has never measured leadership. The predicate names a hierarchy
+             * column, so no query in this codebase can read it as a leadership
+             * finding. (Tenants that map the universal field 'head' — V1 Academy
+             * among them, onto hrms_departments.head_user_id — DO record one, and
+             * OrganizationController::dataQuality now reports their real head
+             * coverage. This finding stays about the hierarchy, under its own
+             * name.)
              *
              * The field name is left alone; renaming it would ripple through
              * every consumer to no benefit. Only the claim is corrected.

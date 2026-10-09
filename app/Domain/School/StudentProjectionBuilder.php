@@ -473,7 +473,7 @@ final class StudentProjectionBuilder
                 ROUND(SUM(metric_value), 2)                                   AS paid,
                 MIN(DATE(occurred_at))                                        AS first_receipt,
                 MAX(DATE(occurred_at))                                        AS last_receipt,
-                {$latest('status')}                                           AS standard,
+                {$latest("JSON_UNQUOTE(JSON_EXTRACT(payload, '$.\"Standard\"'))")}       AS standard,
                 {$latest("JSON_UNQUOTE(JSON_EXTRACT(payload, '$.\"Division\"'))")}       AS division,
                 {$latest("JSON_UNQUOTE(JSON_EXTRACT(payload, '$.\"Batch\"'))")}          AS batch,
                 {$latest("JSON_UNQUOTE(JSON_EXTRACT(payload, '$.\"Student Quota\"'))")}  AS quota,
@@ -489,8 +489,8 @@ final class StudentProjectionBuilder
             -- The academic pass runs first and its name wins; this only fills a
             -- student the academic file never mentioned.
             student_name       = COALESCE(NULLIF(hpbrain_students.student_name, ''), VALUES(student_name)),
-            standard           = VALUES(standard),
-            division           = VALUES(division),
+            standard           = COALESCE(NULLIF(hpbrain_students.standard, ''), VALUES(standard)),
+            division           = COALESCE(NULLIF(hpbrain_students.division, ''), VALUES(division)),
             batch              = VALUES(batch),
             student_quota      = VALUES(student_quota),
             unique_id          = VALUES(unique_id),

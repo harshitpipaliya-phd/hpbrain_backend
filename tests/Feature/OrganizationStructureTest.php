@@ -240,7 +240,8 @@ final class OrganizationStructureTest extends TestCase
      *
      * It has no head column to fill in and no ERP screen an administrator could
      * fix it on, so raising it as a data-quality issue asks somebody to correct
-     * something that does not exist.
+     * something that does not exist — and publishing a head count for it would
+     * say the same thing more quietly, by implying it has a head to lack.
      *
      * @test
      */
@@ -254,11 +255,19 @@ final class OrganizationStructureTest extends TestCase
             ->assertStatus(200)->json();
 
         $this->assertSame(1, $quality['totalDepartments'], 'The shared count, not a fourth one.');
-        $this->assertSame(1, $quality['completeness']['departmentsWithHead']);
+        // Null, not 0 and not 1: "this source system records no leadership" is a
+        // different fact from "its leader is unrecorded", and only one of them is
+        // a gap somebody could close.
+        $this->assertNull($quality['completeness']['departmentsWithHead']);
+        $this->assertSame(
+            [],
+            array_values(array_filter($quality['issues'], fn ($i) => $i['field'] === 'head_user_id')),
+            'A derived section has no head field to be missing.',
+        );
         $this->assertSame(
             [],
             array_values(array_filter($quality['issues'], fn ($i) => $i['field'] === 'parent_id')),
-            'A derived section has no head field to be missing.',
+            'A derived section has no parent field to be missing.',
         );
     }
 
