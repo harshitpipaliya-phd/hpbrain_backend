@@ -4,17 +4,26 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Ai\AiGateway;
 use App\Domain\Events\EventPublisher;
 use App\Domain\Events\LoopEvent;
+use App\Domain\Graph\GraphQueryPort;
+use App\Http\Controllers\Concerns\BuildsGraphRagNarrative;
 use App\Http\Controllers\Controller;
 use App\Repositories\SignalRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Ramsey\Uuid\Uuid;
+use Throwable;
 
 final class SignalController extends Controller
 {
+    use BuildsGraphRagNarrative;
+
+    /** AiGateway service name — the hpbrain_ai_executions row for this verb is traced under this. */
+    private const REASONING_SERVICE = 'signal_reasoning_explanation';
+
     public function __construct(
         private readonly SignalRepository $repository,
         private readonly EventPublisher $events,
@@ -108,6 +117,54 @@ final class SignalController extends Controller
         $row = $this->repository->updateFields($this->tenantId($request), $id, ['status' => $data['status']]);
 
         return $row ? response()->json($row) : response()->json(['error' => 'signal_not_found'], 404);
+    }
+
+    /**
+     * GET signals/{tenantId}/{id}/reasoning — "why was this signal raised?"
+     * (Phase 5 GraphRAG, roadmap doc 5.4).
+     *
+     * Retrieval is GraphQueryPort::reasoningTrail() — the same bounded
+     * Signal→Evidence→Case→Hypothesis→Recommendation→Decision walk
+     * GraphController::trail() exposes read-only — resolved through the
+     * interface, never the concrete GraphProjection. Generation is
+     * AiGateway::completeWithRag(), told to use only what the trail
+     * returned. A signal with no onward trail (no evidence, no case, no
+     * recommendation yet linked) is `no_evidence`: there is nothing to
+     * explain beyond the bare signal, and calling the model on one fact
+     * asking "why" would invite it to guess.
+     */
+    public function explainReasoning(Request $request, string $tenantId, string $id, GraphQueryPort $graph, AiGateway $ai): JsonResponse
+    {
+        $tenant = $this->tenantId($request);
+
+        try {
+            $trail = $graph->reasoningTrail($tenant, 'Signal', $id);
+        } catch (Throwable $e) {
+            return response()->json(['error' => 'graph_unavailable', 'message' => $e->getMessage()], 503);
+        }
+
+        if (($trail['origin']['key'] ?? null) === null) {
+            return response()->json(['error' => 'signal_not_found'], 404);
+        }
+
+        if (count($trail['trail'] ?? []) <= 1) {
+            return response()->json($trail + ['narrative' => null, 'narrativeStatus' => 'no_evidence']);
+        }
+
+        $result = $this->narrateFromDocuments(
+            $request,
+            $ai,
+            $tenant,
+            self::REASONING_SERVICE,
+            'You are explaining why one signal was raised in an organization\'s intelligence graph, and what '
+                .'happened to it afterwards, to someone deciding whether to act. Use only the steps and facts '
+                .'given in the retrieved context — never invent a cause, a date, or a relationship not present '
+                .'in it.',
+            sprintf('Explain why Signal "%s" was raised, and summarize the reasoning trail that followed from it.', $id),
+            $this->reasoningTrailDocuments($trail),
+        );
+
+        return response()->json($trail + $result);
     }
 
     public function generate(Request $request): JsonResponse

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Graph\GraphQueryPort;
 use App\Domain\Organization\OrganizationStructureService;
 use App\Domain\Universal\EntityResolver;
+use App\Http\Controllers\Concerns\BuildsGraphRagNarrative;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,6 +46,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 final class AnalyticsController extends Controller
 {
+    use BuildsGraphRagNarrative;
+
     public function __construct(
         private readonly EntityResolver $resolver,
         private readonly OrganizationStructureService $structure,
@@ -53,6 +57,9 @@ final class AnalyticsController extends Controller
     /** Statuses that count as a decision having been accepted. */
     private const APPROVED = ['approved', 'accepted'];
     private const REJECTED = ['rejected', 'declined'];
+
+    /** AiGateway service name — the hpbrain_ai_executions row for this verb is traced under this. */
+    private const EXECUTIVE_GRAPH_BRIEFING_SERVICE = 'executive_graph_briefing';
 
     public function index(Request $request): JsonResponse
     {
@@ -365,6 +372,59 @@ final class AnalyticsController extends Controller
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * GET /analytics/{tenantId}/executive-summary/graph-briefing
+     *
+     * A second executive narrative, deliberately separate from
+     * executiveNarrative() above: that one grounds on statistics() — the
+     * loop-table aggregates this controller computes for itself.  This one
+     * is Phase 5's GraphRAG version — retrieval is
+     * GraphQueryPort::summary() (the metric strip) and overview() (the
+     * organization's own branches, depth 1, resolved through the
+     * interface, never GraphProjection directly), and generation is
+     * AiGateway::completeWithRag() grounded only in what those two
+     * returned. A tenant whose graph has no branches at all beyond the
+     * bare Organization root (a brand-new tenant with no imports yet) is
+     * `no_evidence` — there is nothing yet to brief on.
+     */
+    public function executiveGraphBriefing(Request $request, GraphQueryPort $graph, \App\Domain\Ai\AiGateway $ai): JsonResponse
+    {
+        $tenant = $this->tenantId($request);
+
+        try {
+            $summary = $graph->summary($tenant);
+            $overview = $graph->overview($tenant, 1, ['signals', 'cases', 'recommendations', 'decisions', 'capabilities']);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'graph_unavailable', 'message' => $e->getMessage()], 503);
+        }
+
+        if (count($overview['nodes'] ?? []) <= 1) {
+            return response()->json([
+                'summary' => $summary,
+                'narrative' => null,
+                'narrativeStatus' => 'no_evidence',
+            ]);
+        }
+
+        $result = $this->narrateFromDocuments(
+            $request,
+            $ai,
+            $tenant,
+            self::EXECUTIVE_GRAPH_BRIEFING_SERVICE,
+            'You are briefing a leadership team on their organization\'s intelligence graph. Use only the '
+                .'metrics and branches given in the retrieved context — never invent a number, risk, or '
+                .'recommendation not present in it.',
+            'Give an executive briefing on this organization\'s current state, based on its intelligence graph.',
+            $this->organizationBriefingDocuments($summary, $overview),
+        );
+
+        return response()->json([
+            'summary' => $summary,
+            'nodeCount' => $overview['nodeCount'] ?? count($overview['nodes'] ?? []),
+            'truncated' => $overview['truncated'] ?? [],
+        ] + $result);
     }
 
     /**

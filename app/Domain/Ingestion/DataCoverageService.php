@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Domain\Ingestion;
 
+use App\Domain\Graph\GraphQueryPort;
+use App\Domain\Graph\GraphVocabulary;
 use App\Domain\Operations\OperationalIntelligence;
 use App\Domain\Universal\EntityResolver;
 use App\Repositories\DataSourceRepository;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 /**
  * FIVE SEPARATE ANSWERS TO "HOW MUCH OF THIS TENANT'S DATA DOES THE BRAIN
@@ -61,10 +64,42 @@ final class DataCoverageService
     /** A configured source with no sync in this many days is reported stale. */
     private const STALE_AFTER_DAYS = 7;
 
+    /**
+     * GraphVocabulary label => the GraphQueryPort::summary() key that counts
+     * it, where one exists. A label absent from this map (Organization,
+     * Standard, Subject, Hypothesis) is not something summary() counts at
+     * all — graphSparsity() reports that honestly as `unmeasured` rather
+     * than guessing a count from elsewhere.
+     */
+    private const LABEL_SUMMARY_KEY = [
+        'Department'     => 'departments',
+        'Person'         => 'people',
+        'Student'        => 'students',
+        'Dataset'        => 'datasets',
+        'Signal'         => 'signals',
+        'Evidence'       => 'evidence',
+        'Case'           => 'cases',
+        'Recommendation' => 'recommendations',
+        'Decision'       => 'decisions',
+        'Capability'     => 'capabilities',
+    ];
+
+    /**
+     * The branches overview() will actually draw when asked for all of them.
+     * Matches the `include` list every other GraphRAG caller in this app
+     * already passes (AiWorkspaceController, AnalyticsController,
+     * OperationalIntelligenceController, OrganizationIntelligenceController),
+     * plus 'evidence' — omitted by those callers for their own reasons, but
+     * this report is specifically about which labels overview() can reach,
+     * so it asks for every loop branch overview() knows how to draw.
+     */
+    private const OVERVIEW_INCLUDE = ['signals', 'evidence', 'cases', 'recommendations', 'decisions', 'capabilities'];
+
     public function __construct(
         private readonly EntityResolver $resolver,
         private readonly OperationalIntelligence $operations,
         private readonly DataSourceRepository $sources,
+        private readonly GraphQueryPort $graph,
     ) {
     }
 
@@ -85,12 +120,20 @@ final class DataCoverageService
             'fieldCompleteness' => $this->fieldCompleteness($ops),
             'dataQuality' => $this->dataQuality($recordProcessing),
             'freshness' => $this->freshness($ops, $configuredSources),
+            // A SIXTH axis, deliberately not blended into the five above: those
+            // are all SQL-side measures of what was imported. This one is the
+            // graph's own view — which GraphVocabulary labels this tenant's
+            // graph can actually reach — and it answers a different question
+            // ("is this subgraph worth grounding a GraphRAG narrative on?"),
+            // not a restatement of fieldCompleteness in graph form.
+            'graphSparsity' => $this->graphSparsity($tenantId),
             'definitions' => [
                 'sourceDiscovery' => 'Universal entities this tenant has mapped, and sources configured in the source registry. Connection status only — a mapped entity may still carry zero imported rows.',
                 'recordProcessing' => 'Of the rows submitted across every import job this tenant has run, the share the pipeline actually processed, and how that processed set split into successes, failures and duplicates.',
                 'fieldCompleteness' => 'For each connected operational dataset, the share of this engine\'s recognised fields (timeline, status, owner, category, …) that carry a value on at least one row.',
                 'dataQuality' => 'Of the rows an import job actually processed (not of what was merely submitted), the share that were clean versus errored or treated as a duplicate.',
                 'freshness' => 'How long ago each dataset last received a row, and how long ago each configured source last completed a sync.',
+                'graphSparsity' => 'For each label GraphQueryPort/GraphVocabulary can draw, whether this tenant\'s graph actually has populated, reachable nodes for it (vs. zero rows, or rows that exist but are not reachable from the graph overview) — the data-quality check worth running before trusting a GraphRAG narrative built on that label.',
             ],
         ];
     }
@@ -291,5 +334,113 @@ final class DataCoverageService
         $days = $this->daysSince($lastSyncedAt);
 
         return $days === null ? null : $days > self::STALE_AFTER_DAYS;
+    }
+
+    /**
+     * The graph half of coverage: of every label GraphVocabulary declares,
+     * which ones this tenant's graph actually has populated, reachable nodes
+     * for — read through GraphQueryPort::summary() (the authoritative,
+     * unbudgeted count per loop/foundation table) and ::overview() (whether
+     * the graph's own top-level walk actually draws that label as a branch,
+     * which is a different question from "does a row exist" — Hypothesis
+     * has no top-level branch at all today; it is only ever reached by
+     * expanding an existing Case).
+     *
+     * NEVER FAILS THE WHOLE REPORT. A graph backend hiccup (Neo4j down, a
+     * slow tenant query) degrades this one axis to `supported: false` with
+     * the reason named, exactly like recordProcessing()/dataQuality() above
+     * degrade when their own tables are empty — the other five axes are
+     * still worth reading.
+     *
+     * @return array<string, mixed>
+     */
+    private function graphSparsity(string $tenantId): array
+    {
+        try {
+            $summary = $this->graph->summary($tenantId);
+            $overview = $this->graph->overview($tenantId, 1, self::OVERVIEW_INCLUDE);
+        } catch (Throwable $e) {
+            return [
+                'supported' => false,
+                'reason' => 'The graph backend could not be read: '.$e->getMessage(),
+                'labels' => [],
+            ];
+        }
+
+        $reachable = [];
+
+        foreach ((array) ($overview['nodes'] ?? []) as $node) {
+            $label = (string) ($node['groupOf'] ?? $node['label'] ?? '');
+
+            if ($label !== '') {
+                $reachable[$label] = true;
+            }
+        }
+
+        $truncatedByKind = [];
+
+        foreach ((array) ($overview['truncated'] ?? []) as $t) {
+            $truncatedByKind[(string) ($t['kind'] ?? '')] = $t;
+        }
+
+        $labels = [];
+
+        foreach (array_keys(GraphVocabulary::LABEL_FAMILY) as $label) {
+            // The root itself — every other node hangs off it or does not
+            // appear at all, so scoring it as a branch would be scoring the
+            // trunk by whether it has itself as a leaf.
+            if ($label === 'Organization') {
+                $labels[] = [
+                    'label' => $label,
+                    'family' => GraphVocabulary::family($label),
+                    'nodeCount' => 1,
+                    'reachableFromOverview' => true,
+                    'status' => 'root',
+                    'note' => 'The tenant itself — the root every other node connects through, not a branch scored for sparsity.',
+                ];
+
+                continue;
+            }
+
+            $summaryKey = self::LABEL_SUMMARY_KEY[$label] ?? null;
+            $count = $summaryKey !== null ? (int) ($summary[$summaryKey] ?? 0) : null;
+            $isReachable = isset($reachable[$label]);
+
+            $status = match (true) {
+                $count === null => 'unmeasured',
+                $count === 0 => 'no_data',
+                $isReachable => 'populated_and_connected',
+                default => 'populated_but_disconnected',
+            };
+
+            $labels[] = [
+                'label' => $label,
+                'family' => GraphVocabulary::family($label),
+                'nodeCount' => $count,
+                'reachableFromOverview' => $isReachable,
+                'status' => $status,
+                'truncated' => $truncatedByKind[$label] ?? null,
+                'note' => match ($status) {
+                    'unmeasured' => 'GraphQueryPort::summary() exposes no count for this label, and it has no top-level overview() branch — only reachable by expanding an existing node that leads to it.',
+                    'no_data' => 'Zero rows for this tenant. The label is declared but the graph has nothing to draw.',
+                    'populated_but_disconnected' => 'Rows exist, but overview()\'s top-level walk never reaches this label — a narrative grounded on it from the top level would find nothing even though the data is real.',
+                    default => null,
+                },
+            ];
+        }
+
+        $scored = array_values(array_filter($labels, fn (array $l): bool => $l['status'] !== 'root'));
+        $populated = array_values(array_filter($scored, fn (array $l): bool => $l['status'] === 'populated_and_connected'));
+        $isolated = array_values(array_filter($scored, fn (array $l): bool => in_array($l['status'], ['no_data', 'unmeasured', 'populated_but_disconnected'], true)));
+
+        return [
+            'supported' => true,
+            'totalLabels' => count($scored),
+            'populatedLabels' => count($populated),
+            'isolatedLabels' => count($isolated),
+            'isolatedLabelNames' => array_column($isolated, 'label'),
+            'coveragePct' => count($scored) > 0 ? round(count($populated) / count($scored) * 100, 1) : null,
+            'labels' => $labels,
+        ];
     }
 }

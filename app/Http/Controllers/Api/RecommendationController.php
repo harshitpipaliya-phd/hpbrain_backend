@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Ai\AiGateway;
+use App\Domain\Graph\GraphQueryPort;
 use App\Domain\Recommendation\EsoBindingRule;
+use App\Http\Controllers\Concerns\BuildsGraphRagNarrative;
 use App\Http\Controllers\Controller;
 use App\Repositories\RecommendationRepository;
 use Illuminate\Http\JsonResponse;
@@ -12,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Ramsey\Uuid\Uuid;
+use Throwable;
 
 /**
  * Response shapes must match the Express originals exactly — web/src/api/*.ts
@@ -24,6 +28,11 @@ use Ramsey\Uuid\Uuid;
  */
 final class RecommendationController extends Controller
 {
+    use BuildsGraphRagNarrative;
+
+    /** AiGateway service name — the hpbrain_ai_executions row for this verb is traced under this. */
+    private const REASONING_SERVICE = 'recommendation_reasoning_trail';
+
     public function __construct(private readonly RecommendationRepository $repository)
     {
     }
@@ -132,5 +141,50 @@ final class RecommendationController extends Controller
         // Re-read so `dependencies` comes back as an array, the way every read
         // surface returns it.
         return response()->json($this->repository->findById($tenant, $row['id']), 201);
+    }
+
+    /**
+     * GET recommendations/{tenantId}/{id}/reasoning-trail — "show me the
+     * reasoning trail" (Phase 5 GraphRAG, roadmap doc 5.5).
+     *
+     * Same shape as SignalController::explainReasoning(): retrieval is
+     * GraphQueryPort::reasoningTrail() (resolved through the interface),
+     * generation is AiGateway::completeWithRag() grounded only in what the
+     * trail returned. A recommendation reached with no onward or backward
+     * links (no signal/case it traces to, no decision made on it) is
+     * `no_evidence` — there is no trail to show.
+     */
+    public function reasoningTrail(Request $request, string $tenantId, string $id, GraphQueryPort $graph, AiGateway $ai): JsonResponse
+    {
+        $tenant = $this->tenantId($request);
+
+        try {
+            $trail = $graph->reasoningTrail($tenant, 'Recommendation', $id);
+        } catch (Throwable $e) {
+            return response()->json(['error' => 'graph_unavailable', 'message' => $e->getMessage()], 503);
+        }
+
+        if (($trail['origin']['key'] ?? null) === null) {
+            return response()->json(['error' => 'recommendation_not_found'], 404);
+        }
+
+        if (count($trail['trail'] ?? []) <= 1) {
+            return response()->json($trail + ['narrative' => null, 'narrativeStatus' => 'no_evidence']);
+        }
+
+        $result = $this->narrateFromDocuments(
+            $request,
+            $ai,
+            $tenant,
+            self::REASONING_SERVICE,
+            'You are walking someone through the reasoning trail behind one recommendation in an organization\'s '
+                .'intelligence graph — what it was derived from, and what happened to it. Use only the steps and '
+                .'facts given in the retrieved context — never invent a cause, a date, or a relationship not '
+                .'present in it.',
+            sprintf('Show and explain the reasoning trail for Recommendation "%s".', $id),
+            $this->reasoningTrailDocuments($trail),
+        );
+
+        return response()->json($trail + $result);
     }
 }

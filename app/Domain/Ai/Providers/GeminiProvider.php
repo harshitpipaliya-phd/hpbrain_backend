@@ -15,7 +15,70 @@ final class GeminiProvider implements AiProvider
         private readonly string $apiKey,
         private readonly string $defaultModel = 'gemini-2.5-flash',
         private readonly int $timeoutSeconds = 30,
+        private readonly string $defaultEmbeddingModel = 'text-embedding-004',
     ) {
+    }
+
+    /**
+     * Built straight from config rather than resolved through the
+     * AiProvider container binding, which is deliberate: AI_PROVIDER picks
+     * which provider handles chat COMPLETIONS (today 'deepseek' in this
+     * installation's .env), but embeddings always go to Gemini regardless
+     * of that choice — RAG retrieval (Embeddings::CURRENT_MODEL /
+     * KnowledgeIngestionService / RetrievalService) has no dependency on
+     * which model answers a user's question. Using a static factory here
+     * means that stays true without touching AiServiceProvider's container
+     * bindings at all.
+     */
+    public static function fromConfig(): self
+    {
+        return new self(
+            apiKey: (string) config('brain.ai.gemini.api_key', ''),
+            defaultModel: (string) config('brain.ai.model', 'gemini-2.5-flash'),
+            timeoutSeconds: (int) config('brain.ai.gemini.timeout', 30),
+            defaultEmbeddingModel: (string) config('brain.ai.gemini.embedding_model', 'text-embedding-004'),
+        );
+    }
+
+    /**
+     * One chunk of text -> one vector, via Gemini's embedContent endpoint.
+     *
+     * Called once per chunk by KnowledgeIngestionService and once per query
+     * by RetrievalService — no batching in this v1 (Gemini's
+     * batchEmbedContents exists and would cut request count for a large
+     * ingest, but per-chunk calls are what the task asked for, and batching
+     * is a straightforward later optimization, not a correctness concern).
+     *
+     * @return array<int, float>
+     */
+    public function embed(string $text, ?string $model = null): array
+    {
+        if ($this->apiKey === '') {
+            throw new \RuntimeException('gemini_api_key_missing');
+        }
+
+        $model = $model ?? $this->defaultEmbeddingModel;
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:embedContent";
+
+        $httpResponse = Http::timeout($this->timeoutSeconds)
+            ->withHeaders(['Content-Type' => 'application/json'])
+            ->post("{$url}?key={$this->apiKey}", [
+                'content' => ['parts' => [['text' => $text]]],
+            ]);
+
+        if ($httpResponse->failed()) {
+            throw new \RuntimeException(
+                'gemini_embed_failed: ' . $httpResponse->status() . ' ' . $httpResponse->body()
+            );
+        }
+
+        $values = $httpResponse->json('embedding.values');
+
+        if (! is_array($values)) {
+            throw new \RuntimeException('gemini_embed_no_values: ' . $httpResponse->body());
+        }
+
+        return array_map('floatval', $values);
     }
 
     public function complete(AiRequest $request): AiResponse

@@ -8,15 +8,15 @@ use App\Domain\Universal\CrossProductIdentityResolver;
 use Illuminate\Console\Command;
 
 /**
- * Phase 7.4 — propose K-12/G2G identity links by email match. Writes drafts
- * only; a human reviews and confirms (or rejects) each one before
- * CrossProductIdentityResolver::resolve() will ever return it.
+ * Phase 7.4 — propose K-12/G2G/EB identity links by email match. Writes
+ * drafts only; a human reviews and confirms (or rejects) each one before
+ * CrossProductIdentityResolver::resolve()/resolveEb() will ever return it.
  */
 class IdentityProposeMatchesCommand extends Command
 {
     protected $signature = 'identity:propose-matches';
 
-    protected $description = 'Propose cross-product (K-12/G2G) identity links by email match — drafts only, never auto-confirmed';
+    protected $description = 'Propose cross-product (K-12/G2G/EB) identity links by email match — drafts only, never auto-confirmed';
 
     public function handle(CrossProductIdentityResolver $resolver): int
     {
@@ -30,7 +30,17 @@ class IdentityProposeMatchesCommand extends Command
             ['Skipped (already rejected)', $result['skipped_rejected']],
         ]);
 
-        $this->line('Every row above is a DRAFT. Nothing is usable by resolve() until a human confirms it.');
+        $this->info('Proposing cross-product identity links (EB <-> G2G / K-12, matched by email)...');
+
+        $ebResult = $resolver->proposeEbMatches();
+
+        $this->table(['Result', 'Count'], [
+            ['Proposed (new or refreshed draft)', $ebResult['proposed']],
+            ['Skipped (already confirmed)', $ebResult['skipped_confirmed']],
+            ['Skipped (already rejected)', $ebResult['skipped_rejected']],
+        ]);
+
+        $this->line('Every row above is a DRAFT. Nothing is usable by resolve()/resolveEb() until a human confirms it.');
 
         return self::SUCCESS;
     }

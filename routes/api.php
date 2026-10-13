@@ -199,6 +199,15 @@ Route::prefix('v1')->group(function () {
         // where it does not. See EntityIntelligenceController.
         Route::get('entity-intelligence/{tenantId}/{entityType}/{entityId}', [EntityIntelligenceController::class, 'show']);
 
+        // Phase 5 GraphRAG: entity intelligence narrated from the GRAPH's own
+        // vocabulary (GraphVocabulary::LABEL_FAMILY, 14 labels) — a
+        // deliberately separate {label} namespace from {entityType} above,
+        // which is EntityResolver::ENTITIES. Calls AiGateway and is billed,
+        // so `create`, same rule graph/explain and knowledge/ask below state
+        // for the same reason. See EntityIntelligenceController::graphNarrative().
+        Route::get('entity-intelligence/{tenantId}/{label}/{id}/narrative', [EntityIntelligenceController::class, 'graphNarrative'])
+            ->middleware('permission:create');
+
         /*
           EVERY LITERAL SEGMENT BEFORE /{id}. Laravel matches in registration
           order, so with `students/{tenantId}/{id}` registered first the literal
@@ -228,6 +237,18 @@ Route::prefix('v1')->group(function () {
         Route::get('capabilities/{tenantId}/search', [CapabilityController::class, 'search']);
         Route::post('capabilities', [CapabilityController::class, 'store'])->middleware('permission:create');
         Route::get('capabilities/{tenantId}/{id}', [CapabilityController::class, 'show']);
+
+        // Phase 5 GraphRAG: "what capabilities does this org/person have,
+        // and how are they distributed" — same shared-trait pattern as
+        // entity-intelligence/.../narrative above, scoped to the two
+        // subjects the question is about. {label} is Organization or
+        // Person, never a capability id, so this does not collide with
+        // capabilities/{tenantId}/{id} above (five segments, not three).
+        // See CapabilityController::graphNarrative(). Calls AiGateway and
+        // is billed, so `create`, same rule every other graph narrative
+        // route in this file states.
+        Route::get('capabilities/{tenantId}/graph-narrative/{label}/{id}', [CapabilityController::class, 'graphNarrative'])
+            ->middleware('permission:create');
 
         /*
           CURRENT CONTEXT — what the caller is looking at, right now.
@@ -291,6 +312,12 @@ Route::prefix('v1')->group(function () {
         Route::post('outcomes', [OutcomeController::class, 'store'])->middleware('permission:create');
 
         Route::get('learnings/{tenantId}/reusable', [LearningController::class, 'reusable']);
+        // GraphRAG (Phase 6.5): "what have we learned about X" — see
+        // LearningController::ask(). POST, matching knowledge/{tenantId}/ask's
+        // own convention for a query-bearing ask endpoint. Billed, so
+        // `create`, same rule every other completeWithRag() endpoint in this
+        // file states.
+        Route::post('learnings/{tenantId}/ask', [LearningController::class, 'ask'])->middleware('permission:create');
         Route::get('learnings/{tenantId}', [LearningController::class, 'index']);
         Route::post('learnings', [LearningController::class, 'store'])->middleware('permission:create');
 
@@ -325,6 +352,11 @@ Route::prefix('v1')->group(function () {
         Route::get('analytics/{tenantId}/signals', [AnalyticsController::class, 'signals']);
         Route::get('analytics/{tenantId}/executive-summary', [AnalyticsController::class, 'executiveSummary']);
         Route::get('analytics/{tenantId}/executive-summary/narrative', [AnalyticsController::class, 'executiveNarrative'])->middleware('permission:create');
+        // Phase 5 GraphRAG: a second executive narrative grounded on
+        // GraphQueryPort::summary()/overview() rather than statistics() —
+        // see AnalyticsController::executiveGraphBriefing(). Billed, so
+        // `create`, same rule the line above already states.
+        Route::get('analytics/{tenantId}/executive-summary/graph-briefing', [AnalyticsController::class, 'executiveGraphBriefing'])->middleware('permission:create');
         Route::get('analytics/{tenantId}/decision-intelligence', [AnalyticsController::class, 'decisionIntelligence']);
         Route::get('analytics/{tenantId}/trend', [AnalyticsController::class, 'trend']);
         // The Export CSV button on the Decision Intelligence screen has always
@@ -370,8 +402,25 @@ Route::prefix('v1')->group(function () {
         Route::get('risks/{tenantId}', [RiskController::class, 'index']);
         Route::post('risks', [RiskController::class, 'assess'])->middleware('permission:create');
         Route::post('risks/{tenantId}/{id}/mitigate', [RiskController::class, 'mitigate'])->middleware('permission:update');
+        // Phase 5 GraphRAG: "risk factors traversed from the org graph" —
+        // see RiskController::graphNarrative(). Retrieval walks
+        // GraphQueryPort::reasoningTrail() from the risk's linked
+        // Decision/Recommendation (Risk itself is not a graph label);
+        // generation calls AiGateway and is billed, so `create`, same rule
+        // signals/.../reasoning and recommendations/.../reasoning-trail
+        // state for the same reason.
+        Route::get('risks/{tenantId}/{id}/graph-narrative', [RiskController::class, 'graphNarrative'])->middleware('permission:create');
 
         Route::get('mental-models/{tenantId}', [MentalModelController::class, 'index']);
+        // Before `/domain/{domain}` only in the sense that both are named
+        // sub-routes of mental-models/{tenantId}; order between the two does
+        // not matter since neither pattern can capture the other's literal.
+        // GraphRAG (Phase 6.5): "ask about our mental models and ESO
+        // library" — see MentalModelController::ask(). POST, matching
+        // knowledge/{tenantId}/ask's own convention for a query-bearing ask
+        // endpoint below. Billed, so `create`, same rule knowledge/ask and
+        // every other completeWithRag() endpoint in this file states.
+        Route::post('mental-models/{tenantId}/ask', [MentalModelController::class, 'ask'])->middleware('permission:create');
         Route::get('mental-models/{tenantId}/domain/{domain}', [MentalModelController::class, 'byDomain']);
 
         // ---- Organization intelligence ---------------------------------------
@@ -396,6 +445,12 @@ Route::prefix('v1')->group(function () {
         // The ONLY route that can spend a model call on the interpretation. Reads above are
         // cache-only; generating needs `create`, so a Viewer cannot cause provider spend.
         Route::post('organization-intelligence/{tenantId}/interpretation', [OrganizationIntelligenceController::class, 'interpret'])->middleware('permission:create');
+        // Phase 5 GraphRAG: "org health from graph traversal" — see
+        // OrganizationIntelligenceController::graphBriefing(). Billed, so
+        // `create`, same rule analytics/.../graph-briefing above states.
+        // BEFORE the bare `{tenantId}` route below, for the same ordering
+        // reason every named sub-route in this block already precedes it.
+        Route::get('organization-intelligence/{tenantId}/graph-briefing', [OrganizationIntelligenceController::class, 'graphBriefing'])->middleware('permission:create');
         Route::get('organization-intelligence/{tenantId}', [OrganizationIntelligenceController::class, 'index']);
 
         // ---- Derived operational intelligence --------------------------------
@@ -416,6 +471,11 @@ Route::prefix('v1')->group(function () {
         Route::get('operations/{tenantId}/trends', [OperationalIntelligenceController::class, 'trends']);
         Route::get('operations/{tenantId}/loop', [OperationalIntelligenceController::class, 'loop']);
         Route::get('operations/{tenantId}/coverage', [DataCoverageController::class, 'show']);
+        // Phase 5 GraphRAG: "operational patterns from the org graph" — see
+        // OperationalIntelligenceController::graphBriefing(). Billed, so
+        // `create`, not this block's plain `read` — same rule
+        // analytics/.../graph-briefing above states for the same reason.
+        Route::get('operations/{tenantId}/graph-briefing', [OperationalIntelligenceController::class, 'graphBriefing'])->middleware('permission:create');
 
         /*
          * Knowledge Library — the RETRIEVE surface.
@@ -433,6 +493,14 @@ Route::prefix('v1')->group(function () {
 
         // ---- Organizational Memory — the LEARN surface -----------------------
         Route::get('organizational-memory/{tenantId}/summary', [OrganizationalMemoryController::class, 'summary']);
+        // BEFORE `/{id}` — 'decision' would otherwise resolve as a learning id,
+        // the same ordering reason eso-definitions/runnable-decisions precedes
+        // its own `{id}` above. GraphRAG: "Decisions→outcomes→learnings→mental
+        // models" (ADR-005) — see OrganizationalMemoryController::decisionLineage().
+        // Billed, so `create`, same rule every other completeWithRag() endpoint
+        // in this file states.
+        Route::get('organizational-memory/{tenantId}/decision/{decisionId}/lineage', [OrganizationalMemoryController::class, 'decisionLineage'])
+            ->middleware('permission:create');
         Route::get('organizational-memory/{tenantId}', [OrganizationalMemoryController::class, 'index']);
         Route::get('organizational-memory/{tenantId}/{id}', [OrganizationalMemoryController::class, 'show']);
 
@@ -513,6 +581,12 @@ Route::prefix('v1')->group(function () {
         // ---- Signals, cases, hypotheses, policies -----------------------------
         Route::get('signals/{tenantId}/{id}', [SignalController::class, 'show']);
         Route::patch('signals/{tenantId}/{id}/status', [SignalController::class, 'changeStatus'])->middleware('permission:update');
+        // Phase 5 GraphRAG: "why was this signal raised?" (roadmap doc 5.4).
+        // Retrieval is GraphQueryPort::reasoningTrail() (pure, no model
+        // call); generation calls AiGateway::completeWithRag() and is
+        // billed, so `create`, same rule graph/explain and knowledge/ask
+        // below state for the same reason.
+        Route::get('signals/{tenantId}/{id}/reasoning', [SignalController::class, 'explainReasoning'])->middleware('permission:create');
 
         Route::get('cases/{tenantId}/{id}', [CaseController::class, 'show']);
         Route::get('cases/{tenantId}/{id}/evidence', [CaseController::class, 'evidence']);
@@ -528,6 +602,9 @@ Route::prefix('v1')->group(function () {
         // RecommendationCaseContext for why the path to the case runs through
         // the cited evidence rather than through reasoning_step_id.
         Route::get('recommendations/{tenantId}/{id}/case-context', [RecommendationCaseContextController::class, 'show']);
+        // Phase 5 GraphRAG: "show me the reasoning trail" (roadmap doc 5.5).
+        // Same shape as signals/{tenantId}/{id}/reasoning above.
+        Route::get('recommendations/{tenantId}/{id}/reasoning-trail', [RecommendationController::class, 'reasoningTrail'])->middleware('permission:create');
 
         Route::post('hypotheses/{tenantId}/case/{caseId}/{id}/reject', [HypothesisController::class, 'reject'])->middleware('permission:update');
         Route::post('hypotheses/{tenantId}/case/{caseId}/{id}/support', [HypothesisController::class, 'support'])->middleware('permission:update');
@@ -616,6 +693,14 @@ Route::prefix('v1')->group(function () {
         Route::get('graph/{tenantId}/summary', [GraphController::class, 'summary']);
         Route::get('graph/{tenantId}/vocabulary', [GraphController::class, 'vocabulary']);
         Route::get('graph/{tenantId}/search', [GraphController::class, 'search']);
+
+        // The Signal->Evidence->Case->Hypothesis->Recommendation->Decision
+        // trail for one intelligence-chain node — read-side plumbing for
+        // Phase 5's "explain this signal" / "show the reasoning trail"
+        // GraphRAG features. Pure read via GraphQueryPort, no AiGateway call,
+        // so `read` like the other Graph Explorer endpoints above, not
+        // `create` like graph/explain below.
+        Route::get('graph/{tenantId}/trail', [GraphController::class, 'trail']);
         Route::get('graph/{tenantId}/entity/{label}/{id}/related', [GraphController::class, 'related']);
         Route::get('graph/{tenantId}/entity/{label}/{id}', [GraphController::class, 'entity']);
 
@@ -923,6 +1008,17 @@ Route::prefix('v1')->group(function () {
             Route::post('workspace/sessions/{sessionId}/messages/{messageId}/explain', [AiWorkspaceController::class, 'explain'])->middleware('permission:create');
             Route::get('workspace/sessions/{sessionId}/messages/{messageId}/follow-up', [AiWorkspaceController::class, 'followUp']);
             Route::get('workspace/sessions/{sessionId}/history', [AiWorkspaceController::class, 'history']);
+
+            // Phase 5 GraphRAG: "workspace intelligence from graph
+            // context" — same shared-trait pattern as the seven narrative
+            // endpoints already built on BuildsGraphRagNarrative. Scopes
+            // to the session's own bound entity when it has one and that
+            // entity still resolves, else to the organization-wide
+            // briefing. See AiWorkspaceController::graphNarrative(). Calls
+            // AiGateway and is billed, so `create`, same rule every other
+            // graph narrative route in this file states.
+            Route::get('workspace/sessions/{sessionId}/graph-narrative', [AiWorkspaceController::class, 'graphNarrative'])
+                ->middleware('permission:create');
         });
 
         // ---- AI & Intelligence console (ported from G2G /api/ai/*) ----------

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
-use App\Domain\Graph\GraphProjection;
+use App\Domain\Graph\GraphQueryPort;
 use App\Domain\Graph\GraphVocabulary;
 use App\Http\Controllers\Controller;
 use Closure;
@@ -26,9 +26,11 @@ use Throwable;
  * reads. They are untouched: their shapes are what existing clients were written
  * against, and widening them would have broken those callers to no purpose.
  *
- * `overview`, `expand`, `node`, `summary` and `vocabulary` are Graph Explorer's.
- * They go through GraphProjection, which composes the services that already own
- * each answer — OrganizationStructureService for what a department is,
+ * `overview`, `expand`, `node`, `summary`, `trail` and `vocabulary` are Graph
+ * Explorer's. They go through GraphQueryPort — constructor-injected as
+ * $this->graph, resolved to GraphProjection by default per
+ * config('graph.driver') — which composes the services that already own each
+ * answer — OrganizationStructureService for what a department is,
  * FoundationCounts for how many people there are, EntityResolver for which table
  * a tenant keeps them in — rather than querying around them. Nothing here
  * computes intelligence and nothing here writes.
@@ -53,6 +55,10 @@ use Throwable;
  */
 final class GraphController extends Controller
 {
+    public function __construct(private readonly GraphQueryPort $graph)
+    {
+    }
+
     private const LABELS = [
         'Signal'         => 'hpbrain_signals',
         'Evidence'       => 'hpbrain_evidence',
@@ -131,7 +137,7 @@ final class GraphController extends Controller
      * made that undefined — the explorer then called .map on it and blanked the
      * screen.
      */
-    public function search(Request $request, GraphProjection $projection): JsonResponse
+    public function search(Request $request): JsonResponse
     {
         $term = trim((string) $request->query('q', ''));
 
@@ -141,7 +147,7 @@ final class GraphController extends Controller
 
         $labels = array_values(array_filter(array_map('trim', explode(',', (string) $request->query('labels', '')))));
 
-        return $this->guard(fn (): array => $projection->search($this->tenantId($request), $term, $labels));
+        return $this->guard(fn (): array => $this->graph->search($this->tenantId($request), $term, $labels));
     }
 
     /* ══════════════════════════════════════════════ Graph Explorer reads ══ */
@@ -154,9 +160,9 @@ final class GraphController extends Controller
      * because a zero would invite the reader to wonder what went wrong with an
      * import that never happened.
      */
-    public function overview(Request $request, GraphProjection $projection): JsonResponse
+    public function overview(Request $request): JsonResponse
     {
-        return $this->guard(fn (): array => $projection->overview(
+        return $this->guard(fn (): array => $this->graph->overview(
             $this->tenantId($request),
             (int) $request->query('depth', '1'),
             $this->include($request),
@@ -171,7 +177,7 @@ final class GraphController extends Controller
      * are real values out of the data, not opaque keys, and plenty of them
      * contain characters a path segment mangles.
      */
-    public function expand(Request $request, GraphProjection $projection): JsonResponse
+    public function expand(Request $request): JsonResponse
     {
         $label = (string) $request->query('label', '');
         $id = (string) $request->query('id', '');
@@ -180,7 +186,7 @@ final class GraphController extends Controller
             return response()->json(['error' => 'label_and_id_required'], 422);
         }
 
-        return $this->guard(fn (): array => $projection->expand(
+        return $this->guard(fn (): array => $this->graph->expand(
             $this->tenantId($request),
             $label,
             $id,
@@ -190,7 +196,7 @@ final class GraphController extends Controller
     }
 
     /** GET graph/{tenantId}/node?label=&id= — what the detail panel renders. */
-    public function node(Request $request, GraphProjection $projection): JsonResponse
+    public function node(Request $request): JsonResponse
     {
         $label = (string) $request->query('label', '');
         $id = (string) $request->query('id', '');
@@ -204,7 +210,7 @@ final class GraphController extends Controller
         }
 
         try {
-            $detail = $projection->detail($this->tenantId($request), $label, $id);
+            $detail = $this->graph->detail($this->tenantId($request), $label, $id);
         } catch (Throwable $e) {
             return $this->failed($e);
         }
@@ -218,9 +224,30 @@ final class GraphController extends Controller
     }
 
     /** GET graph/{tenantId}/summary — the metric strip, without the graph. */
-    public function summary(Request $request, GraphProjection $projection): JsonResponse
+    public function summary(Request $request): JsonResponse
     {
-        return $this->guard(fn (): array => ['summary' => $projection->summary($this->tenantId($request))]);
+        return $this->guard(fn (): array => ['summary' => $this->graph->summary($this->tenantId($request))]);
+    }
+
+    /**
+     * GET graph/{tenantId}/trail?label=&id= — the Signal→Evidence→Case→
+     * Hypothesis→Recommendation→Decision trail reachable from one
+     * intelligence-chain node, for "explain this" / "show the reasoning
+     * trail" features (Phase 5 GraphRAG). A one-line passthrough: the walk
+     * itself lives in GraphQueryPort::reasoningTrail(), not here, so other
+     * callers (e.g. a future AI explanation verb) can use the same method
+     * without going through this controller.
+     */
+    public function trail(Request $request): JsonResponse
+    {
+        $label = (string) $request->query('label', '');
+        $id = (string) $request->query('id', '');
+
+        if ($label === '' || $id === '') {
+            return response()->json(['error' => 'label_and_id_required'], 422);
+        }
+
+        return $this->guard(fn (): array => $this->graph->reasoningTrail($this->tenantId($request), $label, $id));
     }
 
     /**

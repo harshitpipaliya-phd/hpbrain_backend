@@ -5,9 +5,10 @@
   "license": "proprietary",
   "require": {
     "php": "^8.2",
+    "firebase/php-jwt": "^6.10",
     "laravel/framework": "^11.0",
     "laravel/tinker": "^2.9",
-    "firebase/php-jwt": "^6.10",
+    "laudis/neo4j-php-client": "^3.4",
     "ramsey/uuid": "^4.7",
     "symfony/yaml": "^7.0"
   },

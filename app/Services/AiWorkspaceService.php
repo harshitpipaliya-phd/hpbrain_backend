@@ -147,6 +147,32 @@ final class AiWorkspaceService
             ->all();
     }
 
+    /**
+     * One session's own row, for a tenant that actually owns it.
+     *
+     * Returns null for a session that does not exist AND for one that
+     * belongs to another tenant — the same non-distinction every other
+     * method here makes, so a caller cannot use this to probe which ids
+     * are live elsewhere. Unlike sendMessage()/regenerate()/explain(),
+     * this has no actor/role check of its own: a workspace session is not
+     * scoped to the user who opened it the way its MESSAGES are (see
+     * listSessions()'s `created_by` filter) — AiWorkspaceController's own
+     * methods already read a session by tenant alone (messages(), send()),
+     * so this matches the access rule that already governs this table.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getSession(string $tenantId, string $sessionId): ?array
+    {
+        $row = DB::table('hpbrain_conversation_sessions')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $sessionId)
+            ->whereNull('deleted_date')
+            ->first();
+
+        return $row === null ? null : (array) $row;
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function listSessions(string $tenantId, string $userId): array
     {

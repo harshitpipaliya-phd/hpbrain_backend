@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Ai\AiGateway;
+use App\Domain\Graph\GraphQueryPort;
 use App\Domain\Intelligence\IntelligenceEngine;
 use App\Domain\Intelligence\ExecutiveIntelligenceInterpreter;
+use App\Http\Controllers\Concerns\BuildsGraphRagNarrative;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Throwable;
 
 /**
  * Organization intelligence, one endpoint per question a screen asks.
@@ -32,6 +36,11 @@ use Illuminate\Http\Request;
  */
 final class OrganizationIntelligenceController extends Controller
 {
+    use BuildsGraphRagNarrative;
+
+    /** AiGateway service name — the hpbrain_ai_executions row for this verb is traced under this. */
+    private const ORGANIZATION_GRAPH_BRIEFING_SERVICE = 'organization_graph_briefing';
+
     public function __construct(
         private readonly IntelligenceEngine $engine,
         private readonly ExecutiveIntelligenceInterpreter $interpreter,
@@ -175,6 +184,75 @@ final class OrganizationIntelligenceController extends Controller
             'derivation' => $all['derivation'],
             'interpretation' => $this->interpretation($request, $all),
         ]);
+    }
+
+    /**
+     * GET /organization-intelligence/{tenantId}/graph-briefing — "org
+     * health from graph traversal" (Phase 5 GraphRAG, the organization-wide
+     * counterpart of AnalyticsController::executiveGraphBriefing() and
+     * OperationalIntelligenceController::graphBriefing()).
+     *
+     * DELIBERATELY SEPARATE FROM index()/state()/... ABOVE, which all ground
+     * on IntelligenceEngine::forOrganization() — relational aggregates this
+     * controller composes for itself and that every other endpoint on this
+     * controller already agrees on. This one is Phase 5's GraphRAG version:
+     * retrieval is GraphQueryPort::summary() (the metric strip) and
+     * overview() (the organization's own branches, depth 1, resolved
+     * through the interface, never the concrete GraphProjection), and
+     * generation is AiGateway::completeWithRag() grounded only in what
+     * those two returned.
+     *
+     * NOT COMBINED WITH GraphProjection::departmentHierarchy(). That method
+     * exists on the concrete projection (added alongside this work) but is
+     * NOT part of GraphQueryPort — the interface this controller is
+     * required to depend on — so there is no interface call that reaches
+     * it. Forcing it in here would mean either widening GraphQueryPort
+     * (out of scope: GraphQueryPort.php is not to be touched by this
+     * change) or depending on GraphProjection concretely (breaking the
+     * ADR-008 seam every other graph read in this codebase keeps). Left
+     * out rather than worked around.
+     *
+     * A tenant whose graph has no branches at all beyond the bare
+     * Organization root is `no_evidence` — there is nothing yet to brief on.
+     */
+    public function graphBriefing(Request $request, GraphQueryPort $graph, AiGateway $ai): JsonResponse
+    {
+        $tenant = $this->tenantId($request);
+
+        try {
+            $summary = $graph->summary($tenant);
+            $overview = $graph->overview($tenant, 1, ['signals', 'cases', 'recommendations', 'decisions', 'capabilities']);
+        } catch (Throwable $e) {
+            return response()->json(['error' => 'graph_unavailable', 'message' => $e->getMessage()], 503);
+        }
+
+        if (count($overview['nodes'] ?? []) <= 1) {
+            return response()->json([
+                'summary' => $summary,
+                'narrative' => null,
+                'narrativeStatus' => 'no_evidence',
+            ]);
+        }
+
+        $result = $this->narrateFromDocuments(
+            $request,
+            $ai,
+            $tenant,
+            self::ORGANIZATION_GRAPH_BRIEFING_SERVICE,
+            'You are briefing leadership on this organization\'s health, traversed from its intelligence graph '
+                .'— its departments, signals, cases, recommendations and decisions. Use only the metrics and '
+                .'branches given in the retrieved context — never invent a number, risk, or branch not present '
+                .'in it.',
+            'Assess this organization\'s health based on its intelligence graph — what it has recorded, and '
+                .'what that implies about how well its intelligence loop is working.',
+            $this->organizationBriefingDocuments($summary, $overview),
+        );
+
+        return response()->json([
+            'summary' => $summary,
+            'nodeCount' => $overview['nodeCount'] ?? count($overview['nodes'] ?? []),
+            'truncated' => $overview['truncated'] ?? [],
+        ] + $result);
     }
 
     /**

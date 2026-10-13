@@ -4,15 +4,34 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Ai\AiGateway;
+use App\Domain\Graph\GraphBuilder;
+use App\Domain\Graph\GraphQueryPort;
+use App\Http\Controllers\Concerns\BuildsGraphRagNarrative;
 use App\Http\Controllers\Controller;
 use App\Repositories\CapabilityRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Ramsey\Uuid\Uuid;
+use Throwable;
 
 final class CapabilityController extends Controller
 {
+    use BuildsGraphRagNarrative;
+
+    /** AiGateway service name — the hpbrain_ai_executions row for this verb is traced under this. */
+    private const CAPABILITY_GRAPH_NARRATIVE_SERVICE = 'capability_graph_narrative';
+
+    /**
+     * The two subjects "what capabilities does this org/person have" is
+     * actually about. Not GraphVocabulary's full fourteen labels —
+     * EntityIntelligenceController::graphNarrative() already answers
+     * "narrate any graph label" generically; this one stays scoped to the
+     * question the Capability Management feature actually asks.
+     */
+    private const NARRATABLE_LABELS = ['Organization', 'Person'];
+
     public function __construct(private readonly CapabilityRepository $repository)
     {
     }
@@ -231,5 +250,104 @@ final class CapabilityController extends Controller
                 ->where('entity_type', 'Capability')->where('entity_id', $id)
                 ->orderByDesc('created_at')->get()
         );
+    }
+
+    /**
+     * GET capabilities/{tenantId}/graph-narrative/{label}/{id} — "what
+     * capabilities does this org/person have, and how are they
+     * distributed" (Phase 5 GraphRAG, same shared-trait pattern as the
+     * seven narrative endpoints already built on BuildsGraphRagNarrative).
+     *
+     * RETRIEVAL IS detail()+expand(), NOT reasoningTrail() — EVEN THOUGH
+     * Capability itself sits in GraphVocabulary's intelligence family.
+     * {label} here is never "Capability"; it is the SUBJECT the question
+     * is about, Organization or Person, and both of those are in the
+     * organization/people families. expand() for either already walks the
+     * real hpbrain_capability_assignments rows: GraphProjection::
+     * expandPerson() calls capabilityNodesFor() and emits one
+     * 'has_capability' edge per assignment row for this person, and
+     * GraphProjection::attachOrganizationBranches() lists every capability
+     * the tenant has registered under 'holds_capability'. Those are the
+     * subject's own capability facts and neighbours — exactly what
+     * entityContextDocuments() is for. reasoningTrail('Capability', id)
+     * would not serve this: its walk deliberately drops any neighbour
+     * outside the intelligence family, which means the very
+     * Person/Department holders expandCapability() reaches are filtered
+     * back out before they ever reach the caller.
+     *
+     * {label} is validated against self::NARRATABLE_LABELS before it is
+     * validated against GraphVocabulary at all, so an unsupported label
+     * (including "Capability" itself) gets the same 422 shape every other
+     * graph endpoint in this codebase gives, not a 404 from a failed
+     * lookup.
+     */
+    public function graphNarrative(
+        Request $request,
+        string $tenantId,
+        string $label,
+        string $id,
+        GraphQueryPort $graph,
+        AiGateway $ai,
+    ): JsonResponse {
+        if (! in_array($label, self::NARRATABLE_LABELS, true)) {
+            return response()->json([
+                'error'     => 'unsupported_label',
+                'supported' => self::NARRATABLE_LABELS,
+            ], 422);
+        }
+
+        $tenant = $this->tenantId($request);
+
+        // The organization's own graph id is the tenant id itself (see
+        // GraphProjection::buildOverview()) — read from the resolved
+        // tenant, never from the caller's {id}, so an Organization request
+        // can never be pointed at another tenant's root node.
+        $entityId = $label === 'Organization' ? $tenant : $id;
+
+        try {
+            $detail = $graph->detail($tenant, $label, $entityId);
+        } catch (Throwable $e) {
+            return response()->json(['error' => 'graph_unavailable', 'message' => $e->getMessage()], 503);
+        }
+
+        if ($detail === null) {
+            return response()->json(['error' => 'entity_not_found', 'label' => $label, 'id' => $entityId], 404);
+        }
+
+        $expansion = $graph->expand($tenant, $label, $entityId);
+        $selfKey = GraphBuilder::key($label, $entityId);
+        $neighbours = array_filter(
+            $expansion['nodes'] ?? [],
+            static fn (array $n): bool => $n['key'] !== $selfKey,
+        );
+        $hasContext = ($detail['facts'] ?? []) !== [] || ($detail['connections'] ?? []) !== [] || $neighbours !== [];
+
+        if (! $hasContext) {
+            return response()->json($detail + [
+                'label' => $label,
+                'id' => $entityId,
+                'narrative' => null,
+                'narrativeStatus' => 'no_evidence',
+            ]);
+        }
+
+        $result = $this->narrateFromDocuments(
+            $request,
+            $ai,
+            $tenant,
+            self::CAPABILITY_GRAPH_NARRATIVE_SERVICE,
+            'You are explaining what capabilities '.($label === 'Organization' ? 'an organization' : 'a person')
+                .' has, and how those capabilities are distributed, from an organization\'s intelligence graph. '
+                .'Use only the facts and connections given in the retrieved context — never invent a capability, '
+                .'a count, or a holder not present in it.',
+            sprintf(
+                'Explain what capabilities %s "%s" has, and how they are distributed.',
+                strtolower($label),
+                $entityId,
+            ),
+            $this->entityContextDocuments($label, $entityId, $detail, $expansion),
+        );
+
+        return response()->json($detail + ['label' => $label, 'id' => $entityId] + $result);
     }
 }

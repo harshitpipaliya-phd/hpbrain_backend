@@ -107,6 +107,14 @@ return [
         'gemini' => [
             'api_key' => env('GEMINI_API_KEY', ''),
             'timeout' => (int) env('GEMINI_TIMEOUT_SECONDS', 30),
+
+            // RAG v1 (Phase 6.1). Embeddings always go to Gemini via
+            // GeminiProvider::fromConfig(), independent of which provider
+            // `ai.provider` picks for chat completions — see that method's
+            // own docblock. Bumping this requires bumping
+            // App\Domain\Ai\Embeddings::CURRENT_MODEL too, or retrieval and
+            // ingestion disagree about what "current" means.
+            'embedding_model' => env('GEMINI_EMBEDDING_MODEL', 'text-embedding-004'),
         ],
         'deepseek' => [
             'api_key' => env('DEEPSEEK_API_KEY', ''),
