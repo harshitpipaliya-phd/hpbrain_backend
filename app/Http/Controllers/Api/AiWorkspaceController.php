@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Ai\AiGateway;
+use App\Domain\Graph\GraphBuilder;
+use App\Domain\Graph\GraphQueryPort;
+use App\Http\Controllers\Concerns\BuildsGraphRagNarrative;
 use App\Http\Controllers\Concerns\ResolvesCurrentContext;
 use App\Http\Controllers\Controller;
 use App\Services\AiWorkspaceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Throwable;
 
 /**
  * The AI Workspace surface.
@@ -27,6 +32,28 @@ use Illuminate\Http\Request;
 final class AiWorkspaceController extends Controller
 {
     use ResolvesCurrentContext;
+    use BuildsGraphRagNarrative;
+
+    /** AiGateway service name — the hpbrain_ai_executions row for this verb is traced under this. */
+    private const WORKSPACE_GRAPH_NARRATIVE_SERVICE = 'workspace_graph_narrative';
+
+    /**
+     * A session's context_type is validated against EntityResolver::ENTITIES
+     * (see ResolvesCurrentContext::contextRules()) — the ERP's own universal
+     * entity names — not against GraphVocabulary::LABEL_FAMILY's graph
+     * labels. The two vocabularies overlap on three names outright and
+     * disagree on a fourth (EntityIntelligenceComposer's own PROVIDERS map
+     * carries the same 'Department' => 'OrganizationUnit' alias). Position,
+     * OrganizationProfile and PersonProfile have no graph-label counterpart
+     * at all — a session opened over one of those falls through to the
+     * organization-wide briefing below, same as a session with no context.
+     */
+    private const CONTEXT_TYPE_TO_GRAPH_LABEL = [
+        'Organization'     => 'Organization',
+        'OrganizationUnit' => 'Department',
+        'Person'           => 'Person',
+        'Student'          => 'Student',
+    ];
 
     public function __construct(private readonly AiWorkspaceService $workspace)
     {
@@ -143,5 +170,161 @@ final class AiWorkspaceController extends Controller
         return response()->json(
             $this->workspace->getConversationHistory($this->tenantId($request), $sessionId)
         );
+    }
+
+    /**
+     * GET workspace/sessions/{sessionId}/graph-narrative — "workspace
+     * intelligence from graph context" (Phase 5 GraphRAG, same shared-trait
+     * pattern as the seven narrative endpoints already built on
+     * BuildsGraphRagNarrative).
+     *
+     * SCOPES TO WHATEVER THE SESSION ITSELF SCOPES TO, READ FROM ITS OWN
+     * ROW, NOT GUESSED. store()'s doc explains that context_type and
+     * context_entity_id record a RESOLVED object — found by ContextEngine
+     * against this tenant's own data — or null when the conversation was
+     * opened with no subject, which is what every session created before
+     * today's fix to store() actually has, and what most sessions will
+     * keep having: a session is not required to be opened over anything.
+     * Both are therefore real, reachable shapes, not a hypothetical to
+     * design around:
+     *
+     *   - A session whose context_type maps to a graph label (see
+     *     self::CONTEXT_TYPE_TO_GRAPH_LABEL) AND whose context_entity_id
+     *     still resolves on the graph is narrated as THAT ENTITY —
+     *     detail()+expand()->entityContextDocuments(), the same retrieval
+     *     EntityIntelligenceController::graphNarrative() uses for every
+     *     label outside the intelligence family (Organization, Department,
+     *     Person and Student all are).
+     *   - Every other session — no context, an unmapped context_type
+     *     (Position/OrganizationProfile/PersonProfile have no graph-label
+     *     counterpart), or a context_entity_id that no longer resolves —
+     *     falls back to the organization-wide graph briefing
+     *     OrganizationIntelligenceController::graphBriefing() uses:
+     *     summary()+overview() -> organizationBriefingDocuments(). An
+     *     open-ended workspace conversation with nothing more specific to
+     *     ground on is still honestly grounded in what the tenant's graph
+     *     currently holds, rather than refusing to answer at all.
+     *
+     * Either way `narrativeStatus: 'no_evidence'` is reported rather than
+     * fabricated when even that fallback finds nothing.
+     */
+    public function graphNarrative(Request $request, string $sessionId, GraphQueryPort $graph, AiGateway $ai): JsonResponse
+    {
+        $tenant = $this->tenantId($request);
+        $session = $this->workspace->getSession($tenant, $sessionId);
+
+        if ($session === null) {
+            return response()->json(['error' => 'session_not_found'], 404);
+        }
+
+        $contextType = $session['context_type'] ?? null;
+        $contextEntityId = $session['context_entity_id'] ?? null;
+        $label = is_string($contextType) ? (self::CONTEXT_TYPE_TO_GRAPH_LABEL[$contextType] ?? null) : null;
+
+        try {
+            if ($label !== null && $contextEntityId !== null) {
+                $entityResult = $this->entityScopedNarrative($request, $graph, $ai, $tenant, $label, (string) $contextEntityId);
+
+                if ($entityResult !== null) {
+                    return response()->json($entityResult + ['sessionId' => $sessionId, 'scope' => 'entity']);
+                }
+            }
+
+            return response()->json(
+                $this->organizationScopedNarrative($request, $graph, $ai, $tenant) + ['sessionId' => $sessionId, 'scope' => 'organization']
+            );
+        } catch (Throwable $e) {
+            return response()->json(['error' => 'graph_unavailable', 'message' => $e->getMessage()], 503);
+        }
+    }
+
+    /**
+     * The entity-scoped half of graphNarrative() above. Returns null — not
+     * a "no evidence" payload — when the session's bound entity no longer
+     * resolves on the graph, so the caller falls through to the
+     * organization-wide briefing instead of reporting "no evidence" about
+     * an entity that may simply have been renamed or removed since the
+     * session was opened.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function entityScopedNarrative(
+        Request $request,
+        GraphQueryPort $graph,
+        AiGateway $ai,
+        string $tenant,
+        string $label,
+        string $entityId,
+    ): ?array {
+        $detail = $graph->detail($tenant, $label, $entityId);
+
+        if ($detail === null) {
+            return null;
+        }
+
+        $expansion = $graph->expand($tenant, $label, $entityId);
+        $selfKey = GraphBuilder::key($label, $entityId);
+        $neighbours = array_filter(
+            $expansion['nodes'] ?? [],
+            static fn (array $n): bool => $n['key'] !== $selfKey,
+        );
+        $hasContext = ($detail['facts'] ?? []) !== [] || ($detail['connections'] ?? []) !== [] || $neighbours !== [];
+
+        if (! $hasContext) {
+            return $detail + ['label' => $label, 'id' => $entityId, 'narrative' => null, 'narrativeStatus' => 'no_evidence'];
+        }
+
+        $result = $this->narrateFromDocuments(
+            $request,
+            $ai,
+            $tenant,
+            self::WORKSPACE_GRAPH_NARRATIVE_SERVICE,
+            'You are grounding an AI workspace conversation in what the organization\'s intelligence graph '
+                .'records about the thing this conversation was opened over. Use only the facts and connections '
+                .'given in the retrieved context — never invent a name, figure, or relationship not present in it.',
+            sprintf('Summarize what the graph records about %s "%s", for someone about to discuss it.', $label, $entityId),
+            $this->entityContextDocuments($label, $entityId, $detail, $expansion),
+        );
+
+        return $detail + ['label' => $label, 'id' => $entityId] + $result;
+    }
+
+    /**
+     * The organization-wide fallback half of graphNarrative() above —
+     * identical retrieval to OrganizationIntelligenceController::
+     * graphBriefing(), reused here under the workspace's own AiGateway
+     * service name rather than duplicated as a second copy of that
+     * controller's logic.
+     *
+     * @return array<string, mixed>
+     */
+    private function organizationScopedNarrative(Request $request, GraphQueryPort $graph, AiGateway $ai, string $tenant): array
+    {
+        $summary = $graph->summary($tenant);
+        $overview = $graph->overview($tenant, 1, ['signals', 'cases', 'recommendations', 'decisions', 'capabilities']);
+
+        if (count($overview['nodes'] ?? []) <= 1) {
+            return ['summary' => $summary, 'narrative' => null, 'narrativeStatus' => 'no_evidence'];
+        }
+
+        $result = $this->narrateFromDocuments(
+            $request,
+            $ai,
+            $tenant,
+            self::WORKSPACE_GRAPH_NARRATIVE_SERVICE,
+            'You are grounding an open-ended AI workspace conversation in this organization\'s intelligence '
+                .'graph — its departments, signals, cases, recommendations and decisions — because this '
+                .'conversation was not opened over any one specific thing. Use only the metrics and branches '
+                .'given in the retrieved context — never invent a number, risk, or branch not present in it.',
+            'Summarize what this organization\'s intelligence graph currently holds, for someone about to start '
+                .'an open-ended conversation about it.',
+            $this->organizationBriefingDocuments($summary, $overview),
+        );
+
+        return [
+            'summary'   => $summary,
+            'nodeCount' => $overview['nodeCount'] ?? count($overview['nodes'] ?? []),
+            'truncated' => $overview['truncated'] ?? [],
+        ] + $result;
     }
 }

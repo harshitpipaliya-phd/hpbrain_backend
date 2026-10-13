@@ -212,6 +212,12 @@ trait BuildsBrainSchema
             $t->text('status')->default('active');
             $t->text('created_by');
             $t->timestamp('created_date')->nullable();
+            // From 2026_10_10_130000_add_embedding_to_memory_tables. No
+            // updated_date on this table (never had one) — MemoryIngestionService
+            // knows not to stamp one.
+            $t->json('embedding')->nullable();
+            $t->string('embedding_model', 100)->nullable();
+            $t->string('embedding_version', 20)->nullable();
         });
 
         Schema::create('hpbrain_reasoning_steps', function ($t) {
@@ -289,6 +295,10 @@ trait BuildsBrainSchema
             $t->string('created_by', 36)->nullable();
             $t->timestamp('created_date')->nullable();
             $t->timestamp('updated_date')->nullable();
+            // From 2026_10_10_130000_add_embedding_to_memory_tables.
+            $t->json('embedding')->nullable();
+            $t->string('embedding_model', 100)->nullable();
+            $t->string('embedding_version', 20)->nullable();
         });
 
         // Invariant 4 (2026_07_30_000100). An ESO run is refused without one.
@@ -379,6 +389,12 @@ trait BuildsBrainSchema
             $t->boolean('reusable')->default(true);
             $t->text('created_by');
             $t->timestamp('created_date')->nullable();
+            // From 2026_10_10_130000_add_embedding_to_memory_tables. No
+            // updated_date on this table (never had one) — MemoryIngestionService
+            // knows not to stamp one.
+            $t->json('embedding')->nullable();
+            $t->string('embedding_model', 100)->nullable();
+            $t->string('embedding_version', 20)->nullable();
         });
 
         // ---- Universal Platform Foundation (Prompt 3.1) ----------------------
@@ -1408,7 +1424,9 @@ trait BuildsBrainSchema
             $t->timestamp('created_date')->nullable();
         });
 
-        // ---- Knowledge assets (2026_01_01_002000_knowledge_assets) ----------
+        // ---- Knowledge assets (2026_01_01_002000_knowledge_assets,
+        // plus embedding/embedding_model/embedding_version from
+        // 2026_10_10_120000_add_embedding_to_knowledge_assets) -----------
         Schema::create('hpbrain_knowledge_assets', function ($t) {
             $t->string('id', 36)->primary();
             $t->string('tenant_id', 36);
@@ -1423,6 +1441,9 @@ trait BuildsBrainSchema
             $t->integer('reuse_count')->default(0);
             $t->text('status')->default('active');
             $t->text('created_by');
+            $t->json('embedding')->nullable();
+            $t->string('embedding_model', 100)->nullable();
+            $t->string('embedding_version', 20)->nullable();
             $t->timestamp('created_date')->nullable();
             $t->timestamp('updated_date')->nullable();
         });

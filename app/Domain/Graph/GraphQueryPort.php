@@ -17,9 +17,13 @@ namespace App\Domain\Graph;
  * fired (3+ hop traversals routinely needed, or ~10^6 relationships for one
  * tenant — neither measured, so not acted on here).
  *
- * Every method signature below is copied verbatim from GraphProjection's
- * existing public methods, not redesigned — the point of extracting this now
- * is to formalize the seam that already exists, not to change its shape.
+ * The first five method signatures below are copied verbatim from
+ * GraphProjection's existing public methods, not redesigned — the point of
+ * extracting this now is to formalize the seam that already exists, not to
+ * change its shape. `reasoningTrail()` is new: the first read-side method
+ * that composes the other five into a multi-hop walk, so the
+ * Signal→Evidence→Case→Hypothesis→Recommendation→Decision chain has one
+ * place to be read from instead of being re-derived per caller.
  */
 interface GraphQueryPort
 {
@@ -65,4 +69,21 @@ interface GraphQueryPort
      * @return array<string, int|string|null>
      */
     public function summary(string $tenant): array;
+
+    /**
+     * The Signal→Evidence→Case→Hypothesis→Recommendation→Decision trail
+     * reachable from one node in that chain — the read-side plumbing Phase
+     * 5's "explain this signal" and "show the reasoning trail" GraphRAG
+     * features build on. A bounded, intelligence-family-only walk: $label
+     * must be one of GraphVocabulary's FAMILY_INTELLIGENCE labels (Signal,
+     * Evidence, Case, Hypothesis, Recommendation, Decision, Capability), and
+     * every edge it follows is one of GraphVocabulary::RELATIONSHIPS'
+     * 'intelligence'-family entries — never an invented hop.
+     *
+     * @return array<string, mixed>  GraphBuilder-shaped {nodes, edges,
+     *         truncated, ...} plus an ordered `trail` of
+     *         {step, label, id, relationship}; {error: 'unsupported_label',
+     *         supported: [...]} for a label outside the intelligence family.
+     */
+    public function reasoningTrail(string $tenant, string $label, string $id): array;
 }

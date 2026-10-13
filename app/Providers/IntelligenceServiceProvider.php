@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Domain\Graph\GraphProjection;
 use App\Domain\Graph\GraphQueryPort;
+use App\Domain\Graph\Neo4jGraphAdapter;
 use App\Domain\Intelligence\OrganizationDataProfiler;
 use App\Domain\School\DatasetRegistry;
 use App\Services\TenantScopedCache;
@@ -52,14 +53,25 @@ final class IntelligenceServiceProvider extends ServiceProvider
         $this->app->scoped(DatasetRegistry::class);
         $this->app->scoped(TenantScopedCache::class);
 
-        // ADR-008's seam, made resolvable. GraphController still type-hints the
-        // concrete GraphProjection (nothing requires the interface today), so
-        // this binding does nothing yet - it exists so that introducing a
-        // Neo4j adapter later is "bind GraphQueryPort to the new class here
-        // and update GraphController's type-hints", not a call-site hunt.
-        // No lifetime decision to make: GraphProjection is already left to the
-        // container's default transient resolution, same as every other
-        // stateless analyzer in this provider's docblock above.
-        $this->app->bind(GraphQueryPort::class, GraphProjection::class);
+        // ADR-008's seam, now actually load-bearing: GraphController and
+        // GraphExplanationController both type-hint the interface, never the
+        // concrete class, so this match() is the ONLY place that decides
+        // which implementation answers a graph read. config('graph.driver')
+        // defaults to 'mysql' (config/graph.php) — ADR-008 is not being
+        // reopened by this change, Neo4j is selectable, not selected, and
+        // nothing in this installation's .env provisions it.
+        //
+        // No lifetime decision to make: bind() keeps both implementations on
+        // the container's default transient resolution, same as every other
+        // stateless analyzer in this provider's docblock above — GraphProjection
+        // already was transient, and Neo4jGraphAdapter builds its client
+        // lazily on first use, not at resolution time, so resolving it costs
+        // nothing even though it is never selected by default.
+        $this->app->bind(GraphQueryPort::class, function ($app): GraphQueryPort {
+            return match ((string) config('graph.driver', 'mysql')) {
+                'neo4j' => $app->make(Neo4jGraphAdapter::class),
+                default => $app->make(GraphProjection::class),
+            };
+        });
     }
 }

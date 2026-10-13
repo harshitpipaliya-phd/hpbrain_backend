@@ -159,6 +159,27 @@ final class GraphBuilder
     }
 
     /**
+     * The relationship type already recorded between these two node keys, in
+     * either direction, or null if edge() was never called for this pair.
+     *
+     * For a caller (e.g. GraphProjection::reasoningTrail()) that discovers
+     * neighbours through the existing per-label expanders — which already
+     * call edge() with the right type internally but return only the
+     * neighbour, not the type — this is how the type is recovered afterwards
+     * without duplicating each expander's own edge logic.
+     */
+    public function edgeTypeBetween(string $a, string $b): ?string
+    {
+        foreach ($this->edges as $edge) {
+            if (($edge['from'] === $a && $edge['to'] === $b) || ($edge['from'] === $b && $edge['to'] === $a)) {
+                return $edge['type'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Connect two nodes. Silently ignored if either end was refused by the
      * budget — an edge to a node that is not in the response is a dangling
      * reference the renderer would have to guess about.

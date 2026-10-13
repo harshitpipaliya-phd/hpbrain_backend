@@ -6,6 +6,7 @@ namespace App\Domain\Learning;
 
 use App\Domain\Events\EventPublisher;
 use App\Domain\Events\LoopEvent;
+use App\Services\RetrievalService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -40,8 +41,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class MemoryGrounding
 {
-    public function __construct(private readonly EventPublisher $events)
-    {
+    public function __construct(
+        private readonly EventPublisher $events,
+        private readonly RetrievalService $retrieval,
+    ) {
     }
 
     /**
@@ -152,6 +155,67 @@ final class MemoryGrounding
         }
 
         return $learnings;
+    }
+
+    /**
+     * The semantic counterpart to retrieveFor() above — this is the piece of
+     * MemoryGrounding this class's own "bridging class between learning and
+     * RAG" role actually needed and did not yet have. retrieveFor() ranks by
+     * DOMAIN EQUALITY (plus the cross-domain NULL rule) and confidence; that
+     * is the right shape for the five implemented verbs, which always have a
+     * domain in hand (a signal's classification, a capability's category)
+     * and never a free-text question. A caller asking "what have we learned
+     * about X", in X's own words, has no domain to equate against — it needs
+     * RetrievalService::searchMemory()'s real embedding-based retrieval
+     * (keyword-scored fallback when embeddings are unavailable, exactly as
+     * searchMemory() itself documents), ranked by MEANING rather than by a
+     * column match.
+     *
+     * ADR-005's REUSABLE-ONLY RULE IS ENFORCED HERE TOO, even though
+     * searchMemory() itself has no opinion on it — that method ranks every
+     * learning in hpbrain_learnings regardless of the flag, because it also
+     * serves KnowledgeAskController, which is answering a different question
+     * ("what does this org know", failures included) and is right to. This
+     * method is answering the SAME question retrieveFor() answers — "what
+     * may ground new reasoning" — so it cross-checks every ranked id against
+     * `reusable = 1` before returning it, the same floor retrieveFor() never
+     * crosses.
+     *
+     * ADDITIVE, NOT A REPLACEMENT. retrieveFor()/groundAndRecord() — what
+     * ExplainVerb, AssessVerb, EvaluateVerb, RecommendVerb and CoachVerb all
+     * call — are untouched by this method and do not call it. None of those
+     * five verbs ask a free-text question; this is for the caller that does
+     * (LearningController::ask()).
+     *
+     * @return array<int, array{id:string,type:string,content:string,score:float,retrieval:string}>
+     */
+    public function retrieveSemantic(string $tenantId, string $query, int $limit = 10): array
+    {
+        $ranked = array_values(array_filter(
+            $this->retrieval->searchMemory($tenantId, $query),
+            static fn (array $r): bool => ($r['type'] ?? null) === 'memory',
+        ));
+
+        if ($ranked === []) {
+            return [];
+        }
+
+        $rankedIds = array_column($ranked, 'id');
+
+        $reusableIds = DB::table('hpbrain_learnings')
+            ->where('tenant_id', $tenantId)
+            ->where('reusable', 1)
+            ->whereIn('id', $rankedIds)
+            ->pluck('id')
+            ->map(static fn ($id): string => (string) $id)
+            ->all();
+
+        $reusable = array_values(array_filter(
+            $ranked,
+            static fn (array $r): bool => in_array((string) $r['id'], $reusableIds, true),
+        ));
+
+        return array_slice($reusable, 0, $limit);
     }
 
     /**

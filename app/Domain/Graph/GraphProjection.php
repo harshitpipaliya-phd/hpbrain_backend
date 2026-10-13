@@ -714,6 +714,134 @@ final class GraphProjection implements GraphQueryPort
             $out[] = $node;
         }
 
+        return array_merge($out, $this->reportingStructureNodes($builder, $tenant, $selfKey, $id, $limit));
+    }
+
+    /**
+     * The names/count facts() above needs — same current-only read as
+     * reportingStructureNodes() below, but resolving manager NAMES (facts
+     * are for reading, not for expanding) rather than graph nodes.
+     *
+     * @return array{0: array<int, string>, 1: int}
+     */
+    private function reportingStructureFacts(string $tenant, string $id): array
+    {
+        if (! Schema::hasTable('hpbrain_reporting_structures')) {
+            return [[], 0];
+        }
+
+        $current = fn ($q) => $q->where(fn ($w) => $w->whereNull('end_date')->orWhere('end_date', '>=', date('Y-m-d')));
+
+        $managerIds = $current(
+            DB::table('hpbrain_reporting_structures')
+                ->where('tenant_id', $tenant)
+                ->where('reportee_person_id', $id)
+        )->pluck('reporter_person_id')->unique()->values();
+
+        $managerNames = [];
+
+        foreach ($managerIds as $managerId) {
+            $manager = $this->person($tenant, (string) $managerId);
+            $managerNames[] = $manager !== null && $manager['name'] !== null && $manager['name'] !== ''
+                ? (string) $manager['name']
+                : 'Person '.$managerId;
+        }
+
+        $directReportsCount = (int) $current(
+            DB::table('hpbrain_reporting_structures')
+                ->where('tenant_id', $tenant)
+                ->where('reporter_person_id', $id)
+        )->count();
+
+        return [$managerNames, $directReportsCount];
+    }
+
+    /**
+     * Task 7 — Manager → reports chain, read through hpbrain_reporting_structures
+     * (the real table OrganizationEngine::getReportingStructure() already
+     * walks). ADDITIVE ONLY: expandPerson()'s existing works_in/has_capability
+     * edges above are unchanged; this is a new edge type (`reports_to`) drawn
+     * from data that was already there but never projected through
+     * GraphQueryPort.
+     *
+     * DIRECTION, CHECKED AGAINST THE EXISTING WALK, NOT GUESSED.
+     * OrganizationEngine::getReportingStructure() starts at a person and
+     * repeatedly reads `reporter_person_id` off the row where
+     * `reportee_person_id` equals the person it is standing on, which is
+     * how it climbs to a manager, then that manager's manager. So
+     * `reportee_person_id` is the subordinate and `reporter_person_id` is
+     * who they report to — and `reports_to` here is drawn the same way:
+     * subordinate -> manager, both when $id is the subordinate (its
+     * manager(s)) and when $id is the manager (each of its direct reports,
+     * each edge still pointing from that report to $id).
+     *
+     * CURRENT ASSIGNMENTS ONLY, same filter OrganizationEngine's walk
+     * applies: a row whose end_date has passed is a lapsed assignment, not
+     * a fact about who reports to whom today.
+     *
+     * @return array<int, array{key: string, label: string, id: string}>
+     */
+    private function reportingStructureNodes(GraphBuilder $builder, string $tenant, string $selfKey, string $id, int $limit): array
+    {
+        if (! Schema::hasTable('hpbrain_reporting_structures')) {
+            return [];
+        }
+
+        $current = fn ($q) => $q->where(fn ($w) => $w->whereNull('end_date')->orWhere('end_date', '>=', date('Y-m-d')));
+
+        $out = [];
+
+        // This person's own manager(s) — almost always zero or one, but read
+        // as a set rather than assumed singular, since the schema allows a
+        // dual-reporting row and nothing here should hide one.
+        $managerIds = $current(
+            DB::table('hpbrain_reporting_structures')
+                ->where('tenant_id', $tenant)
+                ->where('reportee_person_id', $id)
+        )->limit($limit)->pluck('reporter_person_id')->unique()->values();
+
+        foreach ($managerIds as $managerId) {
+            $key = $this->ensureNode($builder, $tenant, 'Person', (string) $managerId);
+            $builder->edge($selfKey, $key, 'reports_to');
+
+            if ($key !== null) {
+                $out[] = ['key' => $key, 'label' => 'Person', 'id' => (string) $managerId];
+            }
+        }
+
+        // This person's direct reports — potentially many for a department
+        // head, so bounded and truncated exactly like expandDepartment()'s
+        // staff listing above.
+        $totalReports = (int) $current(
+            DB::table('hpbrain_reporting_structures')
+                ->where('tenant_id', $tenant)
+                ->where('reporter_person_id', $id)
+        )->count();
+
+        if ($totalReports > 0) {
+            $reportIds = $current(
+                DB::table('hpbrain_reporting_structures')
+                    ->where('tenant_id', $tenant)
+                    ->where('reporter_person_id', $id)
+            )->limit($limit)->pluck('reportee_person_id')->unique()->values();
+
+            foreach ($reportIds as $reportId) {
+                $key = $this->ensureNode($builder, $tenant, 'Person', (string) $reportId);
+                $builder->edge($key, $selfKey, 'reports_to');
+
+                if ($key !== null) {
+                    $out[] = ['key' => $key, 'label' => 'Person', 'id' => (string) $reportId];
+                }
+            }
+
+            $builder->truncate(
+                'DirectReports',
+                count($reportIds),
+                $totalReports,
+                'Showing the first '.count($reportIds).' of '.$totalReports.' people who currently report to this person.',
+            );
+        }
+
         return $out;
     }
 
@@ -1310,6 +1438,15 @@ final class GraphProjection implements GraphQueryPort
                 $push('Phone', $person['phone']);
                 $push($this->vocabulary->label($tenant, 'OrganizationUnit'), $person['departmentName']);
                 $push('Joined', $person['joinedDate']);
+
+                // Task 7 — read from hpbrain_reporting_structures, current
+                // rows only. Named facts, not a connection count, because
+                // "reports to" and "direct reports" would be indistinguishable
+                // as two rows of the same relationship type in the
+                // connections strip below.
+                [$managerNames, $directReportsCount] = $this->reportingStructureFacts($tenant, $id);
+                $push('Reports to', $managerNames !== [] ? implode(', ', $managerNames) : null);
+                $push('Direct reports', $directReportsCount);
                 break;
 
             case 'Student':
@@ -1806,6 +1943,115 @@ final class GraphProjection implements GraphQueryPort
             'recommendations'  => $loop['hpbrain_recommendations'] ?? 0,
             'decisions'        => $loop['hpbrain_decisions'] ?? 0,
             'capabilities'     => $loop['hpbrain_capabilities'] ?? 0,
+        ];
+    }
+
+    /* ═══════════════════════════════════════════════════ reasoning trail ══ */
+
+    /**
+     * The Signal→Evidence→Case→Hypothesis→Recommendation→Decision trail
+     * reachable from one node in that chain. See
+     * GraphQueryPort::reasoningTrail() for the contract.
+     *
+     * PURE COMPOSITION, NO NEW SQL. Every hop here is the same private
+     * expand*() method expand() already dispatches to for that label — this
+     * is a bounded breadth-first walk OVER those, not a reimplementation of
+     * their joins. A caller who wants "the whole chain from this signal"
+     * today has to call expand() repeatedly and stitch the results together
+     * by hand; this is that stitching, done once, in one place, reusable by
+     * anything else that needs it (a future AI explanation verb, for one).
+     *
+     * NOT CACHED ON THE DATA FINGERPRINT the way overview()/expand()/detail()
+     * are. Those are cached because they are query-count-dominated against a
+     * remote database; this walk is bounded to intelligence-chain labels only
+     * and capped at self::EXPAND_BUDGET nodes / 50 steps, so it is cheap
+     * enough that the fingerprint-cache machinery would cost more than it
+     * saves for a read this narrow.
+     *
+     * @return array<string, mixed>
+     */
+    public function reasoningTrail(string $tenant, string $label, string $id): array
+    {
+        if (GraphVocabulary::family($label) !== GraphVocabulary::FAMILY_INTELLIGENCE) {
+            return [
+                'error'     => 'unsupported_label',
+                'supported' => array_keys(array_filter(
+                    GraphVocabulary::LABEL_FAMILY,
+                    fn (string $family): bool => $family === GraphVocabulary::FAMILY_INTELLIGENCE,
+                )),
+            ];
+        }
+
+        $builder = new GraphBuilder(self::EXPAND_BUDGET);
+        $startKey = $this->ensureNode($builder, $tenant, $label, $id);
+
+        if ($startKey === null) {
+            return $builder->result() + [
+                'origin'   => ['label' => $label, 'id' => $id],
+                'trail'    => [],
+                'tenantId' => $tenant,
+            ];
+        }
+
+        $trail = [['step' => 0, 'label' => $label, 'id' => $id, 'relationship' => null]];
+        $visited = [$startKey => true];
+        $frontier = [['key' => $startKey, 'label' => $label, 'id' => $id]];
+        $step = 0;
+
+        // 50, not self::EXPAND_BUDGET: a step bound on the WALK, distinct from
+        // the node-count bound GraphBuilder already enforces on the RESULT.
+        // The chain this walks is six labels deep at most (Signal, Evidence,
+        // Case, Hypothesis, Recommendation, Decision) with limited fan-out per
+        // hop (self::NEIGHBOUR_LIMIT), so 50 is headroom, not a real ceiling
+        // this is expected to hit.
+        $maxSteps = 50;
+
+        while ($frontier !== [] && $step < $maxSteps && ! $builder->isFull()) {
+            $node = array_shift($frontier);
+            $step++;
+
+            $neighbours = match ($node['label']) {
+                'Signal'         => $this->expandSignal($builder, $tenant, $node['key'], $node['id'], self::NEIGHBOUR_LIMIT),
+                'Evidence'       => $this->expandEvidence($builder, $tenant, $node['key'], $node['id']),
+                'Case'           => $this->expandCase($builder, $tenant, $node['key'], $node['id'], self::NEIGHBOUR_LIMIT),
+                'Hypothesis'     => $this->expandHypothesis($builder, $tenant, $node['key'], $node['id']),
+                'Recommendation' => $this->expandRecommendation($builder, $tenant, $node['key'], $node['id'], self::NEIGHBOUR_LIMIT),
+                'Decision'       => $this->expandDecision($builder, $tenant, $node['key'], $node['id']),
+                'Capability'     => $this->expandCapability($builder, $tenant, $node['key'], $node['id'], self::NEIGHBOUR_LIMIT),
+                default          => [],
+            };
+
+            foreach ($neighbours as $neighbour) {
+                // Restrict the walk to the intelligence family even though
+                // the per-label expanders above sometimes reach outside it
+                // (e.g. expandCapability() reaches Person/Department) —
+                // reasoningTrail() is the Signal/Case chain specifically, not
+                // a general graph crawl, and GraphQueryPort's contract says so.
+                if (GraphVocabulary::family($neighbour['label']) !== GraphVocabulary::FAMILY_INTELLIGENCE) {
+                    continue;
+                }
+
+                if (isset($visited[$neighbour['key']])) {
+                    continue;
+                }
+
+                $visited[$neighbour['key']] = true;
+                $frontier[] = $neighbour;
+
+                $edgeType = $builder->edgeTypeBetween($node['key'], $neighbour['key']);
+                $trail[] = [
+                    'step'         => $step,
+                    'label'        => $neighbour['label'],
+                    'id'           => $neighbour['id'],
+                    'relationship' => $edgeType === null ? null : GraphVocabulary::relationship($edgeType)[0],
+                ];
+            }
+        }
+
+        return $builder->result() + [
+            'origin'   => ['label' => $label, 'id' => $id, 'key' => $startKey],
+            'trail'    => $trail,
+            'tenantId' => $tenant,
         ];
     }
 
@@ -2740,6 +2986,196 @@ final class GraphProjection implements GraphQueryPort
         }
 
         return null;
+    }
+
+    /* ═══════════════════════════════════════════════ department hierarchy ══ */
+
+    /**
+     * The organization's department tree, walked with one `WITH RECURSIVE`
+     * query instead of flattened — ADR-008's own spec ("organizational
+     * hierarchy ... expressed with MySQL 8 WITH RECURSIVE common table
+     * expressions") made real for the one place in this schema where the
+     * hierarchy is genuinely self-referencing: an HR-sourced OrganizationUnit
+     * row carries a parent column (e.g. hrms_departments.parent_id, confirmed
+     * against the real ERP mapping fixture in tests/Feature/ErpLoginTest.php),
+     * and a department can have sub-departments to arbitrary depth.
+     *
+     * DELIBERATELY NOT WIRED INTO attachOrganizationBranches()/buildOverview().
+     * Those draw every department as a DIRECT child of the Organization node,
+     * never nesting on parentId — a flattening OrganizationStructureService's
+     * own docblock explains was chosen so every screen counting "departments"
+     * agrees on one number. This method's nested tree is a genuinely
+     * different shape (dept-to-dept edges the UI has never rendered and no
+     * existing test asserts on), so swapping it into that live read would
+     * violate "preserve existing API shapes/behaviour exactly". This is
+     * additive: a new, separately-named read for a caller that actually wants
+     * the nesting — an org-chart view, for one — not a replacement.
+     *
+     * MEMBER COUNTS ARE NOT RE-DERIVED. They come from
+     * OrganizationStructureService::getPeopleCountByDepartment() — the exact
+     * call attachOrganizationBranches() already trusts — so a department's
+     * count here is guaranteed to agree with the flat read's BY SHARING THE
+     * SOURCE, not by two independent queries happening to match.
+     *
+     * @return array{supported: bool, reason?: string, tree: array<int, array<string, mixed>>, flat: array<int, array<string, mixed>>}
+     */
+    public function departmentHierarchy(string $tenant): array
+    {
+        $structure = $this->structure->forTenant($tenant);
+
+        if ($structure['source'] !== OrganizationStructureService::SOURCE_HR) {
+            // Rule 2/3 tenants (academic-derived sections, or no structure at
+            // all) have no backing table to recurse over — sections are
+            // computed from student rows, not stored rows with a parent
+            // column. A flat, single-level tree of exactly what
+            // attachOrganizationBranches() already draws is honest; claiming
+            // a recursion that cannot run would not be.
+            return [
+                'supported' => false,
+                'reason'    => $structure['source'] === OrganizationStructureService::SOURCE_ACADEMIC
+                    ? 'Departments are derived teaching sections with no backing table to recurse over.'
+                    : 'This organization has no departments.',
+                'tree' => $this->flatHierarchyNodes($structure['departments']),
+                'flat' => $structure['departments'],
+            ];
+        }
+
+        $unit = $this->safeSource($tenant, 'OrganizationUnit');
+
+        if ($unit === null || ! $unit->has('parent')) {
+            return [
+                'supported' => false,
+                'reason'    => 'This tenant\'s OrganizationUnit mapping has no parent column to recurse over.',
+                'tree' => $this->flatHierarchyNodes($structure['departments']),
+                'flat' => $structure['departments'],
+            ];
+        }
+
+        $pk = $unit->primaryKey;
+        $parentCol = $unit->field('parent');
+        $nameCol = $unit->field('name');
+        $tenantKey = $unit->tenantKey;
+        $table = $unit->table;
+
+        // WITH RECURSIVE, per ADR-008's own spec for this exact kind of read.
+        // The anchor's "no parent" test mirrors
+        // OrganizationStructureService's own rule
+        // (`! empty($row->{$parentColumn})`, confirmed at that class's L239)
+        // exactly: parent_id of 0, '' or NULL all mean "this is a root", not
+        // "parented to row 0" — the same convention
+        // ImportSchoolFeeWorkspace/SeedV1AcademySchool write when seeding a
+        // top-level department.
+        //
+        // Table/column names are interpolated, not bound as parameters,
+        // because they are identifiers, not values — PDO placeholders cannot
+        // bind a column or table name. They come from ResolvedSource, i.e.
+        // from hpbrain_entity_mappings, the same trusted, internally-curated
+        // config every other raw-SQL call in this class already interpolates
+        // column names from (see expandDataset()'s selectRaw($column.' AS
+        // value...) and expandStudent()'s selectRaw('category, COUNT(*)...))
+        // — this is not a new trust boundary.
+        $sql = "WITH RECURSIVE dept_tree AS (
+            SELECT {$pk} AS id, {$parentCol} AS parent_id, {$nameCol} AS name, 0 AS depth
+            FROM {$table}
+            WHERE {$tenantKey} = ?
+              AND ({$parentCol} IS NULL OR {$parentCol} = 0 OR {$parentCol} = '')
+            UNION ALL
+            SELECT u.{$pk}, u.{$parentCol}, u.{$nameCol}, dt.depth + 1
+            FROM {$table} u
+            INNER JOIN dept_tree dt ON u.{$parentCol} = dt.id
+            WHERE u.{$tenantKey} = ?
+        )
+        SELECT * FROM dept_tree ORDER BY depth, name";
+
+        try {
+            $rows = DB::select($sql, [$tenant, $tenant]);
+        } catch (Throwable $e) {
+            // Fails closed with the reason said out loud — same rule
+            // GraphController::guard() applies to its callers — rather than
+            // surfacing a raw 500. A MySQL below 8.0 (WITH RECURSIVE needs
+            // 8.0+) would land here, not silently return an empty tree.
+            return [
+                'supported' => false,
+                'reason'    => 'recursive_query_failed: '.$e->getMessage(),
+                'tree'      => [],
+                'flat'      => $structure['departments'],
+            ];
+        }
+
+        $members = $this->structure->getPeopleCountByDepartment($tenant);
+        $byId = [];
+
+        foreach ($rows as $row) {
+            $id = (string) $row->id;
+            $parentRaw = $row->parent_id;
+            $parentId = ($parentRaw === null || (string) $parentRaw === '0' || (string) $parentRaw === '')
+                ? null
+                : (string) $parentRaw;
+
+            $byId[$id] = [
+                'id'       => $id,
+                'parentId' => $parentId,
+                'name'     => (string) $row->name,
+                'depth'    => (int) $row->depth,
+                'members'  => $members[$id] ?? 0,
+            ];
+        }
+
+        // Same byParent + recursive-build shape as
+        // App\Services\NavigationBuilder::tree() and
+        // App\Services\ConfigurationEngine's buildTree() use for the same
+        // problem (flat parent-pointer rows -> nested tree), rather than the
+        // reference-aliasing trick that shape is usually built with — kept
+        // consistent with how this codebase already solves it elsewhere.
+        $childIdsByParent = [];
+
+        foreach ($byId as $id => $node) {
+            $childIdsByParent[$node['parentId'] ?? ''][] = $id;
+        }
+
+        // $parentId is int|string|null, not ?string: a numeric-looking id
+        // ("1") is normalised to an int array key by PHP itself the moment
+        // it is used as one (both here and in $byId above), so a strict
+        // ?string parameter would reject exactly the ids this method deals
+        // in. The lookup is unaffected either way — PHP treats the int key
+        // 1 and the string key "1" as the same slot.
+        $buildTree = function (int|string|null $parentId) use (&$buildTree, $byId, $childIdsByParent): array {
+            $out = [];
+
+            foreach ($childIdsByParent[$parentId ?? ''] ?? [] as $id) {
+                $node = $byId[$id];
+                $node['children'] = $buildTree($id);
+                $out[] = $node;
+            }
+
+            return $out;
+        };
+
+        return [
+            'supported' => true,
+            'tree'      => $buildTree(null),
+            'flat'      => array_values($byId),
+        ];
+    }
+
+    /**
+     * A flat department list as single-level tree nodes, for the
+     * unsupported-recursion fallback shape — so a caller always gets `tree`
+     * in the same shape whether or not recursion actually ran.
+     *
+     * @param  array<int, array<string, mixed>>  $departments
+     * @return array<int, array<string, mixed>>
+     */
+    private function flatHierarchyNodes(array $departments): array
+    {
+        return array_map(fn (array $d): array => [
+            'id'       => (string) $d['id'],
+            'parentId' => null,
+            'name'     => (string) $d['name'],
+            'depth'    => 0,
+            'members'  => (int) $d['members'],
+            'children' => [],
+        ], $departments);
     }
 
     /** @return array<string, mixed>|null */

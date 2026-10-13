@@ -28,6 +28,24 @@ use Illuminate\Support\Facades\DB;
  * DRAFT-ONLY WRITES. Nothing this class writes is used by resolve() until a
  * human sets status='confirmed' - see the migration's own note on why a
  * wrong link is worse than no link.
+ *
+ * PHASE 7.4 EXTENSION — EB's own Person record. hpbrain_people is EB's
+ * Person table (see database/migrations/2026_01_01_000300_person.php) —
+ * NOT the same thing as PersonProfileController::ebSection(), which today
+ * reads hpbrain_capability_assignments directly keyed by G2G's own numeric
+ * user id, with no identity-resolution step of its own. proposeEbMatches()
+ * below gives EB the SAME email-verified, draft-until-confirmed discipline
+ * as the K-12/G2G link above — it does not change what
+ * PersonProfileController reads; that rewiring is explicitly out of this
+ * change's scope.
+ *
+ * NO CORROBORATION-THRESHOLD SCORE FOR EB MATCHES. proposeMatches()'s
+ * 0.900/0.300 split above is calibrated against a REAL measured tenant-pair
+ * volume (K-12 tenant 329 / G2G tenant 1000018: 64 matches). There is no
+ * equivalent measured volume for EB<->G2G or EB<->K12 pairs, so
+ * proposeEbMatches() uses a flat, explicitly lower EB_MATCH_CONFIDENCE
+ * instead of fabricating a volume-based score this pass has no data to
+ * justify.
  */
 class CrossProductIdentityResolver
 {
@@ -35,6 +53,15 @@ class CrossProductIdentityResolver
 
     /** Tenant pairs with fewer matches than this are scored low-confidence, not high. */
     private const CORROBORATION_THRESHOLD = 5;
+
+    /**
+     * Flat confidence for a verified EB<->G2G or EB<->K12 email match. Not
+     * calibrated against measured corroboration volume the way
+     * CORROBORATION_THRESHOLD's 0.900/0.300 split is — there is no
+     * equivalent measured dataset for EB pairs yet, so this is deliberately
+     * a single honest number rather than a fabricated tiered score.
+     */
+    private const EB_MATCH_CONFIDENCE = 0.700;
 
     /**
      * Find every K-12/G2G user pair sharing an email, score each by how
@@ -107,12 +134,118 @@ class CrossProductIdentityResolver
     }
 
     /**
+     * Find every EB<->G2G and EB<->K12 Person/user pair sharing an email,
+     * and write (or refresh) a draft row for each — same discipline as
+     * proposeMatches(): email only, never name; drafts only; an existing
+     * confirmed/rejected row is never touched.
+     *
+     * TWO SEPARATE JOINS, TWO SEPARATE UNIQUE KEYS
+     * (cpil_eb_g2g_unique / cpil_eb_k12_unique), not one three-way match.
+     * If the same email matches in EB, G2G and K12 all at once this can
+     * produce up to three rows for that one real person — the pre-existing
+     * K12<->G2G row from proposeMatches(), plus a new EB<->G2G row and a
+     * new EB<->K12 row — rather than one merged three-way row. That is a
+     * known, deliberate v1 simplification: a human reviewing
+     * pendingReview() sees all of them and can confirm the right ones;
+     * merging three-way proposals into a single row is a reasonable
+     * follow-up, not something this pass builds.
+     *
+     * @return array{proposed:int, skipped_confirmed:int, skipped_rejected:int}
+     */
+    public function proposeEbMatches(): array
+    {
+        $ebToG2g = DB::select("
+            SELECT p.tenant_id AS eb_tenant, p.id AS eb_person_id,
+                   h.sub_institute_id AS g2g_tenant, h.id AS g2g_user_id,
+                   p.email AS email
+            FROM hpbrain_people p
+            INNER JOIN hp_erp.tbluser h ON h.email = p.email
+            WHERE p.email IS NOT NULL AND p.email != ''
+        ");
+
+        $ebToK12 = DB::select("
+            SELECT p.tenant_id AS eb_tenant, p.id AS eb_person_id,
+                   v.sub_institute_id AS k12_tenant, v.id AS k12_user_id,
+                   p.email AS email
+            FROM hpbrain_people p
+            INNER JOIN vivek_erp.tbluser v ON v.email = p.email
+            WHERE p.email IS NOT NULL AND p.email != ''
+        ");
+
+        $proposed = 0;
+        $skippedConfirmed = 0;
+        $skippedRejected = 0;
+
+        foreach ($ebToG2g as $m) {
+            $existing = DB::table(self::TABLE)
+                ->where('eb_person_id', $m->eb_person_id)
+                ->where('g2g_user_id', $m->g2g_user_id)
+                ->first();
+
+            if ($existing !== null && $existing->status !== 'draft') {
+                $existing->status === 'confirmed' ? $skippedConfirmed++ : $skippedRejected++;
+                continue;
+            }
+
+            DB::table(self::TABLE)->updateOrInsert(
+                ['eb_person_id' => $m->eb_person_id, 'g2g_user_id' => $m->g2g_user_id],
+                [
+                    'eb_tenant_id' => $m->eb_tenant,
+                    'g2g_sub_institute_id' => $m->g2g_tenant,
+                    'match_email' => $m->email,
+                    'match_method' => 'email',
+                    'confidence' => self::EB_MATCH_CONFIDENCE,
+                    'status' => 'draft',
+                    'updated_at' => now(),
+                    'created_at' => DB::raw('COALESCE(created_at, NOW())'),
+                ]
+            );
+
+            $proposed++;
+        }
+
+        foreach ($ebToK12 as $m) {
+            $existing = DB::table(self::TABLE)
+                ->where('eb_person_id', $m->eb_person_id)
+                ->where('k12_user_id', $m->k12_user_id)
+                ->first();
+
+            if ($existing !== null && $existing->status !== 'draft') {
+                $existing->status === 'confirmed' ? $skippedConfirmed++ : $skippedRejected++;
+                continue;
+            }
+
+            DB::table(self::TABLE)->updateOrInsert(
+                ['eb_person_id' => $m->eb_person_id, 'k12_user_id' => $m->k12_user_id],
+                [
+                    'eb_tenant_id' => $m->eb_tenant,
+                    'k12_sub_institute_id' => $m->k12_tenant,
+                    'match_email' => $m->email,
+                    'match_method' => 'email',
+                    'confidence' => self::EB_MATCH_CONFIDENCE,
+                    'status' => 'draft',
+                    'updated_at' => now(),
+                    'created_at' => DB::raw('COALESCE(created_at, NOW())'),
+                ]
+            );
+
+            $proposed++;
+        }
+
+        return [
+            'proposed' => $proposed,
+            'skipped_confirmed' => $skippedConfirmed,
+            'skipped_rejected' => $skippedRejected,
+        ];
+    }
+
+    /**
      * The confirmed cross-product identity for one system's user, or null.
      *
      * Only 'confirmed' rows are returned — a 'draft' proposal is a
      * suggestion for a human to review, never something a caller may act on.
      *
-     * @return array{k12:?array, g2g:?array}|null
+     * @return array{k12:?array, g2g:?array, eb:?array}|null
      */
     public function resolve(string $fromSystem, int $subInstituteId, int $userId): ?array
     {
@@ -123,6 +256,39 @@ class CrossProductIdentityResolver
             'g2g' => $query->where('g2g_sub_institute_id', $subInstituteId)->where('g2g_user_id', $userId)->first(),
             default => null,
         };
+
+        if ($row === null) {
+            return null;
+        }
+
+        return [
+            'k12' => $row->k12_user_id !== null
+                ? ['sub_institute_id' => (int) $row->k12_sub_institute_id, 'user_id' => (int) $row->k12_user_id]
+                : null,
+            'g2g' => $row->g2g_user_id !== null
+                ? ['sub_institute_id' => (int) $row->g2g_sub_institute_id, 'user_id' => (int) $row->g2g_user_id]
+                : null,
+            // Additive — existing callers destructuring only ['k12']/['g2g']
+            // (e.g. PersonProfileController::k12Section()) are unaffected.
+            'eb' => $row->eb_person_id !== null
+                ? ['tenant_id' => (string) $row->eb_tenant_id, 'person_id' => (string) $row->eb_person_id]
+                : null,
+        ];
+    }
+
+    /**
+     * The confirmed cross-product identity for EB's own Person id, or null.
+     * Same confirmed-only rule as resolve().
+     *
+     * @return array{k12:?array, g2g:?array}|null
+     */
+    public function resolveEb(string $ebTenantId, string $ebPersonId): ?array
+    {
+        $row = DB::table(self::TABLE)
+            ->where('status', 'confirmed')
+            ->where('eb_tenant_id', $ebTenantId)
+            ->where('eb_person_id', $ebPersonId)
+            ->first();
 
         if ($row === null) {
             return null;

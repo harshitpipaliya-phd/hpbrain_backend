@@ -172,6 +172,20 @@ final class GraphVocabulary
             'organizational',
             'A group of rows of one kind belonging to the node it hangs from. The count is a COUNT over exactly those rows.',
         ],
+        // REPORTS_TO — same edge name K-12's own graph already uses for this
+        // relationship (see Task 7, Enterprise Brain coverage). Directed from
+        // the subordinate to the manager, matching
+        // OrganizationEngine::getReportingStructure()'s own walk: that method
+        // starts at a person and repeatedly follows reporter_person_id to
+        // find who they report to, which is this edge read the same
+        // direction. hpbrain_reporting_structures rows with an end_date in
+        // the past are a lapsed assignment, not a current one, so this is
+        // never drawn from a row outside that window.
+        'reports_to' => [
+            'reports to',
+            'people',
+            'hpbrain_reporting_structures: reporter_person_id is who the reportee_person_id reports to, current rows only (end_date is null or in the future).',
+        ],
     ];
 
     /** Relationship families the client may filter by. */

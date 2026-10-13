@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Ai\AiGateway;
+use App\Domain\Graph\GraphQueryPort;
 use App\Domain\Intelligence\IntelligenceSummaryComposer;
 use App\Domain\Operations\IntelligenceLoopMetrics;
 use App\Domain\Operations\OperationalIntelligence;
@@ -11,10 +13,12 @@ use App\Domain\Operations\OperationalNarrator;
 use App\Domain\Operations\OrganizationScorecard;
 use App\Domain\Organization\FoundationCounts;
 use App\Domain\Universal\EntityResolver;
+use App\Http\Controllers\Concerns\BuildsGraphRagNarrative;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * The derived operational intelligence, one endpoint per screen.
@@ -31,6 +35,11 @@ use Illuminate\Support\Facades\DB;
  */
 final class OperationalIntelligenceController extends Controller
 {
+    use BuildsGraphRagNarrative;
+
+    /** AiGateway service name — the hpbrain_ai_executions row for this verb is traced under this. */
+    private const OPERATIONAL_GRAPH_BRIEFING_SERVICE = 'operational_graph_briefing';
+
     public function __construct(
         private readonly OperationalIntelligence $operations,
         private readonly IntelligenceLoopMetrics $loop,
@@ -246,6 +255,63 @@ final class OperationalIntelligenceController extends Controller
             'support' => $ops['support'],
             'derivation' => $ops['derivation'],
         ]);
+    }
+
+    /**
+     * GET /operations/{tenantId}/graph-briefing — "operational patterns from
+     * the org graph" (Phase 5 GraphRAG, the operational counterpart of
+     * AnalyticsController::executiveGraphBriefing()).
+     *
+     * DELIBERATELY SEPARATE FROM overview()/scorecard() ABOVE, which ground on
+     * OperationalIntelligence/OrganizationScorecard — aggregates over
+     * hpbrain_operational_records this controller computes for itself. This
+     * endpoint is org-wide, not scoped to a department or dataset, so
+     * retrieval is GraphQueryPort::summary() (the metric strip) and
+     * overview() (the organization's own branches, depth 1, resolved
+     * through the interface, never GraphProjection directly) — the same
+     * retrieval shape executiveGraphBriefing() uses, framed for an
+     * operations audience rather than an executive one. A tenant whose
+     * graph has no branches at all beyond the bare Organization root is
+     * `no_evidence` — there is nothing yet to brief on.
+     */
+    public function graphBriefing(Request $request, GraphQueryPort $graph, AiGateway $ai): JsonResponse
+    {
+        $tenant = $this->tenantId($request);
+
+        try {
+            $summary = $graph->summary($tenant);
+            $overview = $graph->overview($tenant, 1, ['signals', 'cases', 'recommendations', 'decisions', 'capabilities']);
+        } catch (Throwable $e) {
+            return response()->json(['error' => 'graph_unavailable', 'message' => $e->getMessage()], 503);
+        }
+
+        if (count($overview['nodes'] ?? []) <= 1) {
+            return response()->json([
+                'summary' => $summary,
+                'narrative' => null,
+                'narrativeStatus' => 'no_evidence',
+            ]);
+        }
+
+        $result = $this->narrateFromDocuments(
+            $request,
+            $ai,
+            $tenant,
+            self::OPERATIONAL_GRAPH_BRIEFING_SERVICE,
+            'You are briefing an operations team on the operational patterns visible in their organization\'s '
+                .'intelligence graph — its departments, signals, and recommendations. Use only the metrics and '
+                .'branches given in the retrieved context — never invent a number, department, or pattern not '
+                .'present in it.',
+            'Give an operational briefing on this organization\'s current patterns — its departments, signals, '
+                .'and recommendations — based on its intelligence graph.',
+            $this->organizationBriefingDocuments($summary, $overview),
+        );
+
+        return response()->json([
+            'summary' => $summary,
+            'nodeCount' => $overview['nodeCount'] ?? count($overview['nodes'] ?? []),
+            'truncated' => $overview['truncated'] ?? [],
+        ] + $result);
     }
 
     /**
